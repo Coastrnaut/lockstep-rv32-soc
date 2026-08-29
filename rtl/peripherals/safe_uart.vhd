@@ -122,10 +122,10 @@ begin
                     when UART_IDLE =>
                         r_baud_cnt <= (others => '0');
                         if r_tx_valid = '1' and w_parity_ok = '1' then
-                            -- Load shift register: start(0) + data + parity + stop(1)
-                            r_tx_shift(10 downto 2) <= r_tx_data;
-                            r_tx_shift(1)           <= r_tx_parity;
-                            r_tx_shift(0)           <= '0'; -- start bit
+                            -- Load shift register: start(0) + data[1-8] + parity(9) + stop(10)
+                            r_tx_shift(8 downto 1) <= r_tx_data;
+                            r_tx_shift(9)          <= r_tx_parity;
+                            r_tx_shift(0)          <= '0'; -- start bit
                             r_tx_bits   <= "1010"; -- 10 bits to shift
                             r_uart_st   <= UART_START;
                         end if;
