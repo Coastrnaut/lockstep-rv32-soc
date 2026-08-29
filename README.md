@@ -59,7 +59,7 @@ pip install vunit_hdl
 
 ### Compiling and Executing Tests
 ```bash
-git clone https://github.com/<your-org>/lockstep-rv32-soc.git
+git clone https://github.com/Coastrnaut/lockstep-rv32-soc.git
 cd lockstep-rv32-soc
 git submodule update --init --recursive
 python3 sim/run.py --compile
@@ -80,4 +80,4 @@ All Pull Requests must meet the following entry criteria:
 ---
 
 ## 📄 License
-This project is licensed under the **Apache License 2.0** — see the `LICENSE` file for details.
+This project is licensed under the **BSD 3-Clause License** — see the [LICENSE.md](LICENSE.md) file for details.
