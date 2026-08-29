@@ -1,0 +1,51 @@
+name: lockstep-rv32-soc - Headless XSim Verification
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  xsim-simulation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Base
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # 1. Clean up default GitHub image space to prevent workspace crashes
+      - name: Maximize Workspace Storage
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 5120
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+
+      # 2. Deploy a lightweight container optimized with Vivado simulation tools
+      - name: Setup Headless Vivado Simulator Toolchain
+        uses: jwscook/setup-vivado@v1
+        with:
+          vivado-version: '2023.2' # Specifies target compilation syntax profile
+
+      - name: Initialize Python Core Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install VUnit Verification Infrastructure
+        run: |
+          python -m pip install --upgrade pip
+          pip install vunit_hdl
+
+      - name: Run Complete Simulation Matrix & Record Results
+        shell: bash
+        run: |
+          # Point the VUnit automation engine directly to your virtual Vivado hook
+          export VUNIT_SIMULATOR=vivado
+          
+          # Execute the OSVVM randomized testbench matrix [3.1]
+          python sim/run.py --vunit-macro-coverage
