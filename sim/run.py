@@ -14,12 +14,14 @@ from vunit import VUnit
 #   python sim/run.py --test <name>  # Run a single test
 # ==============================================================================
 
-# Pin GHDL executable (Windows mcode backend)
-GHDL_BIN = r"C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin"
-if os.path.isdir(GHDL_BIN):
-    os.environ["VUNIT_GHDL_PATH"] = GHDL_BIN
-else:
-    print(f"WARNING: GHDL bin not found at {GHDL_BIN} — will use PATH fallback")
+# Pin GHDL executable — Windows absolute path, Linux falls back to PATH
+if os.name == "nt":  # Windows
+    GHDL_BIN = r"C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin"
+    if os.path.isdir(GHDL_BIN):
+        os.environ["VUNIT_GHDL_PATH"] = GHDL_BIN
+    else:
+        print(f"WARNING: GHDL bin not found at {GHDL_BIN} — will use PATH fallback")
+# On Linux (CI runner), ghdl is installed via apt and found on PATH
 
 # Initialize VUnit testing context
 vu = VUnit.from_argv(compile_builtins=False)
