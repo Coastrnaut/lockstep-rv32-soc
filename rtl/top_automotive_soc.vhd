@@ -14,8 +14,8 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 -- Import custom automotive system types and records
-library work;
-use work.package_soc_types.all;
+library lockstep;
+use lockstep.package_soc_types.all;
 
 -- Explicitly declare the compiled NEORV32 library containing the submodule IPs
 library neorv32;

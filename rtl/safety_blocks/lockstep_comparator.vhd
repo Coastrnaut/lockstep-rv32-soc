@@ -14,8 +14,8 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library work;
-use work.package_soc_types.all;
+library lockstep;
+use lockstep.package_soc_types.all;
 
 entity lockstep_comparator is
     port (
