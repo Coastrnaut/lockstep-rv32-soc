@@ -1,3 +1,6 @@
 [submodule "rtl/core/neorv32"]
 	path = rtl/core/neorv32
 	url = https://github.com/stnolting/neorv32
+[submodule "sim/OsvvmLibraries"]
+	path = sim/OsvvmLibraries
+	url = https://github.com/osvvm/OsvvmLibraries
