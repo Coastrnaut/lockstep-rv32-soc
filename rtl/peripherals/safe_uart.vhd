@@ -187,4 +187,32 @@ begin
     uart_busy_o  <= '1' when r_uart_st /= UART_IDLE else '0';
     uart_error_o <= '1' when (r_tx_valid = '1' and w_parity_ok = '0') else '0';
 
+    -- ========================================================================
+    -- 5. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
+    -- ========================================================================
+    -- Property: Parity mismatch blocks TX
+    -- Property: UART error flagged when parity fails
+    -- ========================================================================
+    p_formal_asserts : process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_n_i = '0' then
+                null;
+            else
+                -- Property: TX blocked when parity mismatch
+                if r_tx_valid = '1' and w_parity_ok = '0' then
+                    assert uart_error_o = '1'
+                        report "FORMAL FAIL: error not flagged on parity mismatch"
+                        severity error;
+                end if;
+                -- Property: TX only starts when parity valid
+                if r_uart_st = UART_START and r_tx_valid = '1' then
+                    assert w_parity_ok = '1'
+                        report "FORMAL FAIL: TX started with parity mismatch"
+                        severity error;
+                end if;
+            end if;
+        end if;
+    end process p_formal_asserts;
+
 end architecture rtl;

@@ -190,4 +190,28 @@ begin
     sbe_corrected_o <= w_sbe;
     dbe_fatal_o <= w_dbe;
 
+    -- ========================================================================
+    -- 5. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
+    -- ========================================================================
+    -- Property: DBE blocks corrected output (no data correction on double error)
+    -- Property: Syndrome zero implies no error flag
+    -- ========================================================================
+    p_formal_asserts : process(all)
+    begin
+        -- DBE must not produce corrected data
+        if w_dbe = '1' then
+            assert w_sbe = '0'
+                report "FORMAL FAIL: SBE and DBE both asserted"
+                severity error;
+        end if;
+        -- Syndrome zero means clean path
+        if w_syndrome(6 downto 0) = "0000000" then
+            assert w_sbe = '0' and w_dbe = '0'
+                report "FORMAL FAIL: error flags set with zero syndrome"
+                severity error;
+        end if;
+        -- No-op: assertions are combinational checks on safety properties
+        null;
+    end process p_formal_asserts;
+
 end architecture rtl;

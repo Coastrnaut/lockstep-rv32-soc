@@ -154,4 +154,48 @@ begin
     sys_bus_o.we    <= core_a_bus_i.we    when (r_current_state = ST_SYSTEM_OK) else '0';
     sys_bus_o.valid <= core_a_bus_i.valid when (r_current_state = ST_SYSTEM_OK) else '0';
 
+    -- ========================================================================
+    -- 5. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
+    -- ========================================================================
+    -- Clocked assertion process: NMI within 2 cycles of mismatch, bus_valid
+    -- deasserts, safe_state latches
+    -- ========================================================================
+    p_formal_asserts : process(clk_i)
+        variable v_mismatch_count : integer range 0 to 4 := 0;
+        variable v_mismatch_seen  : std_logic := '0';
+    begin
+        if rising_edge(clk_i) then
+            if rst_n_syn_i = '0' then
+                v_mismatch_count := 0;
+                v_mismatch_seen  := '0';
+            else
+                if w_mismatch_detected = '1' then
+                    v_mismatch_seen  := '1';
+                    v_mismatch_count := 0;
+                    -- Property: NMI asserted immediately on mismatch
+                    assert nmi_fault_o = '1'
+                        report "FORMAL FAIL: NMI not asserted on mismatch"
+                        severity error;
+                elsif v_mismatch_seen = '1' then
+                    v_mismatch_count := v_mismatch_count + 1;
+                    -- Property: NMI latched within 2 cycles
+                    assert nmi_fault_o = '1'
+                        report "FORMAL FAIL: NMI not latched within 2 cycles"
+                        severity error;
+                    -- Property: bus_valid deasserted when fault active
+                    assert bus_valid_o = '0'
+                        report "FORMAL FAIL: bus_valid not deasserted on fault"
+                        severity error;
+                    -- Property: safe_state asserted when fault active
+                    assert safe_state_o = '1'
+                        report "FORMAL FAIL: safe_state not asserted on fault"
+                        severity error;
+                    if v_mismatch_count >= 2 then
+                        v_mismatch_seen := '0';
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process p_formal_asserts;
+
 end architecture rtl;

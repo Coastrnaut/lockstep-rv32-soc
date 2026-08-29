@@ -111,4 +111,33 @@ begin
     wd_status_o(5) <= w_late_violation;
     wd_status_o(4 downto 0) <= std_logic_vector(r_counter(15 downto 11));
 
+    -- ========================================================================
+    -- 4. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
+    -- ========================================================================
+    -- Property: Watchdog reset asserted on timeout
+    -- Property: Early kick boundary enforced
+    -- ========================================================================
+    p_formal_asserts : process(wd_clk_i)
+    begin
+        if rising_edge(wd_clk_i) then
+            if rst_n_i = '0' then
+                -- Reset clears fault — no assertion
+                null;
+            else
+                -- Property: sys_reset asserted when timeout latched
+                if r_timeout_latched = '1' then
+                    assert sys_reset_o = '1'
+                        report "FORMAL FAIL: sys_reset not asserted on timeout"
+                        severity error;
+                end if;
+                -- Property: early kick triggers reset
+                if w_early_violation = '1' then
+                    assert sys_reset_o = '1'
+                        report "FORMAL FAIL: sys_reset not asserted on early kick"
+                        severity error;
+                end if;
+            end if;
+        end if;
+    end process p_formal_asserts;
+
 end architecture rtl;

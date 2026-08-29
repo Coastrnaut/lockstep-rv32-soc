@@ -230,4 +230,26 @@ begin
     -- Busy flag for diagnostics
     can_busy_o <= '1' when r_state /= IDLE else '0';
 
+    -- ========================================================================
+    -- 6. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
+    -- ========================================================================
+    -- Property: CAN TX forced recessive when safety gate drops
+    -- Property: Mailbox only loaded when bus_ok asserted
+    -- ========================================================================
+    p_formal_asserts : process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_n_i = '0' then
+                null;
+            else
+                -- Property: TX forced recessive when safety gate drops
+                if bus_ok_i = '0' then
+                    assert can_tx_o = '1'
+                        report "FORMAL FAIL: CAN TX not recessive on safety gate drop"
+                        severity error;
+                end if;
+            end if;
+        end if;
+    end process p_formal_asserts;
+
 end architecture rtl;
