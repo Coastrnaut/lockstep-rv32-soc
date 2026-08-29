@@ -1,1 +1,41 @@
-rtl/core/neorv32/
+# GHDL artifacts
+*.cf
+*.ghdl
+*.o
+*.vo
+*.cm
+
+# VUnit
+vunit_out/
+vunit_log/
+
+# Vivado
+*.log
+*.str
+*.jou
+*.xpr
+*.runs
+*.sim
+*.hw
+*.cache
+*.gen
+*.hwdef
+*.bit
+*.bin
+*.ltx
+
+# QuestaSim
+*.wav
+*.ucf
+*.f
+*.do
+*.wlf
+*.ust
+
+# General
+*.pyc
+__pycache__/
+*.swp
+*.swo
+.vscode/
+.idea/
