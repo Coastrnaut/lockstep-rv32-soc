@@ -40,14 +40,14 @@ begin
 
         cpu_kick <= '0';
         wd_rst_n <= '0';
-        for _ in 1 to 5 loop wait until rising_edge(wd_clk); end loop;
+        for dummy in 1 to 5 loop wait until rising_edge(wd_clk); end loop;
 
         wd_rst_n <= '1';
-        for _ in 1 to 10 loop wait until rising_edge(wd_clk); end loop;
+        for dummy in 1 to 10 loop wait until rising_edge(wd_clk); end loop;
 
         -- --- Test 1: Normal periodic kicks (within window) ---
         -- C_WD_MIN=40000, C_WD_MAX=50000 — kick at ~45000 counts
-        for _ in 1 to 45000 loop
+        for dummy in 1 to 45000 loop
             wait until rising_edge(wd_clk);
         end loop;
         cpu_kick <= '1';
@@ -56,7 +56,7 @@ begin
         check(sys_rst = '0', "no reset on valid kick");
 
         -- --- Test 2: Kick too early (below MIN) ---
-        for _ in 1 to 10 loop
+        for dummy in 1 to 10 loop
             wait until rising_edge(wd_clk);
         end loop;
         cpu_kick <= '1';
