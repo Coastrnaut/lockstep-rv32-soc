@@ -49,16 +49,16 @@ begin
     begin
         test_runner_setup(runner, runner_cfg);
         tb_rst_n <= '0';
-        for _ in 1 to 10 loop wait until rising_edge(tb_clk); end loop;
+        for dummy in 1 to 10 loop wait until rising_edge(tb_clk); end loop;
         tb_rst_n <= '1';
-        for _ in 1 to 10 loop wait until rising_edge(tb_clk); end loop;
+        for dummy in 1 to 10 loop wait until rising_edge(tb_clk); end loop;
 
         -- --- Fault 1: Address mismatch ---
         core_a_bus <= (addr  => x"00001000", data => x"00000001",
                        we    => '1', valid => '1');
         core_b_bus <= (addr  => x"00002000", data => x"00000001",
                        we    => '1', valid => '1');
-        for _ in 1 to 3 loop wait until rising_edge(tb_clk); end loop;
+        for dummy in 1 to 3 loop wait until rising_edge(tb_clk); end loop;
         check(nmi_fault = '1', "NMI on addr mismatch");
         check(bus_valid = '0', "bus isolated on addr mismatch");
 
@@ -67,7 +67,7 @@ begin
                        we    => '1', valid => '1');
         core_b_bus <= (addr  => x"00003000", data => x"00000002",
                        we    => '0', valid => '1');
-        for _ in 1 to 3 loop wait until rising_edge(tb_clk); end loop;
+        for dummy in 1 to 3 loop wait until rising_edge(tb_clk); end loop;
         check(nmi_fault = '1', "NMI on WE mismatch (latched)");
 
         -- --- Fault 3: Single-bit data flip ---
@@ -75,7 +75,7 @@ begin
                        we    => '1', valid => '1');
         core_b_bus <= (addr  => x"00004000", data => x"00000001",
                        we    => '1', valid => '1');
-        for _ in 1 to 3 loop wait until rising_edge(tb_clk); end loop;
+        for dummy in 1 to 3 loop wait until rising_edge(tb_clk); end loop;
         check(nmi_fault = '1', "NMI on single-bit data flip (latched)");
 
         test_runner_cleanup(runner);
