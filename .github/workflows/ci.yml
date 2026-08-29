@@ -1,0 +1,79 @@
+name: VHDL Compile & Regression
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  vhdl-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install GHDL (mcode backend)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ghdl
+
+      - name: Install VUnit
+        run: |
+          pip install vunit_hdl
+
+      - name: Compile all VHDL sources
+        run: |
+          cd sim
+          python run.py --compile
+
+      - name: Run lockstep comparator testbench
+        run: |
+          cd sim
+          python run.py --test tb_lockstep_comparator
+
+      - name: Run ECC testbench
+        run: |
+          cd sim
+          python run.py --test tb_ecc
+
+      - name: Run watchdog testbench
+        run: |
+          cd sim
+          python run.py --test tb_watchdog
+
+      - name: Run CAN controller testbench
+        run: |
+          cd sim
+          python run.py --test tb_can
+
+      - name: Run UART testbench
+        run: |
+          cd sim
+          python run.py --test tb_uart
+
+      - name: Run lockstep fault injection testbench
+        run: |
+          cd sim
+          python run.py --test tb_lockstep_fault_inject
+
+      - name: Run ECC fault injection testbench
+        run: |
+          cd sim
+          python run.py --test tb_ecc_fault_inject
+
+      - name: Upload simulation logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-logs
+          path: |
+            vunit_out/test_output/**/*.txt
+            vunit_out/test_output/**/*.html
