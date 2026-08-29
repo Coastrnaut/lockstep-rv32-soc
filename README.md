@@ -1,6 +1,6 @@
-# 🏎️ ASIL-V: Open-Source ISO 26262 ASIL-D Reference Hardware Platform
+# 🏎️ lockstep-rv32-soc: Open-Source ISO 26262 ASIL-D Reference Hardware Platform
 
-**ASIL-V** is a fully open-source, vendor-agnostic, dual-core lockstep System-on-Chip (SoC) reference architecture written in pure, deterministic **VHDL-2008**.
+**lockstep-rv32-soc** is a fully open-source, vendor-agnostic, dual-core lockstep System-on-Chip (SoC) reference architecture written in pure, deterministic **VHDL-2008**.
 
 Designed specifically to address **ISO 26262 ASIL-D** functional safety requirements, this project provides automotive OEMs, Tier-1 suppliers, and researchers with an auditable, hardware-hardened computational core for critical control units (e.g., steer-by-wire, brake-by-wire, and autonomous safety-gate monitors).
 
