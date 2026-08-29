@@ -39,3 +39,4 @@ __pycache__/
 *.swo
 .vscode/
 .idea/
+rtl/core/neorv32/
