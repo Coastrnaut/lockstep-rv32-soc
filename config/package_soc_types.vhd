@@ -1,9 +1,9 @@
 -- ============================================================================
 -- Company:      Open-Source Automotive SoC Initiative
--- Design Name:  ASIL-V Global Types Package
+-- Design Name:  lockstep-rv32-soc Global Types Package
 -- Module Name:  package_soc_types - package
 -- Description:  Defines uniform communication structures, safe state encodings,
---               and system-wide constants for the ASIL-V platform.
+--               and system-wide constants for the lockstep-rv32-soc platform.
 --
 -- Traces to:    TSR_TYPES_001, TSR_SAFETY_GATE_001
 -- ============================================================================

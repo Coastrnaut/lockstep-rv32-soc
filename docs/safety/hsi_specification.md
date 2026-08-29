@@ -1,15 +1,15 @@
 # ============================================================================
-# ASIL-V HSI Specification
+# lockstep-rv32-soc HSI Specification
 # ============================================================================
 # ISO 26262 Part 4: Hardware Safety Requirements Specification
-# Document ID: HSI-ASIL-V-001
+# Document ID: HSI-LRS-001
 # Revision: 1.0
 # ============================================================================
 
 ## 1. SCOPE & APPLICABILITY
 
 ### 1.1 System Overview
-The ASIL-V dual-core lockstep SoC is designed for automotive safety-critical
+The lockstep-rv32-soc dual-core lockstep SoC is designed for automotive safety-critical
 control units targeting **ASIL-D** per ISO 26262-6. It provides a hardware-
 hardened computational core for steer-by-wire, brake-by-wire, and autonomous
 safety-gate monitors.

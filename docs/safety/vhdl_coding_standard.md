@@ -8,7 +8,7 @@
 # ============================================================================
 
 ## 1. SCOPE
-This standard applies to all VHDL source files in the ASIL-V lockstep SoC
+This standard applies to all VHDL source files in the lockstep-rv32-soc
 project. It defines mandatory and advisory rules for safety-critical hardware
 design targeting ASIL-D compliance.
 

@@ -1,8 +1,8 @@
 # ============================================================================
-# FMEDA Analysis — ASIL-V Lockstep SoC
+# FMEDA Analysis — lockstep-rv32-soc
 # ============================================================================
 # ISO 26262-9: Quantitative Hardware Metrics
-# Document ID: FMEDA-ASIL-V-001
+# Document ID: FMEDA-LRS-001
 # Revision: 1.0
 # ============================================================================
 
@@ -126,4 +126,4 @@ All quantitative hardware metrics exceed ASIL-D thresholds:
 - **PMHF: 1.53×10⁻⁹ /h** (target: < 10⁻⁸ /h)
 - **DC: 95.6%** (target: >= 60%)
 
-The ASIL-V lockstep SoC meets ISO 26262-9 quantitative requirements for ASIL-D.
+The lockstep-rv32-soc meets ISO 26262-9 quantitative requirements for ASIL-D.

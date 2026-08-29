@@ -12,7 +12,7 @@ ERRORS=0
 WARNINGS=0
 
 echo "============================================"
-echo "  ASIL-V Static Analysis Pipeline"
+echo "  lockstep-rv32-soc Static Analysis Pipeline"
 echo "============================================"
 
 # 1. Check for inferred latches (incomplete assignments)

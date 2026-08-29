@@ -1,6 +1,6 @@
 -- ============================================================================
 -- Company:      Open-Source Automotive SoC Initiative
--- Design Name:  ASIL-V Reference Hardware Platform
+-- Design Name:  lockstep-rv32-soc Reference Hardware Platform
 -- Module Name:  top_automotive_soc - structural
 -- Description:  Master structural fabric. Instantiates two parallel NEORV32
 --               RISC-V cores (Master & Checker), routing their external bus

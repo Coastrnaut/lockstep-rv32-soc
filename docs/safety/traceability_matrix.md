@@ -2,7 +2,7 @@
 # Bi-directional Traceability Matrix
 # ============================================================================
 # ISO 26262 Part 4: Traceability from Safety Goals to Verification
-# Document ID: TRC-ASIL-V-001
+# Document ID: TRC-LRS-001
 # Revision: 1.0
 # ============================================================================
 

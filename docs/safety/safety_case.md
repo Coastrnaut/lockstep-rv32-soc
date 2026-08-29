@@ -1,14 +1,14 @@
 # ============================================================================
-# Safety Case Document — ASIL-V Lockstep SoC
+# Safety Case Document — lockstep-rv32-soc
 # ============================================================================
 # ISO 26262 Part 4: Evidence of Compliance
-# Document ID: SC-ASIL-V-001
+# Document ID: SC-LRS-001
 # Revision: 1.0
 # ============================================================================
 
 ## 1. EXECUTIVE SUMMARY
 
-The ASIL-V lockstep SoC is a dual-core RISC-V platform designed for
+The lockstep-rv32-soc dual-core lockstep SoC is a dual-core RISC-V platform designed for
 automotive safety-critical applications. This safety case demonstrates
 compliance with ISO 26262 ASIL-D through:
 
@@ -87,7 +87,7 @@ VHDL traceability attributes (`requirement_id`).
 
 ## 7. CONCLUSION
 
-The ASIL-V lockstep SoC satisfies ISO 26262 ASIL-D requirements through:
+The lockstep-rv32-soc satisfies ISO 26262 ASIL-D requirements through:
 - **Redundancy**: Dual-core lockstep with independent ECC
 - **Diagnostics**: Watchdog, safety-gated I/O, parity checks
 - **Verification**: 7 testbenches with fault injection coverage

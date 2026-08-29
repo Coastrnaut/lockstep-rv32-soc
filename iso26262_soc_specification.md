@@ -1,4 +1,4 @@
-# 📋 ASIL-V: Exhaustive ISO 26262 ASIL-D Reference Hardware Platform Checklist & Specification
+# 📋 lockstep-rv32-soc: Exhaustive ISO 26262 ASIL-D Reference Hardware Platform Checklist & Specification
 
 This specification document outlines the comprehensive roadmap, architectural constraints, and low-level VHDL implementation details required to design, verify, and certify the `lockstep-rv32-soc` repository under **ISO 26262 ASIL-D** functional safety requirements.
 

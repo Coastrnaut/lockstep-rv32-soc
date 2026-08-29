@@ -3,7 +3,7 @@ from pathlib import Path
 from vunit import VUnit
 
 # ==============================================================================
-# VUnit Test Runner — ASIL-V Lockstep RISC-V SoC
+# VUnit Test Runner — lockstep-rv32-soc RISC-V SoC
 # ==============================================================================
 # Runs the full regression matrix against GHDL. Enables code coverage tracking
 # for ASIL-D compliance reporting.
