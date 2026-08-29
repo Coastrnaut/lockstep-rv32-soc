@@ -34,40 +34,9 @@ jobs:
           cd sim
           python run.py --compile
 
-      - name: Run lockstep comparator testbench
+      - name: Run full regression (auto-discover all testbenches)
         run: |
-          cd sim
-          python run.py --test tb_lockstep_comparator
-
-      - name: Run ECC testbench
-        run: |
-          cd sim
-          python run.py --test tb_ecc
-
-      - name: Run watchdog testbench
-        run: |
-          cd sim
-          python run.py --test tb_watchdog
-
-      - name: Run CAN controller testbench
-        run: |
-          cd sim
-          python run.py --test tb_can
-
-      - name: Run UART testbench
-        run: |
-          cd sim
-          python run.py --test tb_uart
-
-      - name: Run lockstep fault injection testbench
-        run: |
-          cd sim
-          python run.py --test tb_lockstep_fault_inject
-
-      - name: Run ECC fault injection testbench
-        run: |
-          cd sim
-          python run.py --test tb_ecc_fault_inject
+          cd sim && python run.py
 
       - name: Upload simulation logs on failure
         if: failure()
