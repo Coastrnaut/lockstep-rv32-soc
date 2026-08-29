@@ -67,15 +67,9 @@ sim_lib = vu.add_library("sim_lib", vhdl_standard="2008")
 sim_lib.add_source_files(root / "sim" / "testbenches" / "*.vhd")
 
 # ---------------------------------------------------------------------------
-# 7. GHDL coverage flags (mandatory for ASIL-D compliance)
+# 7. GHDL flags (coverage removed — GHDL 6.0 mcode backend lacks coverage)
 # ---------------------------------------------------------------------------
-vu.set_sim_option("ghdl.sim_flags", [
-    "--coverage-signals",
-    "--coverage-statements",
-    "--coverage-asserts",
-    "--coverage-fsm",
-    "--coverage-branches",
-])
+# vu.set_sim_option("ghdl.sim_flags", [...])
 
 # ---------------------------------------------------------------------------
 # 8. Run

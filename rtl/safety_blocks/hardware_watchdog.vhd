@@ -3,9 +3,9 @@
 -- Design Name:  Windowed Hardware Watchdog & Clock Monitor
 -- Module Name:  hardware_watchdog - rtl
 -- Description:  Independent watchdog running on a separate RC oscillator.
---               Monitors the primary CPU clock. If the processor misses a
---               sub-millisecond check-in window, the logic asserts a hardware
---               reset to critical actuators.
+--               Windowed timing: kick must arrive between MIN and MAX count.
+--               Early kicks (too soon) and late kicks (timeout) both trigger
+--               a hard reset.
 --
 -- Traces to:    TSR_WD_001, TSR_SAFETY_GATE_003
 -- ============================================================================
@@ -44,45 +44,71 @@ architecture rtl of hardware_watchdog is
     signal r_counter : unsigned(15 downto 0) := (others => '0');
 
     -- Internal status flags
-    signal w_timeout : std_logic;
+    signal w_early_violation  : std_logic;
+    signal w_late_violation   : std_logic;
+    signal r_timeout_latched  : std_logic;
 
 begin
 
     -- ========================================================================
-    -- 1. WATCHDOG COUNTER (Rule 1.2)
+    -- 1. WATCHDOG COUNTER WITH WINDOWED CHECK (Rule 1.2, 2.1, 2.2)
     -- ========================================================================
     p_wd_counter : process(wd_clk_i)
     begin
         if rising_edge(wd_clk_i) then
             if rst_n_i = '0' then
-                r_counter <= (others => '0');
-            elsif cpu_kick_i = '1' then
-                -- CPU checked in on time — reset counter
-                r_counter <= (others => '0');
-            else
-                r_counter <= r_counter + 1;
+                r_counter         <= (others => '0');
+                r_timeout_latched <= '0';
+            elsif r_timeout_latched = '0' then
+                -- Only count when not already in fault state
+                if cpu_kick_i = '1' then
+                    -- CPU checked in — evaluate window
+                    if r_counter < C_WD_MIN_COUNT then
+                        -- Early kick: CPU is running too fast / loop too tight
+                        r_timeout_latched <= '1';
+                    else
+                        -- Kick is within window — reset counter
+                        r_counter <= (others => '0');
+                    end if;
+                else
+                    -- Normal count-up
+                    if r_counter < C_WD_MAX_COUNT then
+                        r_counter <= r_counter + 1;
+                    else
+                        -- Late kick: CPU missed the window
+                        r_timeout_latched <= '1';
+                    end if;
+                end if;
             end if;
         end if;
     end process p_wd_counter;
 
     -- ========================================================================
-    -- 2. TIMEOUT DETECTION (Rule 2.1)
+    -- 2. VIOLATION FLAGS (Rule 2.1)
     -- ========================================================================
-    p_timeout : process(all)
+    p_violation : process(all)
     begin
-        w_timeout <= '0';
+        w_early_violation <= '0';
+        w_late_violation  <= '0';
 
-        if r_counter > C_WD_TIMEOUT then
-            w_timeout <= '1';
+        if cpu_kick_i = '1' and r_counter < C_WD_MIN_COUNT and r_timeout_latched = '0' then
+            w_early_violation <= '1';
         end if;
-    end process p_timeout;
+
+        if r_counter >= C_WD_MAX_COUNT and r_timeout_latched = '0' then
+            w_late_violation <= '1';
+        end if;
+    end process p_violation;
 
     -- ========================================================================
     -- 3. OUTPUT DRIVERS
     -- ========================================================================
-    sys_reset_o <= w_timeout;
+    sys_reset_o <= r_timeout_latched or w_early_violation or w_late_violation;
 
-    -- Diagnostic status: mirror the counter for external monitoring
-    wd_status_o <= std_logic_vector(r_counter);
+    -- Diagnostic status: upper nibble = fault code, lower = counter MSB
+    wd_status_o(7) <= r_timeout_latched;
+    wd_status_o(6) <= w_early_violation;
+    wd_status_o(5) <= w_late_violation;
+    wd_status_o(4 downto 0) <= std_logic_vector(r_counter(15 downto 11));
 
 end architecture rtl;

@@ -34,6 +34,20 @@ package package_soc_types is
     end record t_rv_bus;
 
     -- ------------------------------------------------------------------------
+    -- Peripheral Interface Record
+    -- ------------------------------------------------------------------------
+    -- Memory-mapped peripheral bus for safe routing to IO devices.
+    -- ------------------------------------------------------------------------
+    type t_periph_bus is record
+        addr  : std_logic_vector(C_ADDR_WIDTH-1 downto 0);
+        wdata : std_logic_vector(C_DATA_WIDTH-1 downto 0);
+        rdata : std_logic_vector(C_DATA_WIDTH-1 downto 0);
+        we    : std_logic;
+        re    : std_logic;
+        ready : std_logic;
+    end record t_periph_bus;
+
+    -- ------------------------------------------------------------------------
     -- Safe State Encoding (High Hamming Distance)
     -- ------------------------------------------------------------------------
     -- Custom 8-bit vectors where a single bit flip cannot accidentally
@@ -44,8 +58,9 @@ package package_soc_types is
     constant ST_FAULT_TRIPPED : t_safe_state := X"A5"; -- "10100101"
 
     -- ------------------------------------------------------------------------
-    -- Watchdog Timeout Constant
+    -- Watchdog Timing Constants
     -- ------------------------------------------------------------------------
-    constant C_WD_TIMEOUT : unsigned(15 downto 0) := to_unsigned(50000, 16);
+    constant C_WD_MIN_COUNT : unsigned(15 downto 0) := to_unsigned(40000, 16);
+    constant C_WD_MAX_COUNT : unsigned(15 downto 0) := to_unsigned(50000, 16);
 
 end package package_soc_types;

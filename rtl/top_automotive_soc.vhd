@@ -3,8 +3,8 @@
 -- Design Name:  ASIL-V Reference Hardware Platform
 -- Module Name:  top_automotive_soc - structural
 -- Description:  Master structural fabric. Instantiates two parallel NEORV32
---               RISC-V cores (Master & Checker), routing their internal memory
---               buses into the lockstep comparator safety block.
+--               RISC-V cores (Master & Checker), routing their external bus
+--               signals into the lockstep comparator safety block.
 --
 -- Traces to:    TSR_LOCKSTEP_001, TSR_SAFETY_GATE_001
 -- ============================================================================
@@ -33,6 +33,7 @@ entity top_automotive_soc is
         -- --------------------------------------------------------------------
         can_tx_o        : out std_logic; -- Hardened CAN-Bus transmission line
         can_rx_i        : in  std_logic; -- Hardened CAN-Bus reception line
+        uart_tx_o       : out std_logic; -- Safe UART diagnostic output
 
         -- --------------------------------------------------------------------
         -- Safety Supervisor & Actuator Isolation Pins
@@ -57,99 +58,606 @@ architecture structural of top_automotive_soc is
     signal w_nmi          : std_logic;
     signal w_bus_valid    : std_logic;
 
-    -- Local signal maps to catch individual flat port lines out of NEORV32 instances
-    signal w_core_a_addr  : std_logic_vector(31 downto 0);
-    signal w_core_b_addr  : std_logic_vector(31 downto 0);
-    signal w_core_a_data  : std_logic_vector(31 downto 0);
-    signal w_core_b_data  : std_logic_vector(31 downto 0);
-    signal w_core_a_we    : std_logic;
-    signal w_core_b_we    : std_logic;
-    signal w_core_a_valid : std_logic;
-    signal w_core_b_valid : std_logic;
+    -- Peripheral diagnostic signals
+    signal w_can_busy     : std_logic;
+    signal w_uart_busy    : std_logic;
+    signal w_uart_error   : std_logic;
+
+    -- XBus signals from each NEORV32 instance
+    signal w_core_a_xbus_addr : std_logic_vector(31 downto 0);
+    signal w_core_b_xbus_addr : std_logic_vector(31 downto 0);
+    signal w_core_a_xbus_data : std_logic_vector(31 downto 0);
+    signal w_core_b_xbus_data : std_logic_vector(31 downto 0);
+    signal w_core_a_xbus_we   : std_logic;
+    signal w_core_b_xbus_we   : std_logic;
+    signal w_core_a_xbus_stb  : std_logic;
+    signal w_core_b_xbus_stb  : std_logic;
+
+    -- Reset outputs from NEORV32
+    signal w_core_a_rstn_ocd : std_logic;
+    signal w_core_b_rstn_ocd : std_logic;
+    signal w_core_a_rstn_wdt : std_logic;
+    signal w_core_b_rstn_wdt : std_logic;
+
+    -- Trace ports (always present)
+    signal w_core_a_trace : std_logic_vector(31 downto 0);
+    signal w_core_b_trace : std_logic_vector(31 downto 0);
 
 begin
 
     -- ========================================================================
     -- 1. BUS RECORD PACKAGING
     -- ========================================================================
-    -- Aggregates the standard individual output wires coming out of the core
-    -- instances into clean, auditable records for the lockstep safety engine.
+    -- Aggregate XBus output wires into clean records for the lockstep engine.
     -- ========================================================================
-    w_core_a_bus.addr   <= w_core_a_addr;
-    w_core_a_bus.data   <= w_core_a_data;
-    w_core_a_bus.we     <= w_core_a_we;
-    w_core_a_bus.valid  <= w_core_a_valid;
+    w_core_a_bus.addr   <= w_core_a_xbus_addr;
+    w_core_a_bus.data   <= w_core_a_xbus_data;
+    w_core_a_bus.we     <= w_core_a_xbus_we;
+    w_core_a_bus.valid  <= w_core_a_xbus_stb;
 
-    w_core_b_bus.addr   <= w_core_b_addr;
-    w_core_b_bus.data   <= w_core_b_data;
-    w_core_b_bus.we     <= w_core_b_we;
-    w_core_b_bus.valid  <= w_core_b_valid;
+    w_core_b_bus.addr   <= w_core_b_xbus_addr;
+    w_core_b_bus.data   <= w_core_b_xbus_data;
+    w_core_b_bus.we     <= w_core_b_xbus_we;
+    w_core_b_bus.valid  <= w_core_b_xbus_stb;
 
     -- ========================================================================
     -- 2. INSTANCE: MASTER CPU (CORE A)
     -- ========================================================================
     i_cpu_master : entity neorv32.neorv32_top
         generic map (
-            CLOCK_FREQUENCY   => 50_000_000, -- 50 MHz Automotive baseline
-            INT_BOOTLOADER_EN => false,      -- Boot directly from flash
-            IO_GPIO_NUM       => 0,          -- Unused for raw computational core
-            MEM_INT_IMEM_EN   => true,       -- Enable internal instruction memory
-            MEM_INT_IMEM_SIZE => 16384       -- 16 KB Boot Cache
+            -- General
+            CLOCK_FREQUENCY   => 50_000_000,
+            TRACE_PORT_EN     => false,
+            DUAL_CORE_EN      => false,
+
+            -- Boot
+            BOOT_MODE_SELECT  => 0,
+            BOOT_ADDR_CUSTOM  => x"00000000",
+
+            -- OCD
+            OCD_EN            => false,
+            OCD_NUM_HW_TRIGGERS => 0,
+            OCD_AUTHENTICATION => false,
+            OCD_JEDEC_ID      => (others => '0'),
+
+            -- RISC-V Extensions
+            RISCV_ISA_C       => false,
+            RISCV_ISA_E       => false,
+            RISCV_ISA_M       => false,
+            RISCV_ISA_U       => false,
+            RISCV_ISA_Zaamo   => false,
+            RISCV_ISA_Zalrsc  => false,
+            RISCV_ISA_Zba     => false,
+            RISCV_ISA_Zbb     => false,
+            RISCV_ISA_Zbc     => false,
+            RISCV_ISA_Zbkb    => false,
+            RISCV_ISA_Zbkc    => false,
+            RISCV_ISA_Zbkx    => false,
+            RISCV_ISA_Zbs     => false,
+            RISCV_ISA_Zcb     => false,
+            RISCV_ISA_Zcmop   => false,
+            RISCV_ISA_Zfinx   => false,
+            RISCV_ISA_Zibi    => false,
+            RISCV_ISA_Zicntr  => false,
+            RISCV_ISA_Zicond  => false,
+            RISCV_ISA_Zihpm   => false,
+            RISCV_ISA_Zimop   => false,
+            RISCV_ISA_Zknd    => false,
+            RISCV_ISA_Zkne    => false,
+            RISCV_ISA_Zknh    => false,
+            RISCV_ISA_Zksed   => false,
+            RISCV_ISA_Zksh    => false,
+            RISCV_ISA_Zmmul   => false,
+            RISCV_ISA_Smcntrpmf => false,
+            RISCV_ISA_Xcfu    => false,
+
+            -- Tuning
+            CPU_CONSTT_BR_EN  => false,
+            CPU_FAST_MUL_EN   => false,
+            CPU_FAST_MUL_REGS => 1,
+            CPU_FAST_SHIFT_EN => false,
+            CPU_RF_ARCH_SEL   => 0,
+
+            -- PMP
+            PMP_NUM_REGIONS   => 0,
+            PMP_MIN_GRANULARITY => 4,
+            PMP_TOR_MODE_EN   => false,
+            PMP_NAP_MODE_EN   => false,
+
+            -- HPM
+            HPM_NUM_CNTS      => 0,
+            HPM_CNT_WIDTH     => 64,
+
+            -- IMEM
+            IMEM_EN           => true,
+            IMEM_BASE         => x"00000000",
+            IMEM_SIZE         => 16384,
+            IMEM_OUTREG_EN    => false,
+
+            -- DMEM
+            DMEM_EN           => false,
+            DMEM_BASE         => x"80000000",
+            DMEM_SIZE         => 8192,
+            DMEM_OUTREG_EN    => false,
+
+            -- Caches
+            ICACHE_EN         => false,
+            ICACHE_NUM_BLOCKS => 4,
+            DCACHE_EN         => false,
+            DCACHE_NUM_BLOCKS => 4,
+            CACHE_BLOCK_SIZE  => 64,
+            CACHE_BURSTS_EN   => true,
+            CACHE_UC_BASE     => x"F0000000",
+
+            -- SMC
+            SMC_EN            => false,
+            SMC_BASE          => x"E0000000",
+
+            -- XBus
+            XBUS_EN           => true,
+            XBUS_TIMEOUT      => 2048,
+            XBUS_REGSTAGE_EN  => false,
+
+            -- GPIO
+            IO_GPIO_NUM       => 0,
+            IO_GPIO_DIR_EN    => false,
+
+            -- CLINT
+            IO_CLINT_EN       => false,
+
+            -- UARTs
+            IO_UART0_EN       => false,
+            IO_UART0_RX_FIFO  => 1,
+            IO_UART0_TX_FIFO  => 1,
+            IO_UART1_EN       => false,
+            IO_UART1_RX_FIFO  => 1,
+            IO_UART1_TX_FIFO  => 1,
+
+            -- SPI/SDI
+            IO_SPI_EN         => false,
+            IO_SPI_FIFO       => 1,
+            IO_SDI_EN         => false,
+            IO_SDI_FIFO       => 1,
+
+            -- TWI/TWD
+            IO_TWI_EN         => false,
+            IO_TWI_FIFO       => 1,
+            IO_TWD_EN         => false,
+            IO_TWD_RX_FIFO    => 1,
+            IO_TWD_TX_FIFO    => 1,
+
+            -- PWM
+            IO_PWM_NUM        => 0,
+
+            -- WDT
+            IO_WDT_EN         => false,
+
+            -- TRNG
+            IO_TRNG_EN        => false,
+            IO_TRNG_FIFO      => 1,
+            IO_TRNG_NUM_RO    => 3,
+            IO_TRNG_NUM_INV   => 5,
+            IO_TRNG_NUM_RBIT  => 64,
+
+            -- CFS
+            IO_CFS_EN         => false,
+
+            -- NEOLED
+            IO_NEOLED_EN      => false,
+            IO_NEOLED_TX_FIFO => 1,
+
+            -- GPTMR
+            IO_GPTMR_NUM      => 0,
+
+            -- ONEWIRE
+            IO_ONEWIRE_EN     => false,
+            IO_ONEWIRE_FIFO   => 1,
+
+            -- DMA
+            IO_DMA_EN         => false,
+            IO_DMA_DSC_FIFO   => 4,
+
+            -- SLINK
+            IO_SLINK_EN       => false,
+            IO_SLINK_RX_FIFO  => 1,
+            IO_SLINK_TX_FIFO  => 1,
+
+            -- TRACER
+            IO_TRACER_EN      => false,
+            IO_TRACER_BUFFER  => 1,
+            IO_TRACER_SIMLOG_EN => false
         )
         port map (
-            -- Global Signals
+            -- Global
             clk_i          => clk_i,
             rstn_i         => rst_n_i,
+            rstn_ocd_o     => w_core_a_rstn_ocd,
+            rstn_wdt_o     => w_core_a_rstn_wdt,
 
-            -- Wishbone External Memory Bus Port Maps
-            wb_adr_o       => w_core_a_addr,
-            wb_dat_o       => w_core_a_data,
-            wb_we_o        => w_core_a_we,
-            wb_stb_o       => w_core_a_valid,
-            wb_dat_i       => (others => '0'), -- Read lines handled downstream
-            wb_ack_i       => w_bus_valid,     -- Only acknowledge if safety gate clears
+            -- Trace
+            trace_cpu0_o   => open,
+            trace_cpu1_o   => open,
 
-            -- Custom External Interrupts
-            ext_irq_i      => w_nmi            -- Feed the safety latch directly back as NMI
+            -- JTAG (disabled)
+            jtag_tck_i     => '0',
+            jtag_tdi_i     => '0',
+            jtag_tdo_o     => open,
+            jtag_tms_i     => '0',
+
+            -- SMC (disabled)
+            smc_ioen_o     => open,
+            smc_sck_o      => open,
+            smc_csn_o      => open,
+            smc_sdo_o      => open,
+            smc_sdi_i      => '0',
+
+            -- XBus
+            xbus_adr_o     => w_core_a_xbus_addr,
+            xbus_dat_o     => w_core_a_xbus_data,
+            xbus_cti_o     => open,
+            xbus_tag_o     => open,
+            xbus_we_o      => w_core_a_xbus_we,
+            xbus_sel_o     => open,
+            xbus_stb_o     => w_core_a_xbus_stb,
+            xbus_cyc_o     => open,
+            xbus_dat_i     => (others => '0'),
+            xbus_ack_i     => w_bus_valid,
+            xbus_err_i     => '0',
+
+            -- SLINK (disabled)
+            slink_rx_dat_i => (others => '0'),
+            slink_rx_src_i => (others => '0'),
+            slink_rx_val_i => '0',
+            slink_rx_lst_i => '0',
+            slink_rx_rdy_o => open,
+            slink_tx_dat_o => open,
+            slink_tx_dst_o => open,
+            slink_tx_val_o => open,
+            slink_tx_lst_o => open,
+            slink_tx_rdy_i => '0',
+
+            -- GPIO (disabled)
+            gpio_dir_o     => open,
+            gpio_o         => open,
+            gpio_i         => (others => '0'),
+
+            -- UART0/1 (disabled)
+            uart0_txd_o    => open,
+            uart0_rxd_i    => '0',
+            uart0_rtsn_o   => open,
+            uart0_ctsn_i   => '0',
+            uart1_txd_o    => open,
+            uart1_rxd_i    => '0',
+            uart1_rtsn_o   => open,
+            uart1_ctsn_i   => '0',
+
+            -- SPI (disabled)
+            spi_clk_o      => open,
+            spi_dat_o      => open,
+            spi_dat_i      => '0',
+            spi_csn_o      => open,
+
+            -- SDI (disabled)
+            sdi_clk_i      => '0',
+            sdi_dat_o      => open,
+            sdi_dat_i      => '0',
+            sdi_csn_i      => '1',
+
+            -- TWI (disabled)
+            twi_sda_i      => '1',
+            twi_sda_o      => open,
+            twi_scl_i      => '1',
+            twi_scl_o      => open,
+
+            -- TWD (disabled)
+            twd_sda_i      => '1',
+            twd_sda_o      => open,
+            twd_scl_i      => '1',
+
+            -- ONEWIRE (disabled)
+            onewire_i      => '1',
+            onewire_o      => open,
+
+            -- PWM (disabled)
+            pwm_o          => open,
+
+            -- CFS (disabled)
+            cfs_in_i       => (others => '0'),
+            cfs_out_o      => open,
+
+            -- NEOLED (disabled)
+            neoled_o       => open,
+
+            -- CLINT (disabled)
+            mtime_time_o   => open,
+
+            -- Interrupts
+            irq_msi_i      => '0',
+            irq_mti_i      => '0',
+            irq_mei_i      => w_nmi
         );
 
     -- ========================================================================
     -- 3. INSTANCE: MIRROR CHECKER CPU (CORE B)
     -- ========================================================================
-    -- Exact identical hardware instance. Receives identical inputs. Output
-    -- lines are kept separate to feed exclusively into the safety comparator.
-    -- ========================================================================
     i_cpu_checker : entity neorv32.neorv32_top
         generic map (
+            -- General
             CLOCK_FREQUENCY   => 50_000_000,
-            INT_BOOTLOADER_EN => false,
+            TRACE_PORT_EN     => false,
+            DUAL_CORE_EN      => false,
+
+            -- Boot
+            BOOT_MODE_SELECT  => 0,
+            BOOT_ADDR_CUSTOM  => x"00000000",
+
+            -- OCD
+            OCD_EN            => false,
+            OCD_NUM_HW_TRIGGERS => 0,
+            OCD_AUTHENTICATION => false,
+            OCD_JEDEC_ID      => (others => '0'),
+
+            -- RISC-V Extensions (same as Core A)
+            RISCV_ISA_C       => false,
+            RISCV_ISA_E       => false,
+            RISCV_ISA_M       => false,
+            RISCV_ISA_U       => false,
+            RISCV_ISA_Zaamo   => false,
+            RISCV_ISA_Zalrsc  => false,
+            RISCV_ISA_Zba     => false,
+            RISCV_ISA_Zbb     => false,
+            RISCV_ISA_Zbc     => false,
+            RISCV_ISA_Zbkb    => false,
+            RISCV_ISA_Zbkc    => false,
+            RISCV_ISA_Zbkx    => false,
+            RISCV_ISA_Zbs     => false,
+            RISCV_ISA_Zcb     => false,
+            RISCV_ISA_Zcmop   => false,
+            RISCV_ISA_Zfinx   => false,
+            RISCV_ISA_Zibi    => false,
+            RISCV_ISA_Zicntr  => false,
+            RISCV_ISA_Zicond  => false,
+            RISCV_ISA_Zihpm   => false,
+            RISCV_ISA_Zimop   => false,
+            RISCV_ISA_Zknd    => false,
+            RISCV_ISA_Zkne    => false,
+            RISCV_ISA_Zknh    => false,
+            RISCV_ISA_Zksed   => false,
+            RISCV_ISA_Zksh    => false,
+            RISCV_ISA_Zmmul   => false,
+            RISCV_ISA_Smcntrpmf => false,
+            RISCV_ISA_Xcfu    => false,
+
+            -- Tuning
+            CPU_CONSTT_BR_EN  => false,
+            CPU_FAST_MUL_EN   => false,
+            CPU_FAST_MUL_REGS => 1,
+            CPU_FAST_SHIFT_EN => false,
+            CPU_RF_ARCH_SEL   => 0,
+
+            -- PMP
+            PMP_NUM_REGIONS   => 0,
+            PMP_MIN_GRANULARITY => 4,
+            PMP_TOR_MODE_EN   => false,
+            PMP_NAP_MODE_EN   => false,
+
+            -- HPM
+            HPM_NUM_CNTS      => 0,
+            HPM_CNT_WIDTH     => 64,
+
+            -- IMEM
+            IMEM_EN           => true,
+            IMEM_BASE         => x"00000000",
+            IMEM_SIZE         => 16384,
+            IMEM_OUTREG_EN    => false,
+
+            -- DMEM
+            DMEM_EN           => false,
+            DMEM_BASE         => x"80000000",
+            DMEM_SIZE         => 8192,
+            DMEM_OUTREG_EN    => false,
+
+            -- Caches
+            ICACHE_EN         => false,
+            ICACHE_NUM_BLOCKS => 4,
+            DCACHE_EN         => false,
+            DCACHE_NUM_BLOCKS => 4,
+            CACHE_BLOCK_SIZE  => 64,
+            CACHE_BURSTS_EN   => true,
+            CACHE_UC_BASE     => x"F0000000",
+
+            -- SMC
+            SMC_EN            => false,
+            SMC_BASE          => x"E0000000",
+
+            -- XBus
+            XBUS_EN           => true,
+            XBUS_TIMEOUT      => 2048,
+            XBUS_REGSTAGE_EN  => false,
+
+            -- GPIO
             IO_GPIO_NUM       => 0,
-            MEM_INT_IMEM_EN   => true,
-            MEM_INT_IMEM_SIZE => 16384
+            IO_GPIO_DIR_EN    => false,
+
+            -- CLINT
+            IO_CLINT_EN       => false,
+
+            -- UARTs
+            IO_UART0_EN       => false,
+            IO_UART0_RX_FIFO  => 1,
+            IO_UART0_TX_FIFO  => 1,
+            IO_UART1_EN       => false,
+            IO_UART1_RX_FIFO  => 1,
+            IO_UART1_TX_FIFO  => 1,
+
+            -- SPI/SDI
+            IO_SPI_EN         => false,
+            IO_SPI_FIFO       => 1,
+            IO_SDI_EN         => false,
+            IO_SDI_FIFO       => 1,
+
+            -- TWI/TWD
+            IO_TWI_EN         => false,
+            IO_TWI_FIFO       => 1,
+            IO_TWD_EN         => false,
+            IO_TWD_RX_FIFO    => 1,
+            IO_TWD_TX_FIFO    => 1,
+
+            -- PWM
+            IO_PWM_NUM        => 0,
+
+            -- WDT
+            IO_WDT_EN         => false,
+
+            -- TRNG
+            IO_TRNG_EN        => false,
+            IO_TRNG_FIFO      => 1,
+            IO_TRNG_NUM_RO    => 3,
+            IO_TRNG_NUM_INV   => 5,
+            IO_TRNG_NUM_RBIT  => 64,
+
+            -- CFS
+            IO_CFS_EN         => false,
+
+            -- NEOLED
+            IO_NEOLED_EN      => false,
+            IO_NEOLED_TX_FIFO => 1,
+
+            -- GPTMR
+            IO_GPTMR_NUM      => 0,
+
+            -- ONEWIRE
+            IO_ONEWIRE_EN     => false,
+            IO_ONEWIRE_FIFO   => 1,
+
+            -- DMA
+            IO_DMA_EN         => false,
+            IO_DMA_DSC_FIFO   => 4,
+
+            -- SLINK
+            IO_SLINK_EN       => false,
+            IO_SLINK_RX_FIFO  => 1,
+            IO_SLINK_TX_FIFO  => 1,
+
+            -- TRACER
+            IO_TRACER_EN      => false,
+            IO_TRACER_BUFFER  => 1,
+            IO_TRACER_SIMLOG_EN => false
         )
         port map (
-            -- Global Signals
+            -- Global
             clk_i          => clk_i,
             rstn_i         => rst_n_i,
+            rstn_ocd_o     => w_core_b_rstn_ocd,
+            rstn_wdt_o     => w_core_b_rstn_wdt,
 
-            -- Wishbone External Memory Bus Port Maps
-            wb_adr_o       => w_core_b_addr,
-            wb_dat_o       => w_core_b_data,
-            wb_we_o        => w_core_b_we,
-            wb_stb_o       => w_core_b_valid,
-            wb_dat_i       => (others => '0'),
-            wb_ack_i       => w_bus_valid,     -- Synced lockstep clock gating
+            -- Trace
+            trace_cpu0_o   => open,
+            trace_cpu1_o   => open,
 
-            -- Custom External Interrupts
-            ext_irq_i      => w_nmi
+            -- JTAG (disabled)
+            jtag_tck_i     => '0',
+            jtag_tdi_i     => '0',
+            jtag_tdo_o     => open,
+            jtag_tms_i     => '0',
+
+            -- SMC (disabled)
+            smc_ioen_o     => open,
+            smc_sck_o      => open,
+            smc_csn_o      => open,
+            smc_sdo_o      => open,
+            smc_sdi_i      => '0',
+
+            -- XBus
+            xbus_adr_o     => w_core_b_xbus_addr,
+            xbus_dat_o     => w_core_b_xbus_data,
+            xbus_cti_o     => open,
+            xbus_tag_o     => open,
+            xbus_we_o      => w_core_b_xbus_we,
+            xbus_sel_o     => open,
+            xbus_stb_o     => w_core_b_xbus_stb,
+            xbus_cyc_o     => open,
+            xbus_dat_i     => (others => '0'),
+            xbus_ack_i     => w_bus_valid,
+            xbus_err_i     => '0',
+
+            -- SLINK (disabled)
+            slink_rx_dat_i => (others => '0'),
+            slink_rx_src_i => (others => '0'),
+            slink_rx_val_i => '0',
+            slink_rx_lst_i => '0',
+            slink_rx_rdy_o => open,
+            slink_tx_dat_o => open,
+            slink_tx_dst_o => open,
+            slink_tx_val_o => open,
+            slink_tx_lst_o => open,
+            slink_tx_rdy_i => '0',
+
+            -- GPIO (disabled)
+            gpio_dir_o     => open,
+            gpio_o         => open,
+            gpio_i         => (others => '0'),
+
+            -- UART0/1 (disabled)
+            uart0_txd_o    => open,
+            uart0_rxd_i    => '0',
+            uart0_rtsn_o   => open,
+            uart0_ctsn_i   => '0',
+            uart1_txd_o    => open,
+            uart1_rxd_i    => '0',
+            uart1_rtsn_o   => open,
+            uart1_ctsn_i   => '0',
+
+            -- SPI (disabled)
+            spi_clk_o      => open,
+            spi_dat_o      => open,
+            spi_dat_i      => '0',
+            spi_csn_o      => open,
+
+            -- SDI (disabled)
+            sdi_clk_i      => '0',
+            sdi_dat_o      => open,
+            sdi_dat_i      => '0',
+            sdi_csn_i      => '1',
+
+            -- TWI (disabled)
+            twi_sda_i      => '1',
+            twi_sda_o      => open,
+            twi_scl_i      => '1',
+            twi_scl_o      => open,
+
+            -- TWD (disabled)
+            twd_sda_i      => '1',
+            twd_sda_o      => open,
+            twd_scl_i      => '1',
+
+            -- ONEWIRE (disabled)
+            onewire_i      => '1',
+            onewire_o      => open,
+
+            -- PWM (disabled)
+            pwm_o          => open,
+
+            -- CFS (disabled)
+            cfs_in_i       => (others => '0'),
+            cfs_out_o      => open,
+
+            -- NEOLED (disabled)
+            neoled_o       => open,
+
+            -- CLINT (disabled)
+            mtime_time_o   => open,
+
+            -- Interrupts
+            irq_msi_i      => '0',
+            irq_mti_i      => '0',
+            irq_mei_i      => w_nmi
         );
 
     -- ========================================================================
     -- 4. INSTANCE: HARDENED DUAL-CORE LOCKSTEP COMPARATOR
     -- ========================================================================
-    -- Monitors cycle-by-cycle. Drops validity immediately on any mismatch.
-    -- ========================================================================
-    i_lockstep_gate : entity work.lockstep_comparator
+    i_lockstep_gate : entity lockstep.lockstep_comparator
         port map (
             clk_i        => clk_i,
             rst_n_syn_i  => rst_n_i,
@@ -170,17 +678,29 @@ begin
     -- ========================================================================
     -- 5. AUTOMOTIVE BUS CONTROLLER INTEGRATION
     -- ========================================================================
-    -- Only receives commands if the lockstep core validates the current
-    -- bus state transaction.
-    -- ========================================================================
-    i_automotive_can : entity work.automotive_can_controller
+    i_automotive_can : entity lockstep.automotive_can_controller
         port map (
             clk_i      => clk_i,
             rst_n_i    => rst_n_i,
-            bus_i      => w_safe_sys_bus,  -- Connects to the filtered safety bus
-            bus_ok_i   => w_bus_valid,     -- Hardware transaction validation gate
+            bus_i      => w_safe_sys_bus,
+            bus_ok_i   => w_bus_valid,
             can_tx_o   => can_tx_o,
-            can_rx_i   => can_rx_i
+            can_rx_i   => can_rx_i,
+            can_busy_o => w_can_busy
+        );
+
+    -- ========================================================================
+    -- 6. SAFE UART DIAGNOSTIC INTERFACE
+    -- ========================================================================
+    i_safe_uart : entity lockstep.safe_uart
+        port map (
+            clk_i      => clk_i,
+            rst_n_i    => rst_n_i,
+            bus_i      => w_safe_sys_bus,
+            bus_ok_i   => w_bus_valid,
+            uart_tx_o  => uart_tx_o,
+            uart_busy_o  => w_uart_busy,
+            uart_error_o => w_uart_error
         );
 
 end architecture structural;
