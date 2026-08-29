@@ -1,8 +1,6 @@
 -- ============================================================================
 -- Testbench: Lockstep Comparator — Mismatch Injection
 -- ============================================================================
--- ISO 26262 §5.2 | VUnit testbench | GHDL 6.0 mcode
--- ============================================================================
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -55,7 +53,6 @@ begin
         for dummy in 1 to 5 loop wait until rising_edge(tb_clk); end loop;
 
         -- --- Test 1: Normal operation — identical buses ---
-        -- Assign BOTH cores explicitly (VHDL signal semantics: b<=a copies old a)
         core_a_bus <= (addr  => x"00001000",
                        data  => x"DEADBEEF",
                        we    => '1',
@@ -72,6 +69,8 @@ begin
         -- --- Test 2: Data mismatch ---
         core_a_bus.data <= x"DEADBEEF";
         core_b_bus.data <= x"12345678";
+        -- Wait for mismatch to propagate through FSM (needs 2 cycles)
+        wait until rising_edge(tb_clk);
         wait until rising_edge(tb_clk);
         check(nmi_fault  = '1', "NMI on data mismatch");
         check(safe_state = '1', "safe_state on mismatch");
