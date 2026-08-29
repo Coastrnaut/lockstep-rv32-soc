@@ -53,7 +53,7 @@ begin
         wait for 10 ns;
         check(sbe_o = '0', "no SBE on clean read");
         check(dbe_o = '0', "no DBE on clean read");
-        check(data_o = (others => '0'), "data passes through clean");
+        check(data_o = "0000000000000000000000000000000000000000000000000000000000000000", "data passes through clean");
 
         -- --- Test 2: Single-bit error injection ---
         data_rd_i <= (others => '0');
