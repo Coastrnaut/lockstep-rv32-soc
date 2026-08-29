@@ -61,7 +61,12 @@ else:
 lockstep_lib.add_source_files(root / "rtl" / "top_automotive_soc.vhd")
 
 # ---------------------------------------------------------------------------
-# 6. Testbenches
+# 6. OSVVM libraries (scoreboard, NVC reporter, etc.)
+# ---------------------------------------------------------------------------
+vu.add_osvvm()
+
+# ---------------------------------------------------------------------------
+# 7. Testbenches
 # ---------------------------------------------------------------------------
 sim_lib = vu.add_library("sim_lib", vhdl_standard="2008")
 sim_lib.add_source_files(root / "sim" / "testbenches" / "*.vhd")
