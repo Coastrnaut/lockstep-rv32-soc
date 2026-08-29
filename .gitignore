@@ -40,3 +40,4 @@ __pycache__/
 .vscode/
 .idea/
 rtl/core/neorv32/
+sim/OsvvmLibraries/
