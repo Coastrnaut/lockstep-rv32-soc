@@ -45,35 +45,35 @@ begin
         test_runner_setup(runner, runner_cfg);
 
         tb_rst_n <= '0';
-        for _ in 1 to 5 loop wait until rising_edge(tb_clk); end loop;
+        for dummy in 1 to 5 loop wait until rising_edge(tb_clk); end loop;
         tb_rst_n <= '1';
-        for _ in 1 to 5 loop wait until rising_edge(tb_clk); end loop;
+        for dummy in 1 to 5 loop wait until rising_edge(tb_clk); end loop;
 
-        -- --- Test 1: Idle line ---
-        check(uart_tx   = '1', "TX idle recessive");
-        check(uart_busy = '0', "UART idle");
-        check(uart_err  = '0', "no error at idle");
+        -- --- Test 1: Idle state ---
+        check(uart_busy = '0', "UART idle at start");
+        check(uart_tx   = '1', "TX recessive at idle");
 
         -- --- Test 2: Write valid data → TX starts ---
         bus_i <= (addr  => (others => '0'),
-                  data  => x"0041",
+                  data  => x"00000041",
                   we    => '1',
                   valid => '1');
-        wait until rising_edge(tb_clk);
+        wait until rising_edge(tb_clk);  -- p_rx_regs accepts write
         bus_i <= (addr => (others => '0'),
                   data => (others => '0'),
                   we   => '0',
                   valid => '0');
-        wait until rising_edge(tb_clk);
+        wait until rising_edge(tb_clk);  -- FSM sees r_tx_valid, transitions
+        wait until rising_edge(tb_clk);  -- extra cycle for FSM to settle
         check(uart_busy = '1', "UART busy after write");
         check(uart_err  = '0', "no parity error on valid write");
 
         -- --- Test 3: Wait for TX to finish ---
-        for _ in 1 to 5000 loop
+        for dummy in 1 to 5000 loop
             wait until rising_edge(tb_clk);
             if uart_busy = '0' then exit; end if;
         end loop;
-        check(uart_busy = '0', "UART returns to idle");
+        check(uart_busy = '0', "UART idle after TX complete");
 
         test_runner_cleanup(runner);
     end process;
