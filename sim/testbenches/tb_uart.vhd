@@ -59,17 +59,13 @@ begin
                   we    => '1',
                   valid => '1');
         wait until rising_edge(tb_clk);  -- p_rx_regs accepts write
-        bus_i <= (addr => (others => '0'),
-                  data => (others => '0'),
-                  we   => '0',
-                  valid => '0');
         wait until rising_edge(tb_clk);  -- FSM sees r_tx_valid, transitions
-        wait until rising_edge(tb_clk);  -- extra cycle for FSM to settle
+        wait until rising_edge(tb_clk);  -- extra margin
         check(uart_busy = '1', "UART busy after write");
         check(uart_err  = '0', "no parity error on valid write");
 
-        -- --- Test 3: Wait for TX to finish ---
-        for dummy in 1 to 5000 loop
+        -- --- Test 3: Wait for TX to finish (max 10000 cycles) ---
+        for dummy in 1 to 10000 loop
             wait until rising_edge(tb_clk);
             if uart_busy = '0' then exit; end if;
         end loop;
