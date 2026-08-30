@@ -1,12 +1,14 @@
 import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from vunit import VUnit
 
 # ==============================================================================
 # VUnit Test Runner — lockstep-rv32-soc RISC-V SoC
 # ==============================================================================
-# Runs the full regression matrix against GHDL. Enables code coverage tracking
-# for ASIL-D compliance reporting.
+# Auto-detects simulator: Vivado XSim > hardcoded GHDL > GHDL on PATH
 #
 # Usage:
 #   python sim/run.py --compile    # Compile only
@@ -14,14 +16,63 @@ from vunit import VUnit
 #   python sim/run.py --test <name>  # Run a single test
 # ==============================================================================
 
-# Pin GHDL executable — Windows absolute path, Linux falls back to PATH
-if os.name == "nt":  # Windows
-    GHDL_BIN = r"C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin"
-    if os.path.isdir(GHDL_BIN):
-        os.environ["VUNIT_GHDL_PATH"] = GHDL_BIN
-    else:
-        print(f"WARNING: GHDL bin not found at {GHDL_BIN} — will use PATH fallback")
-# On Linux (CI runner), ghdl is installed via apt and found on PATH
+# ---------------------------------------------------------------------------
+# Simulator auto-detection
+# ---------------------------------------------------------------------------
+def find_simulator():
+    """Return ('vivado', None), ('ghdl', path), or ('ghdl', 'auto')."""
+
+    # 1. Check for Vivado XSim on PATH
+    if shutil.which("xvlog") and shutil.which("xsim"):
+        # Verify Vivado actually works (handles installed but not licensed)
+        try:
+            result = subprocess.run(
+                ["xvlog", "--version"],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                return ("vivado", None)
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+    # 2. Check for hardcoded GHDL (Windows)
+    if os.name == "nt":
+        ghdl_bin = Path(r"C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin")
+        if ghdl_bin.is_dir():
+            return ("ghdl", str(ghdl_bin))
+
+    # 3. Fall back to GHDL on PATH
+    if shutil.which("ghdl"):
+        return ("ghdl", "auto")
+
+    # Nothing found
+    return (None, None)
+
+simulator_name, sim_path = find_simulator()
+
+if simulator_name is None:
+    print("ERROR: No simulator found.")
+    print("  Checked: Vivado XSim (xvlog/xsim on PATH),")
+    print("           GHDL (C:\\GIT\\ghdl-mcode-6.0.0-rc2-mingw64\\bin),")
+    print("           GHDL (PATH)")
+    sys.exit(1)
+
+print(f"Using simulator: {simulator_name}" + (
+    f" ({sim_path})" if sim_path and sim_path != "auto" else ""
+))
+
+# ---------------------------------------------------------------------------
+# Configure VUnit for detected simulator
+# ---------------------------------------------------------------------------
+if simulator_name == "vivado":
+    os.environ["VUNIT_SIMULATOR"] = "vivado"
+else:
+    os.environ["VUNIT_SIMULATOR"] = "ghdl"
+    if sim_path and sim_path != "auto":
+        os.environ["VUNIT_GHDL_PATH"] = sim_path
+    elif os.name == "nt":
+        # Windows without hardcoded path — warn
+        print("WARNING: Using PATH ghdl on Windows — may not work")
 
 # Initialize VUnit testing context
 vu = VUnit.from_argv(compile_builtins=False)
@@ -74,9 +125,15 @@ sim_lib = vu.add_library("sim_lib", vhdl_standard="2008")
 sim_lib.add_source_files(root / "sim" / "testbenches" / "*.vhd")
 
 # ---------------------------------------------------------------------------
-# 7. GHDL flags (coverage removed — GHDL 6.0 mcode backend lacks coverage)
+# Simulator-specific options
 # ---------------------------------------------------------------------------
-# vu.set_sim_option("ghdl.sim_flags", [...])
+if simulator_name == "vivado":
+    # XSim: relax strictness for mixed-std projects, verbose on failure
+    vu.set_compile_option("vivado.xvhdl_flags", ["-relax"])
+    vu.set_sim_option("vivado.xsim_flags", ["-v", "1"])
+else:
+    # GHDL: no coverage flags (mcode backend lacks coverage support)
+    pass
 
 # ---------------------------------------------------------------------------
 # Ensure reports/ directory exists (OSVVM writes OsvvmRun.yml here)
@@ -85,6 +142,6 @@ sim_lib.add_source_files(root / "sim" / "testbenches" / "*.vhd")
 os.makedirs("reports", exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# 8. Run
+# Run
 # ---------------------------------------------------------------------------
 vu.main()
