@@ -64,10 +64,11 @@ def find_simulator():
     # Nothing found
     return (None, None)
 
-# Strip --skip-lint / --skip-vsg before any VUnit.from_argv() call
-_skip_lint = "--skip-lint" in sys.argv
-_skip_vsg = "--skip-vsg" in sys.argv
-sys.argv = [a for a in sys.argv if a not in ("--skip-lint", "--skip-vsg")]
+# Parse standalone lint flags: --lint runs only ghdl lint, --vsg runs only vsg.
+# When neither is present, the full pipeline (lint → compile → test) runs.
+_lint_only = "--lint" in sys.argv
+_vsg_only = "--vsg" in sys.argv
+sys.argv = [a for a in sys.argv if a not in ("--lint", "--vsg")]
 
 detected_name, detected_path = find_simulator()
 
@@ -367,20 +368,47 @@ if not _ghdl_for_lint:
 
 _vsg_exe = _find_exe("vsg")
 
-# Run lint gates
-if _ghdl_for_lint and not _skip_lint:
-    if not _run_ghdl_lint(_ghdl_for_lint):
-        sys.exit(1)
-elif not _ghdl_for_lint and not _skip_lint:
-    print("WARNING: GHDL not found — skipping semantic safety lint.")
-    print("  Install ghdl or add to PATH to enable ASIL-D lint gate.")
+# ---------------------------------------------------------------------------
+# Lint gates
+# --lint : run only ghdl semantic lint, then exit
+# --vsg  : run only vsg style lint, then exit
+# (no flag) : run both, then continue to compile + test
+# ---------------------------------------------------------------------------
+def _do_lint():
+    if _ghdl_for_lint:
+        if not _run_ghdl_lint(_ghdl_for_lint):
+            sys.exit(1)
+    else:
+        print("WARNING: GHDL not found — skipping semantic safety lint.")
+        print("  Install ghdl or add to PATH to enable ASIL-D lint gate.")
 
-if _vsg_exe and not _skip_vsg:
-    if not _run_vsg(_vsg_exe):
+    if _vsg_exe:
+        if not _run_vsg(_vsg_exe):
+            sys.exit(1)
+    else:
+        print("WARNING: vsg not found — skipping style lint.")
+        print("  pip install vsg to enable style checking.")
+
+if _lint_only:
+    if _ghdl_for_lint:
+        if not _run_ghdl_lint(_ghdl_for_lint):
+            sys.exit(1)
+    else:
+        print("ERROR: GHDL not found.")
         sys.exit(1)
-elif not _vsg_exe and not _skip_vsg:
-    print("WARNING: vsg not found — skipping style lint.")
-    print("  pip install vsg to enable style checking.")
+    sys.exit(0)
+
+if _vsg_only:
+    if _vsg_exe:
+        if not _run_vsg(_vsg_exe):
+            sys.exit(1)
+    else:
+        print("ERROR: vsg not found.")
+        sys.exit(1)
+    sys.exit(0)
+
+# Full pipeline — run both linters
+_do_lint()
 
 # ---------------------------------------------------------------------------
 # 6. OSVVM libraries (scoreboard, NVC reporter, etc.)
