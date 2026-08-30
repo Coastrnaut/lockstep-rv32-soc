@@ -66,7 +66,7 @@ begin
         wait for 0 ns;
         check(uart_busy = '1', "TX in progress: busy asserted");
         -- Wait for TX to complete (baud div = 434, ~10 bits => ~4340 cycles)
-        wait for CLK_PERIOD * 50;
+        wait for CLK_PERIOD * 5000;
         wait for 0 ns;
         check(uart_busy = '0', "TX complete: idle");
 
@@ -93,11 +93,12 @@ begin
             bus_i <= (addr => x"00000000", data => std_logic_vector(to_unsigned(dummy + 65, 32)), we => '1', valid => '1');
             wait until rising_edge(clk);
             bus_i.valid <= '0';
-            wait for CLK_PERIOD * 50;
+            wait for CLK_PERIOD * 5000;
         end loop;
         check(uart_busy = '0', "back-to-back: idle after all tx");
         check(uart_err = '0', "back-to-back: no error");
 
         test_runner_cleanup(runner);
+        wait;
     end process;
 end architecture rtl;
