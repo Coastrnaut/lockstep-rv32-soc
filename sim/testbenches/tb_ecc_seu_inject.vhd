@@ -50,7 +50,7 @@ begin
 
     );
 
-p_test : process is
+  p_test : process is
 
     variable v_sbe      : std_logic;
     variable v_dbe      : std_logic;
