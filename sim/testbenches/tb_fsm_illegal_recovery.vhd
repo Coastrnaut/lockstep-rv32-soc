@@ -25,16 +25,11 @@ architecture tb of tb_fsm_illegal_recovery is
   signal bus_ok   : std_logic;
   signal can_tx   : std_logic;
   signal can_rx   : std_logic;
-  signal can_busy : std_logic;
-
-  -- Component declarations (VSG compliance)
-  component automotive_can_controller is end component automotive_can_controller;
-
-begin
+  signal can_busy : std_logic;begin
 
   clk <= not clk after clk_period / 2;
 
-  uut : component automotive_can_controller
+  uut : entity lockstep.automotive_can_controller
     port map (
       clk_i      => clk,
       rst_n_i    => rst_n,

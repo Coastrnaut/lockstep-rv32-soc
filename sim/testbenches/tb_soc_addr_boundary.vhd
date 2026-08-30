@@ -25,16 +25,11 @@ architecture tb of tb_soc_addr_boundary is
   signal   safe_state : std_logic;
   signal   nmi_fault  : std_logic;
   signal   bus_valid  : std_logic;
-  signal   sys_bus    : t_rv_bus;
-
-  -- Component declarations (VSG compliance)
-  component lockstep_comparator is end component lockstep_comparator;
-
-begin
+  signal   sys_bus    : t_rv_bus;begin
 
   clk <= not clk after clk_per / 2;
 
-  u_dut : component lockstep_comparator
+  u_dut : entity lockstep.lockstep_comparator
     port map (
       clk_i        => clk,
       rst_n_syn_i  => rst_n,

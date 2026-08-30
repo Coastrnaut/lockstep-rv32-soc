@@ -28,16 +28,11 @@ architecture rtl of tb_watchdog_timeout is
   signal   wd_rst_n      : std_logic;
   signal   cpu_kick      : std_logic;
   signal   sys_rst       : std_logic;
-  signal   wd_stat       : std_logic_vector(7 downto 0);
-
-  -- Component declarations (VSG compliance)
-  component hardware_watchdog is end component hardware_watchdog;
-
-begin
+  signal   wd_stat       : std_logic_vector(7 downto 0);begin
 
   wd_clk <= not wd_clk after wd_clk_period / 2;
 
-  i_wdt : component hardware_watchdog
+  i_wdt : entity lockstep.hardware_watchdog
     port map (
       wd_clk_i    => wd_clk,
       rst_n_i     => wd_rst_n,

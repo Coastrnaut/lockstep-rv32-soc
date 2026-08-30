@@ -50,7 +50,7 @@ architecture rtl of tb_ecc is
 
 begin
 
-  i_ecc : component hamming_ecc_wrapper
+  i_ecc : entity lockstep.hamming_ecc_wrapper
     generic map (
       g_data_width => C_DW
     )

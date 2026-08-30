@@ -27,16 +27,11 @@ architecture rtl of tb_uart is
   signal   bus_ok     : std_logic;
   signal   uart_tx    : std_logic;
   signal   uart_busy  : std_logic;
-  signal   uart_err   : std_logic;
-
-  -- Component declarations (VSG compliance)
-  component safe_uart is end component safe_uart;
-
-begin
+  signal   uart_err   : std_logic;begin
 
   tb_clk <= not tb_clk after clk_period / 2;
 
-  i_uart : component safe_uart
+  i_uart : entity lockstep.safe_uart
     port map (
       clk_i        => tb_clk,
       rst_n_i      => tb_rst_n,

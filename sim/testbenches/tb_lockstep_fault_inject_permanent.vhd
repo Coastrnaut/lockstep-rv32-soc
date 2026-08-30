@@ -25,16 +25,11 @@ architecture tb of tb_lockstep_fault_inject_permanent is
   signal   nmi_fault  : std_logic;
   signal   safe_state : std_logic;
   signal   bus_valid  : std_logic;
-  signal   sys_bus    : t_rv_bus;
-
-  -- Component declarations (VSG compliance)
-  component lockstep_comparator is end component lockstep_comparator;
-
-begin
+  signal   sys_bus    : t_rv_bus;begin
 
   clk <= not clk after clk_period / 2;
 
-  uut : component lockstep_comparator
+  uut : entity lockstep.lockstep_comparator
     port map (
       clk_i        => clk,
       rst_n_syn_i  => rst_n,

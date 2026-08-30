@@ -55,16 +55,13 @@ architecture behavior of tb_lockstep_comparator is
 
   constant clk_period : time := 20 ns; -- 50 MHz Automotive baseline
 
-  -- Component declarations (VSG compliance)
-  component lockstep_comparator is end component lockstep_comparator;
-
 begin
 
   -- Clock Generation Thread
   clk_s <= not clk_s after clk_period / 2;
 
   -- Unit Under Test
-  uut : component lockstep_comparator
+  uut : entity lockstep.lockstep_comparator
     port map (
       clk_i        => clk_s,
       rst_n_syn_i  => rst_n_s,

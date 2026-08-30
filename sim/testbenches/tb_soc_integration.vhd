@@ -31,16 +31,11 @@ architecture rtl of tb_soc_integration is
   signal can_rx        : std_logic;
   signal uart_tx       : std_logic;
   signal nmi_fault     : std_logic;
-  signal actuator_safe : std_logic;
-
-  -- Component declarations (VSG compliance)
-  component top_automotive_soc is end component top_automotive_soc;
-
-begin
+  signal actuator_safe : std_logic;begin
 
   clk <= not clk after clk_period / 2;
 
-  i_soc : component top_automotive_soc
+  i_soc : entity lockstep.top_automotive_soc
     port map (
       clk_i           => clk,
       rst_n_i         => rst_n,

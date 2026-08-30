@@ -26,12 +26,7 @@ architecture tb of tb_can is
   signal bus_ok_i   : std_logic;
   signal can_rx_i   : std_logic;
   signal can_tx_o   : std_logic;
-  signal can_busy_o : std_logic;
-
-  -- Component declarations (VSG compliance)
-  component automotive_can_controller is end component automotive_can_controller;
-
-begin
+  signal can_busy_o : std_logic;begin
 
   -- Clock: 10ns period
   p_clk : process is
@@ -43,7 +38,7 @@ begin
   end process p_clk;
 
   -- DUT
-  uut : component automotive_can_controller
+  uut : entity lockstep.automotive_can_controller
     port map (
       clk_i      => clk_i,
       rst_n_i    => rst_n_i,

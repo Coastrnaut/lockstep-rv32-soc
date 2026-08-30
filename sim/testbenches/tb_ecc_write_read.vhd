@@ -35,12 +35,7 @@ architecture rtl of tb_ecc_write_read is
   signal s_sbe     : std_logic;
   signal s_dbe     : std_logic;
 
-  constant clk_half : time := 5 ns;
-
-  -- Component declarations (VSG compliance)
-  component hamming_ecc_wrapper is end component hamming_ecc_wrapper;
-
-begin
+  constant clk_half : time := 5 ns;begin
 
   clk_proc : process is
   begin
@@ -50,7 +45,7 @@ begin
 
   end process clk_proc;
 
-  i_ecc : component hamming_ecc_wrapper
+  i_ecc : entity lockstep.hamming_ecc_wrapper
     port map (
       clk_i           => s_clk,
       rst_n_i         => s_rst_n,

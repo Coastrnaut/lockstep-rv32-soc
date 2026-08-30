@@ -30,16 +30,11 @@ architecture rtl of tb_can_rx_data is
   signal bus_ok   : std_logic;
   signal can_tx   : std_logic;
   signal can_rx   : std_logic;
-  signal can_busy : std_logic;
-
-  -- Component declarations (VSG compliance)
-  component automotive_can_controller is end component automotive_can_controller;
-
-begin
+  signal can_busy : std_logic;begin
 
   clk <= not clk after clk_period / 2;
 
-  i_can : component automotive_can_controller
+  i_can : entity lockstep.automotive_can_controller
     port map (
       clk_i      => clk,
       rst_n_i    => rst_n,

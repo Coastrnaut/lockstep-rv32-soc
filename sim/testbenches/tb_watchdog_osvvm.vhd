@@ -24,17 +24,12 @@ architecture tb of tb_watchdog_osvvm is
   signal wd_clk      : std_logic;
   signal cpu_kick    : std_logic;
   signal sys_reset_o : std_logic;
-  signal wd_status_o : std_logic_vector(7 downto 0);
-
-  -- Component declarations (VSG compliance)
-  component hardware_watchdog is end component hardware_watchdog;
-
-begin
+  signal wd_status_o : std_logic_vector(7 downto 0);begin
 
   clk    <= not clk after clk_period / 2;
   wd_clk <= not wd_clk after clk_period / 2;
 
-  uut : component hardware_watchdog
+  uut : entity lockstep.hardware_watchdog
     port map (
       wd_clk_i    => wd_clk,
       rst_n_i     => rst_n,
