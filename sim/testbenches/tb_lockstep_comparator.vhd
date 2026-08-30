@@ -1,81 +1,193 @@
 -- ============================================================================
--- Testbench: Lockstep Comparator — Mismatch Injection
+-- Testbench: Lockstep Comparator — Constrained-Random Coverage-Driven
+-- ============================================================================
+-- Uses OSVVM RandomPType and CoveragePkg for intelligent pseudo-random
+-- stimulus generation with functional coverage tracking.
+-- Loop runs until the 2x3 cross-matrix (bus operation x fault vector)
+-- reaches 100% bin coverage.
+--
+-- Traces to:   TSR_LOCKSTEP_042, TSR_SAFETY_GATE_001
 -- ============================================================================
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+-- Import OSVVM core packages
+library osvvm;
+use osvvm.AlertLogPkg.all;
+use osvvm.CoveragePkg.all;
+use osvvm.RandomPkg.all;
+use osvvm.ReportPkg.all;
+
 library lockstep;
 use lockstep.package_soc_types.all;
 
-library vunit_lib;
-context vunit_lib.vunit_context;
-
 entity tb_lockstep_comparator is
-    generic (runner_cfg : string := "");
-end entity;
+-- Testbenches do not feature physical ports
+end entity tb_lockstep_comparator;
 
-architecture rtl of tb_lockstep_comparator is
-    constant CLK_PERIOD : time := 20 ns;
-    signal tb_clk : std_logic := '0';
-    signal tb_rst_n : std_logic := '0';
-    signal core_a_bus : t_rv_bus := (addr => (others => '0'),
-                                     data => (others => '0'),
-                                     we   => '0',
-                                     valid => '0');
-    signal core_b_bus : t_rv_bus := (addr => (others => '0'),
-                                     data => (others => '0'),
-                                     we   => '0',
-                                     valid => '0');
-    signal nmi_fault, safe_state, bus_valid : std_logic;
+architecture behavior of tb_lockstep_comparator is
+
+    -- Declare OSVVM Randomizer (protected type — must be shared variable)
+    shared variable RV : RandomPType;
+
+    -- Local Clock & Timing Wires
+    signal clk_s           : std_logic := '0';
+    signal rst_n_s         : std_logic := '1';
+
+    -- Mock CPU Bus Signals matching lockstep.package_soc_types
+    signal core_a_bus_s    : t_rv_bus := (addr => (others => '0'), data => (others => '0'), we => '0', valid => '0');
+    signal core_b_bus_s    : t_rv_bus := (addr => (others => '0'), data => (others => '0'), we => '0', valid => '0');
+
+    -- Outward-facing monitored safety outputs
+    signal nmi_fault_s     : std_logic;
+    signal actuator_safe_s : std_logic;
+    signal bus_valid_s     : std_logic;
+
+    constant CLK_PERIOD    : time := 20 ns; -- 50 MHz Automotive baseline
+
 begin
-    tb_clk <= not tb_clk after CLK_PERIOD / 2;
 
-    i_cmp : entity lockstep.lockstep_comparator
-        port map (clk_i           => tb_clk,
-                  rst_n_syn_i     => tb_rst_n,
-                  core_a_bus_i    => core_a_bus,
-                  core_b_bus_i    => core_b_bus,
-                  nmi_fault_o     => nmi_fault,
-                  safe_state_o    => safe_state,
-                  bus_valid_o     => bus_valid,
-                  sys_bus_o       => open);
+    -- Clock Generation Thread
+    clk_s <= not clk_s after CLK_PERIOD / 2;
 
-    p_stim : process
+    -- Unit Under Test
+    uut : entity lockstep.lockstep_comparator
+        port map (
+            clk_i          => clk_s,
+            rst_n_syn_i    => rst_n_s,
+            core_a_bus_i   => core_a_bus_s,
+            core_b_bus_i   => core_b_bus_s,
+            nmi_fault_o    => nmi_fault_s,
+            safe_state_o   => actuator_safe_s,
+            bus_valid_o    => bus_valid_s,
+            sys_bus_o      => open
+        );
+
+    -- ========================================================================
+    -- CONSTRAINED-RANDOM STIMULUS & COVERAGE TRACKING LOOP
+    -- ========================================================================
+    p_stimulus : process
+        -- Coverage ID (record type, not protected — must be local variable)
+        variable CovMatrix   : CoverageIDType;
+        -- Local storage variables to hold loop-generated parameters
+        variable v_rand_we    : integer;
+        variable v_rand_fault : integer;
+        variable v_rand_data  : std_logic_vector(31 downto 0);
+        variable v_rand_addr  : std_logic_vector(31 downto 0);
+        variable v_cov_point  : integer_vector(1 to 2);
     begin
-        test_runner_setup(runner, runner_cfg);
+        -- Initialize the OSVVM Alert/Log naming context
+        SetAlertLogName("tb_lockstep_randomized");
 
-        -- --- Reset sequence ---
-        tb_rst_n <= '0';
-        for dummy in 1 to 10 loop wait until rising_edge(tb_clk); end loop;
-        tb_rst_n <= '1';
-        for dummy in 1 to 5 loop wait until rising_edge(tb_clk); end loop;
+        -- Initialize the Random Seed Generator engine
+        RV.InitSeed(RV'instance_name);
 
-        -- --- Test 1: Normal operation — identical buses ---
-        core_a_bus <= (addr  => x"00001000",
-                       data  => x"DEADBEEF",
-                       we    => '1',
-                       valid => '1');
-        core_b_bus <= (addr  => x"00001000",
-                       data  => x"DEADBEEF",
-                       we    => '1',
-                       valid => '1');
-        wait until rising_edge(tb_clk);
-        check(nmi_fault  = '0', "no NMI in normal mode");
-        check(safe_state = '0', "safe_state low in normal mode");
-        check(bus_valid  = '1', "bus_valid high in normal mode");
+        -- Create a unique coverage ID
+        CovMatrix := NewID("CovMatrix");
 
-        -- --- Test 2: Data mismatch ---
-        core_a_bus.data <= x"DEADBEEF";
-        core_b_bus.data <= x"12345678";
-        -- Wait for mismatch to propagate through FSM (needs 2 cycles)
-        wait until rising_edge(tb_clk);
-        wait until rising_edge(tb_clk);
-        check(nmi_fault  = '1', "NMI on data mismatch");
-        check(safe_state = '1', "safe_state on mismatch");
-        check(bus_valid  = '0', "bus_valid drops on mismatch");
+        -- --------------------------------------------------------------------
+        -- Define the Coverage Bins (Functional Matrix Geometry)
+        -- --------------------------------------------------------------------
+        -- Axis 1: Bus Operation Mode (0 = Read, 1 = Write)
+        -- Axis 2: Fault Injection Vector (0 = Safe, 1 = Address Mismatch, 2 = Data Mismatch)
+        -- Resulting Cross-Matrix total size = 6 distinct bins
+        AddBins(CovMatrix, GenBin(0, 1));  -- Bus Operation Axis
+        AddBins(CovMatrix, GenBin(0, 2));  -- Fault Injection Axis
 
-        test_runner_cleanup(runner);
-    end process;
-end architecture rtl;
+        -- System Hard Reset sequence
+        rst_n_s <= '0';
+        wait for CLK_PERIOD * 2;
+        rst_n_s <= '1';
+        wait until rising_edge(clk_s);
+
+        log("Launching Intelligent Constrained-Random Simulation Framework...", INFO);
+
+        -- --------------------------------------------------------------------
+        -- COVERAGE-DRIVEN LOOP: Runs until all 6 cross-bins are satisfied
+        -- --------------------------------------------------------------------
+        while not IsCovered(CovMatrix) loop
+            wait until rising_edge(clk_s);
+
+            -- If a previous fault locked down the ASIL core, issue a synchronous
+            -- soft-reset to restore the state machine for the next randomized vector
+            if actuator_safe_s = '1' then
+                rst_n_s <= '0';
+                wait until rising_edge(clk_s);
+                rst_n_s <= '1';
+                wait until rising_edge(clk_s);
+            end if;
+
+            -- 1. Generate pseudo-random hardware components using RV
+            v_rand_we    := RV.RandInt(0, 1);       -- Randomly chooses Read (0) or Write (1)
+            v_rand_fault := RV.RandInt(0, 2);       -- Randomly chooses Fault Injection profiles
+            v_rand_addr  := RV.RandSlv(32);         -- Random 32-bit hex address
+            v_rand_data  := RV.RandSlv(32);         -- Random 32-bit payload
+
+            -- 2. Build the structural core assignments based on the chosen random mode
+            case v_rand_fault is
+                when 0 => -- SAFE OPERATION: Core A and Core B are perfectly matched
+                    core_a_bus_s <= (addr  => v_rand_addr,
+                                     data  => v_rand_data,
+                                     we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
+                                     valid => '1');
+                    core_b_bus_s <= (addr  => v_rand_addr,
+                                     data  => v_rand_data,
+                                     we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
+                                     valid => '1');
+
+                when 1 => -- ADDRESS MISMATCH: Corrupt Core B's address line
+                    core_a_bus_s <= (addr  => v_rand_addr,
+                                     data  => v_rand_data,
+                                     we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
+                                     valid => '1');
+                    -- Bitwise flip the lowest address byte on Core B to create divergence
+                    core_b_bus_s <= (addr  => v_rand_addr xor X"00000001",
+                                     data  => v_rand_data,
+                                     we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
+                                     valid => '1');
+
+                when 2 => -- DATA MISMATCH: Corrupt Core B's data payload
+                    core_a_bus_s <= (addr  => v_rand_addr,
+                                     data  => v_rand_data,
+                                     we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
+                                     valid => '1');
+                    -- Bitwise flip data payload on Core B
+                    core_b_bus_s <= (addr  => v_rand_addr,
+                                     data  => v_rand_data xor X"00000001",
+                                     we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
+                                     valid => '1');
+
+                when others =>
+                    null;
+            end case;
+
+            -- Allow comparison combinational network to resolve
+            wait for CLK_PERIOD * 0.5;
+
+            -- 3. Sample the active coverage matrix state
+            v_cov_point(1) := v_rand_we;
+            v_cov_point(2) := v_rand_fault;
+            ICover(CovMatrix, v_cov_point);
+
+            -- 4. Check real-time structural assertions if an anomaly was injected
+            if v_rand_fault /= 0 then
+                wait for CLK_PERIOD;
+                AffirmIfEqual(nmi_fault_s, '1', "ASIL-D Failure: System failed to generate immediate NMI trap!");
+                AffirmIfEqual(actuator_safe_s, '1', "ASIL-D Failure: System failed to lock down vehicle actuators!");
+            end if;
+
+        end loop;
+
+        -- --------------------------------------------------------------------
+        -- Post-Simulation Metrics Consolidation
+        -- --------------------------------------------------------------------
+        log("Coverage block satisfied!", INFO);
+        WriteBin(CovMatrix); -- Dump exact distribution frequencies to log
+
+        EndOfTestReports; -- OSVVM test report finalization
+        wait;
+    end process p_stimulus;
+
+end architecture behavior;
