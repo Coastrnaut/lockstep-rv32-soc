@@ -150,7 +150,7 @@ architecture rtl of tb_ecc_write_read is
     check(s_data_o = x"0000000000000001", "data output: matches written");
 
     test_runner_cleanup(runner);
-    wait;
+    wait for 100 ns;
 
   end process p_stim;
 

@@ -226,7 +226,7 @@ begin
     EndOfTestReports;                                                                                         -- OSVVM test report finalization
 
     test_runner_cleanup(runner);
-    wait;
+    wait for 100 ns;
 
   end process p_stimulus;
 

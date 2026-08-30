@@ -123,7 +123,7 @@ architecture rtl of tb_ecc_fault_inject is
     check(s_dbe = '0', "No DBE on clean read");
 
     test_runner_cleanup(runner);
-    wait;
+    wait for 100 ns;
 
   end process p_stim;
 

@@ -108,7 +108,7 @@ architecture rtl of tb_uart_tx_error is
     check(uart_err = '0', "back-to-back: no error");
 
     test_runner_cleanup(runner);
-    wait;
+    wait for 100 ns;
 
   end process p_stim;
 

@@ -134,7 +134,7 @@ architecture tb of tb_can is
     end loop;
 
     test_runner_cleanup(runner);
-    wait;
+    wait for 100 ns;
 
   end process p_stim;
 

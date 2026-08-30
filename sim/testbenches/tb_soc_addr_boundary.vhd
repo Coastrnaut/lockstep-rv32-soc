@@ -172,7 +172,7 @@ architecture tb of tb_soc_addr_boundary is
     check(safe_state = '0', "TEST8: max data match");
 
     test_runner_cleanup(runner);
-    wait;
+    wait for 100 ns;
 
   end process test_proc;
 

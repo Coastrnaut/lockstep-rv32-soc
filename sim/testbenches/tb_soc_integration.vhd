@@ -101,7 +101,7 @@ architecture rtl of tb_soc_integration is
     check((actuator_safe = '0') or (actuator_safe = '1'), "actuator: valid level");
 
     test_runner_cleanup(runner);
-    wait;
+    wait for 100 ns;
 
   end process p_stim;
 
