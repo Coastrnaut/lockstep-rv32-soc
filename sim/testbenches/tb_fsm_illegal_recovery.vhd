@@ -17,9 +17,9 @@ end entity tb_fsm_illegal_recovery;
 
 architecture tb of tb_fsm_illegal_recovery is
 
-  constant clk_period : time      := 20 ns;
-  signal   clk        : std_logic := '0';
-  signal   rst_n      : std_logic := '0';
+  constant clk_period : time := 20 ns;
+  signal   clk        : std_logic;
+  signal   rst_n      : std_logic;
 
   signal bus_i    : t_rv_bus;
   signal bus_ok   : std_logic;
@@ -27,11 +27,14 @@ architecture tb of tb_fsm_illegal_recovery is
   signal can_rx   : std_logic;
   signal can_busy : std_logic;
 
+  -- Component declarations (VSG compliance)
+  component automotive_can_controller is end component automotive_can_controller;
+
 begin
 
   clk <= not clk after clk_period / 2;
 
-  uut : entity lockstep.automotive_can_controller
+  uut : component automotive_can_controller
     port map (
       clk_i      => clk,
       rst_n_i    => rst_n,
@@ -40,9 +43,8 @@ begin
       can_tx_o   => can_tx,
       can_rx_i   => can_rx,
       can_busy_o => can_busy
-    );
 
-  p_test : process is
+    );p_test : process is
   begin
 
     test_runner_setup(runner, runner_cfg);

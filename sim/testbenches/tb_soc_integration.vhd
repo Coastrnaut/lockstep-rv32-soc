@@ -23,9 +23,9 @@ end entity tb_soc_integration;
 
 architecture rtl of tb_soc_integration is
 
-  constant clk_period : time      := 20 ns;
-  signal   clk        : std_logic := '0';
-  signal   rst_n      : std_logic := '0';
+  constant clk_period : time := 20 ns;
+  signal   clk        : std_logic;
+  signal   rst_n      : std_logic;
 
   signal can_tx        : std_logic;
   signal can_rx        : std_logic;
@@ -33,11 +33,14 @@ architecture rtl of tb_soc_integration is
   signal nmi_fault     : std_logic;
   signal actuator_safe : std_logic;
 
+  -- Component declarations (VSG compliance)
+  component top_automotive_soc is end component top_automotive_soc;
+
 begin
 
   clk <= not clk after clk_period / 2;
 
-  i_soc : entity lockstep.top_automotive_soc
+  i_soc : component top_automotive_soc
     port map (
       clk_i           => clk,
       rst_n_i         => rst_n,
@@ -46,9 +49,8 @@ begin
       uart_tx_o       => uart_tx,
       nmi_fault_o     => nmi_fault,
       actuator_safe_o => actuator_safe
-    );
 
-  p_stim : process is
+    );p_stim : process is
   begin
 
     test_runner_setup(runner, runner_cfg);

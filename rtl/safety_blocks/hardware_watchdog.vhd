@@ -41,7 +41,7 @@ architecture rtl of hardware_watchdog is
   attribute requirement_id of rtl : architecture is "TSR_WD_001";
 
   -- Watchdog counter
-  signal r_counter : unsigned(15 downto 0) := (others => '0');
+  signal r_counter : unsigned(15 downto 0);
 
   -- Internal status flags
   signal w_early_violation : std_logic;

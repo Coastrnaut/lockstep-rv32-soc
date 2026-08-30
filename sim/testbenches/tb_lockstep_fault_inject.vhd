@@ -20,27 +20,24 @@ end entity tb_lockstep_fault_inject;
 
 architecture rtl of tb_lockstep_fault_inject is
 
-  constant clk_period : time      := 20 ns;
-  signal   tb_clk     : std_logic := '0';
-  signal   tb_rst_n   : std_logic := '0';
-  signal   core_a_bus : t_rv_bus  := (addr => (others => '0'),
-                                     data => (others => '0'),
-                                     we   => '0',
-                                     valid => '0');
-  signal   core_b_bus : t_rv_bus  := (addr => (others => '0'),
-                                     data => (others => '0'),
-                                     we   => '0',
-                                     valid => '0');
+  constant clk_period : time := 20 ns;
+  signal   tb_clk     : std_logic;
+  signal   tb_rst_n   : std_logic;
+  signal   core_a_bus : t_rv_bus;
+  signal   core_b_bus : t_rv_bus;
   signal   nmi_fault  : std_logic;
   signal   safe_state : std_logic;
   signal   bus_valid  : std_logic;
   signal   sys_bus    : t_rv_bus;
 
+  -- Component declarations (VSG compliance)
+  component lockstep_comparator is end component lockstep_comparator;
+
 begin
 
   tb_clk <= not tb_clk after clk_period / 2;
 
-  i_dut : entity lockstep.lockstep_comparator
+  i_dut : component lockstep_comparator
     port map (
       clk_i        => tb_clk,
       rst_n_syn_i  => tb_rst_n,
@@ -50,9 +47,8 @@ begin
       safe_state_o => safe_state,
       bus_valid_o  => bus_valid,
       sys_bus_o    => sys_bus
-    );
 
-  p_stim : process is
+    );p_stim : process is
   begin
 
     test_runner_setup(runner, runner_cfg);

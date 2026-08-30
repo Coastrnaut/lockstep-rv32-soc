@@ -56,7 +56,7 @@ architecture rtl of automotive_can_controller is
     tx_interframe
   );
 
-  signal r_state   : t_can_state := idle;
+  signal r_state   : t_can_state;
   signal w_next_st : t_can_state;
 
   -- Mailbox: holds one outgoing frame

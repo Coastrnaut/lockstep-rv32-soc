@@ -17,9 +17,9 @@ end entity tb_soc_addr_boundary;
 
 architecture tb of tb_soc_addr_boundary is
 
-  signal   clk        : std_logic := '0';
-  constant clk_per    : time      := 10 ns;
-  signal   rst_n      : std_logic := '0';
+  signal   clk        : std_logic;
+  constant clk_per    : time := 10 ns;
+  signal   rst_n      : std_logic;
   signal   core_a_bus : t_rv_bus;
   signal   core_b_bus : t_rv_bus;
   signal   safe_state : std_logic;
@@ -27,11 +27,14 @@ architecture tb of tb_soc_addr_boundary is
   signal   bus_valid  : std_logic;
   signal   sys_bus    : t_rv_bus;
 
+  -- Component declarations (VSG compliance)
+  component lockstep_comparator is end component lockstep_comparator;
+
 begin
 
   clk <= not clk after clk_per / 2;
 
-  u_dut : entity lockstep.lockstep_comparator
+  u_dut : component lockstep_comparator
     port map (
       clk_i        => clk,
       rst_n_syn_i  => rst_n,
@@ -41,9 +44,8 @@ begin
       nmi_fault_o  => nmi_fault,
       bus_valid_o  => bus_valid,
       sys_bus_o    => sys_bus
-    );
 
-  test_proc : process is
+    );test_proc : process is
   begin
 
     test_runner_setup(runner, runner_cfg);

@@ -23,7 +23,7 @@ end entity tb_ecc_write_read;
 
 architecture rtl of tb_ecc_write_read is
 
-  signal s_clk     : std_logic := '0';
+  signal s_clk     : std_logic;
   signal s_rst_n   : std_logic;
   signal s_wr_en   : std_logic;
   signal s_rd_en   : std_logic;
@@ -37,6 +37,9 @@ architecture rtl of tb_ecc_write_read is
 
   constant clk_half : time := 5 ns;
 
+  -- Component declarations (VSG compliance)
+  component hamming_ecc_wrapper is end component hamming_ecc_wrapper;
+
 begin
 
   clk_proc : process is
@@ -47,7 +50,7 @@ begin
 
   end process clk_proc;
 
-  i_ecc : entity lockstep.hamming_ecc_wrapper
+  i_ecc : component hamming_ecc_wrapper
     port map (
       clk_i           => s_clk,
       rst_n_i         => s_rst_n,
@@ -60,9 +63,8 @@ begin
       ecc_o           => s_ecc_o,
       sbe_corrected_o => s_sbe,
       dbe_fatal_o     => s_dbe
-    );
 
-  p_stim : process is
+    );p_stim : process is
 
     variable v_good_ecc    : std_logic_vector(7 downto 0);
     variable v_ecc_nonzero : boolean;

@@ -54,7 +54,7 @@ architecture rtl of lockstep_comparator is
   attribute requirement_id of rtl : architecture is "TSR_LOCKSTEP_042, TSR_SAFETY_GATE_001";
 
   -- Safe State Encoding (Rule 3.1)
-  signal r_current_state : t_safe_state := ST_SYSTEM_OK;
+  signal r_current_state : t_safe_state;
   signal w_next_state    : t_safe_state;
 
   -- Internal monitoring signals
@@ -168,8 +168,8 @@ begin
   -- ========================================================================
   p_formal_asserts : process (clk_i) is
 
-    variable v_mismatch_count : integer range 0 to 4 := 0;
-    variable v_mismatch_seen  : std_logic            := '0';
+    variable v_mismatch_count : integer range 0 to 4;
+    variable v_mismatch_seen  : std_logic;
 
   begin
 

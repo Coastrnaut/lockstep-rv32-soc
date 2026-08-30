@@ -20,13 +20,16 @@ end entity tb_can;
 
 architecture tb of tb_can is
 
-  signal clk_i      : std_logic := '0';
-  signal rst_n_i    : std_logic := '0';
-  signal bus_i      : t_rv_bus  := (valid => '0', we => '0', addr => (others => '0'), data => (others => '0'));
-  signal bus_ok_i   : std_logic := '1';
-  signal can_rx_i   : std_logic := '1';
+  signal clk_i      : std_logic;
+  signal rst_n_i    : std_logic;
+  signal bus_i      : t_rv_bus;
+  signal bus_ok_i   : std_logic;
+  signal can_rx_i   : std_logic;
   signal can_tx_o   : std_logic;
   signal can_busy_o : std_logic;
+
+  -- Component declarations (VSG compliance)
+  component automotive_can_controller is end component automotive_can_controller;
 
 begin
 
@@ -40,7 +43,7 @@ begin
   end process p_clk;
 
   -- DUT
-  uut : entity lockstep.automotive_can_controller
+  uut : component automotive_can_controller
     port map (
       clk_i      => clk_i,
       rst_n_i    => rst_n_i,
@@ -49,9 +52,9 @@ begin
       can_tx_o   => can_tx_o,
       can_rx_i   => can_rx_i,
       can_busy_o => can_busy_o
-    );
 
-  -- Stimulus
+    ); -- Stimulus
+
   p_stim : process is
   begin
 

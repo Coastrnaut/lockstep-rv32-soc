@@ -22,9 +22,9 @@ end entity tb_uart_tx_error;
 
 architecture rtl of tb_uart_tx_error is
 
-  constant clk_period : time      := 20 ns;
-  signal   clk        : std_logic := '0';
-  signal   rst_n      : std_logic := '0';
+  constant clk_period : time := 20 ns;
+  signal   clk        : std_logic;
+  signal   rst_n      : std_logic;
 
   signal bus_i     : t_rv_bus;
   signal bus_ok    : std_logic;
@@ -32,11 +32,14 @@ architecture rtl of tb_uart_tx_error is
   signal uart_err  : std_logic;
   signal uart_busy : std_logic;
 
+  -- Component declarations (VSG compliance)
+  component safe_uart is end component safe_uart;
+
 begin
 
   clk <= not clk after clk_period / 2;
 
-  i_uart : entity lockstep.safe_uart
+  i_uart : component safe_uart
     port map (
       clk_i        => clk,
       rst_n_i      => rst_n,
@@ -45,9 +48,8 @@ begin
       uart_tx_o    => uart_tx,
       uart_busy_o  => uart_busy,
       uart_error_o => uart_err
-    );
 
-  p_stim : process is
+    );p_stim : process is
   begin
 
     test_runner_setup(runner, runner_cfg);

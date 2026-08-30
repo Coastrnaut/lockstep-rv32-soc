@@ -22,9 +22,9 @@ end entity tb_can_rx_data;
 
 architecture rtl of tb_can_rx_data is
 
-  constant clk_period : time      := 20 ns;
-  signal   clk        : std_logic := '0';
-  signal   rst_n      : std_logic := '0';
+  constant clk_period : time := 20 ns;
+  signal   clk        : std_logic;
+  signal   rst_n      : std_logic;
 
   signal bus_i    : t_rv_bus;
   signal bus_ok   : std_logic;
@@ -32,11 +32,14 @@ architecture rtl of tb_can_rx_data is
   signal can_rx   : std_logic;
   signal can_busy : std_logic;
 
+  -- Component declarations (VSG compliance)
+  component automotive_can_controller is end component automotive_can_controller;
+
 begin
 
   clk <= not clk after clk_period / 2;
 
-  i_can : entity lockstep.automotive_can_controller
+  i_can : component automotive_can_controller
     port map (
       clk_i      => clk,
       rst_n_i    => rst_n,
@@ -45,9 +48,8 @@ begin
       can_tx_o   => can_tx,
       can_rx_i   => can_rx,
       can_busy_o => can_busy
-    );
 
-  p_stim : process is
+    );p_stim : process is
   begin
 
     test_runner_setup(runner, runner_cfg);

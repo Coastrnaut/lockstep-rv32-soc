@@ -16,24 +16,27 @@ end entity tb_ecc_seu_inject;
 
 architecture tb of tb_ecc_seu_inject is
 
-  constant clk_period  : time                          := 20 ns;
-  signal   clk         : std_logic                     := '0';
-  signal   rst_n       : std_logic                     := '0';
-  signal   ecc_wr_en   : std_logic                     := '0';
-  signal   ecc_data_wr : std_logic_vector(63 downto 0) := (others => '0');
-  signal   ecc_rd_en   : std_logic                     := '0';
-  signal   ecc_data_rd : std_logic_vector(63 downto 0) := (others => '0');
-  signal   ecc_rd_ecc  : std_logic_vector(7 downto 0)  := (others => '0');
+  constant clk_period  : time := 20 ns;
+  signal   clk         : std_logic;
+  signal   rst_n       : std_logic;
+  signal   ecc_wr_en   : std_logic;
+  signal   ecc_data_wr : std_logic_vector(63 downto 0);
+  signal   ecc_rd_en   : std_logic;
+  signal   ecc_data_rd : std_logic_vector(63 downto 0);
+  signal   ecc_rd_ecc  : std_logic_vector(7 downto 0);
   signal   ecc_data_o  : std_logic_vector(63 downto 0);
   signal   ecc_out     : std_logic_vector(7 downto 0);
   signal   ecc_sbe     : std_logic;
   signal   ecc_dbe     : std_logic;
 
+  -- Component declarations (VSG compliance)
+  component hamming_ecc_wrapper is end component hamming_ecc_wrapper;
+
 begin
 
   clk <= not clk after clk_period / 2;
 
-  uut : entity lockstep.hamming_ecc_wrapper
+  uut : component hamming_ecc_wrapper
     port map (
       clk_i           => clk,
       rst_n_i         => rst_n,
@@ -46,9 +49,8 @@ begin
       ecc_o           => ecc_out,
       sbe_corrected_o => ecc_sbe,
       dbe_fatal_o     => ecc_dbe
-    );
 
-  p_test : process is
+    );p_test : process is
 
     variable v_sbe      : std_logic;
     variable v_dbe      : std_logic;

@@ -85,6 +85,15 @@ architecture structural of top_automotive_soc is
   signal w_core_a_trace : std_logic_vector(31 downto 0);
   signal w_core_b_trace : std_logic_vector(31 downto 0);
 
+  -- Component declarations (VSG compliance)
+  component lockstep_comparator is end component lockstep_comparator;
+
+  component automotive_can_controller is end component automotive_can_controller;
+
+  component safe_uart is end component safe_uart;
+
+  component neorv32_top is end component neorv32_top;
+
 begin
 
   -- ========================================================================
@@ -105,7 +114,7 @@ begin
   -- ========================================================================
   -- 2. INSTANCE: MASTER CPU (CORE A)
   -- ========================================================================
-  i_cpu_master : entity neorv32.neorv32_top
+  i_cpu_master : component neorv32_top
     generic map (
       -- General
       clock_frequency => 50_000_000,
@@ -382,7 +391,7 @@ begin
   -- ========================================================================
   -- 3. INSTANCE: MIRROR CHECKER CPU (CORE B)
   -- ========================================================================
-  i_cpu_checker : entity neorv32.neorv32_top
+  i_cpu_checker : component neorv32_top
     generic map (
       -- General
       clock_frequency => 50_000_000,
@@ -659,7 +668,7 @@ begin
   -- ========================================================================
   -- 4. INSTANCE: HARDENED DUAL-CORE LOCKSTEP COMPARATOR
   -- ========================================================================
-  i_lockstep_gate : entity lockstep.lockstep_comparator
+  i_lockstep_gate : component lockstep_comparator
     port map (
       clk_i       => clk_i,
       rst_n_syn_i => rst_n_i,
@@ -675,12 +684,12 @@ begin
       -- Gated System Infrastructure Connections
       sys_bus_o   => w_safe_sys_bus,
       bus_valid_o => w_bus_valid
-    );
 
-  -- ========================================================================
+    ); -- ========================================================================
+
   -- 5. AUTOMOTIVE BUS CONTROLLER INTEGRATION
   -- ========================================================================
-  i_automotive_can : entity lockstep.automotive_can_controller
+  i_automotive_can : component automotive_can_controller
     port map (
       clk_i      => clk_i,
       rst_n_i    => rst_n_i,
@@ -689,12 +698,12 @@ begin
       can_tx_o   => can_tx_o,
       can_rx_i   => can_rx_i,
       can_busy_o => w_can_busy
-    );
 
-  -- ========================================================================
+    ); -- ========================================================================
+
   -- 6. SAFE UART DIAGNOSTIC INTERFACE
   -- ========================================================================
-  i_safe_uart : entity lockstep.safe_uart
+  i_safe_uart : component safe_uart
     port map (
       clk_i        => clk_i,
       rst_n_i      => rst_n_i,
@@ -703,6 +712,5 @@ begin
       uart_tx_o    => uart_tx_o,
       uart_busy_o  => w_uart_busy,
       uart_error_o => w_uart_error
-    );
 
-end architecture structural;
+    );end architecture structural;

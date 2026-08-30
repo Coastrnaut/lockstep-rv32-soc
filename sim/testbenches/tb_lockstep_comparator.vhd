@@ -41,12 +41,12 @@ architecture behavior of tb_lockstep_comparator is
   shared variable rv : randomptype;
 
   -- Local Clock & Timing Wires
-  signal clk_s   : std_logic := '0';
-  signal rst_n_s : std_logic := '1';
+  signal clk_s   : std_logic;
+  signal rst_n_s : std_logic;
 
   -- Mock CPU Bus Signals matching lockstep.package_soc_types
-  signal core_a_bus_s : t_rv_bus := (addr => (others => '0'), data => (others => '0'), we => '0', valid => '0');
-  signal core_b_bus_s : t_rv_bus := (addr => (others => '0'), data => (others => '0'), we => '0', valid => '0');
+  signal core_a_bus_s : t_rv_bus;
+  signal core_b_bus_s : t_rv_bus;
 
   -- Outward-facing monitored safety outputs
   signal nmi_fault_s     : std_logic;
@@ -55,13 +55,16 @@ architecture behavior of tb_lockstep_comparator is
 
   constant clk_period : time := 20 ns; -- 50 MHz Automotive baseline
 
+  -- Component declarations (VSG compliance)
+  component lockstep_comparator is end component lockstep_comparator;
+
 begin
 
   -- Clock Generation Thread
   clk_s <= not clk_s after clk_period / 2;
 
   -- Unit Under Test
-  uut : entity lockstep.lockstep_comparator
+  uut : component lockstep_comparator
     port map (
       clk_i        => clk_s,
       rst_n_syn_i  => rst_n_s,
@@ -71,9 +74,9 @@ begin
       safe_state_o => actuator_safe_s,
       bus_valid_o  => bus_valid_s,
       sys_bus_o    => open
-    );
 
-  -- ========================================================================
+    ); -- ========================================================================
+
   -- CONSTRAINED-RANDOM STIMULUS & COVERAGE TRACKING LOOP
   -- ========================================================================
   p_stimulus : process is
