@@ -186,7 +186,19 @@ def _run_ghdl_lint(ghdl_exe):
     safety_files = sorted((root / "rtl" / "safety_blocks").glob("*.vhd"))
     periph_files = sorted((root / "rtl" / "peripherals").glob("*.vhd"))
     top_soc = root / "rtl" / "top_automotive_soc.vhd"
-    neorv32_files = []  # Skip NEORV32 — third-party submodule; lint our RTL only
+    # NEORV32: use file_list_core.f for correct dependency order
+    neorv32_files = []
+    fl = root / "rtl" / "core" / "neorv32" / "rtl" / "file_list_core.f"
+    if fl.exists():
+        neorv32_home = root / "rtl" / "core" / "neorv32"
+        neorv32_home_s = str(neorv32_home).replace("\\", "/")
+        for line in fl.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("--"):
+                continue
+            p = line.replace("$NEORV32_HOME", neorv32_home_s)
+            if Path(p).exists():
+                neorv32_files.append(p)
 
     total = len(config_files) + len(safety_files) + len(periph_files) \
             + (1 if top_soc.exists() else 0) + len(neorv32_files)
@@ -249,7 +261,15 @@ def _run_ghdl_lint(ghdl_exe):
                 return False
 
         # Phase 5: top_automotive_soc  -> library lockstep
-        # Skip — depends on neorv32 library which we don't lint (third-party)
+        if top_soc.exists():
+            cmd = [ghdl_exe, "-a", "--std=08", "-Wall",
+                   "--work=lockstep", str(top_soc).replace("\\", "/")]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                               cwd=tmp)
+            if r.returncode != 0:
+                print(r.stdout or r.stderr)
+                print(f"\nLINT FAILED at top_soc phase (exit {r.returncode}).")
+                return False
 
     print("\nLint passed — no semantic safety issues found.\n")
     return True
