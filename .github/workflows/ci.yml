@@ -25,25 +25,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ghdl
 
-      - name: Install VUnit
+      - name: Install VUnit & VSG
         run: |
           pip install vunit_hdl vsg
 
       - name: Semantic safety lint (ghdl -Wall)
         run: |
-          cd sim && python run.py --compile
+          cd sim && python run.py --lint
 
       - name: Style lint (vsg)
         run: |
-          cd sim && python run.py --compile --skip-lint
+          cd sim && python run.py --vsg
 
-      - name: Compile all VHDL sources (skip lint)
+      - name: Compile and run full regression
         run: |
-          cd sim && python run.py --compile --skip-lint --skip-vsg
-
-      - name: Run full regression (auto-discover all testbenches)
-        run: |
-          cd sim && mkdir -p reports && python run.py --skip-lint --skip-vsg
+          cd sim && mkdir -p reports && python run.py
 
       - name: Upload simulation logs on failure
         if: failure()
