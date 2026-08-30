@@ -64,6 +64,10 @@ def find_simulator():
     # Nothing found
     return (None, None)
 
+# Strip --skip-lint before any VUnit.from_argv() call
+_skip_lint = "--skip-lint" in sys.argv
+sys.argv = [a for a in sys.argv if a != "--skip-lint"]
+
 detected_name, detected_path = find_simulator()
 
 # ---------------------------------------------------------------------------
@@ -283,10 +287,10 @@ if os.name == "nt":
 if not _ghdl_for_lint:
     _ghdl_for_lint = _find_exe("ghdl")
 
-if _ghdl_for_lint:
+if _ghdl_for_lint and not _skip_lint:
     if not _run_ghdl_lint(_ghdl_for_lint):
         sys.exit(1)
-else:
+elif not _ghdl_for_lint and not _skip_lint:
     print("WARNING: GHDL not found — skipping semantic safety lint.")
     print("  Install ghdl or add to PATH to enable ASIL-D lint gate.")
 
