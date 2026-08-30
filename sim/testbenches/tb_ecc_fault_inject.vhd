@@ -3,41 +3,49 @@
 -- ============================================================================
 -- ISO 26262 §5.5 Fault Injection: Stuck-at & bit-flip on ECC path
 -- ============================================================================
+
 library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+
 library vunit_lib;
-context vunit_lib.vunit_context;
+  context vunit_lib.vunit_context;
+
 library lockstep;
-use lockstep.package_soc_types.all;
+  use lockstep.package_soc_types.all;
 
 entity tb_ecc_fault_inject is
-  generic (runner_cfg : string := "");
-end entity;
+  generic (
+    runner_cfg : string := ""
+  );
+end entity tb_ecc_fault_inject;
 
 architecture rtl of tb_ecc_fault_inject is
 
-  signal s_clk       : std_logic := '0';
-  signal s_rst_n     : std_logic;
-  signal s_wr_en     : std_logic;
-  signal s_rd_en     : std_logic;
-  signal s_data_wr   : std_logic_vector(63 downto 0);
-  signal s_data_rd   : std_logic_vector(63 downto 0);
-  signal s_ecc_rd    : std_logic_vector(7 downto 0);
-  signal s_data_o    : std_logic_vector(63 downto 0);
-  signal s_ecc_o     : std_logic_vector(7 downto 0);
-  signal s_sbe       : std_logic;
-  signal s_dbe       : std_logic;
+  signal s_clk     : std_logic := '0';
+  signal s_rst_n   : std_logic;
+  signal s_wr_en   : std_logic;
+  signal s_rd_en   : std_logic;
+  signal s_data_wr : std_logic_vector(63 downto 0);
+  signal s_data_rd : std_logic_vector(63 downto 0);
+  signal s_ecc_rd  : std_logic_vector(7 downto 0);
+  signal s_data_o  : std_logic_vector(63 downto 0);
+  signal s_ecc_o   : std_logic_vector(7 downto 0);
+  signal s_sbe     : std_logic;
+  signal s_dbe     : std_logic;
 
-  constant CLK_HALF : time := 5 ns;
+  constant clk_half : time := 5 ns;
+
 begin
 
   -- Clock
-  clk_proc : process
+  clk_proc : process is
   begin
-    wait for CLK_HALF;
+
+    wait for clk_half;
     s_clk <= not s_clk;
-  end process;
+
+  end process clk_proc;
 
   -- DUT
   i_ecc : entity lockstep.hamming_ecc_wrapper
@@ -56,10 +64,13 @@ begin
     );
 
   -- Stimulus
-  p_stim : process
+  p_stim : process is
+
     variable v_good_ecc : std_logic_vector(7 downto 0);
     variable v_flip_ecc : std_logic_vector(7 downto 0);
+
   begin
+
     test_runner_setup(runner, runner_cfg);
 
     -- Reset
@@ -71,25 +82,25 @@ begin
     s_ecc_rd  <= (others => '0');
     wait until rising_edge(s_clk);
     wait until rising_edge(s_clk);
-    s_rst_n <= '1';
+    s_rst_n   <= '1';
 
     -- --- Test 1: Write 0x01, capture generated ECC ---
-    s_data_wr <= x"0000000000000001";
-    s_wr_en   <= '1';
-    s_rd_en   <= '0';
+    s_data_wr  <= x"0000000000000001";
+    s_wr_en    <= '1';
+    s_rd_en    <= '0';
     wait until rising_edge(s_clk);
-    s_wr_en <= '0';
+    s_wr_en    <= '0';
     wait for 0 ns;
     v_good_ecc := s_ecc_o;
 
     -- --- Test 2: Read with bit-flip in ECC bit 0 (SBE) ---
-    v_flip_ecc := v_good_ecc;
+    v_flip_ecc    := v_good_ecc;
     v_flip_ecc(0) := not v_flip_ecc(0);
-    s_data_rd <= x"0000000000000001";
-    s_ecc_rd  <= v_flip_ecc;
-    s_rd_en   <= '1';
+    s_data_rd     <= x"0000000000000001";
+    s_ecc_rd      <= v_flip_ecc;
+    s_rd_en       <= '1';
     wait until rising_edge(s_clk);
-    s_rd_en <= '0';
+    s_rd_en       <= '0';
     wait for 0 ns;
     check(s_sbe = '1', "SBE detected on ECC bit-flip");
     check(s_dbe = '0', "No DBE on single bit-flip");
@@ -99,7 +110,7 @@ begin
     s_ecc_rd  <= v_good_ecc;
     s_rd_en   <= '1';
     wait until rising_edge(s_clk);
-    s_rd_en <= '0';
+    s_rd_en   <= '0';
     wait for 0 ns;
     check(s_sbe = '1', "SBE detected on data bit-flip");
 
@@ -108,12 +119,14 @@ begin
     s_ecc_rd  <= v_good_ecc;
     s_rd_en   <= '1';
     wait until rising_edge(s_clk);
-    s_rd_en <= '0';
+    s_rd_en   <= '0';
     wait for 0 ns;
     check(s_sbe = '0', "No error on clean read");
     check(s_dbe = '0', "No DBE on clean read");
 
     test_runner_cleanup(runner);
     wait;
-  end process;
-end architecture;
+
+  end process p_stim;
+
+end architecture rtl;

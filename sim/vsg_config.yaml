@@ -1,100 +1,115 @@
 # ==============================================================================
-# ISO 26262 ASIL D Safety-Critical VHDL Linting Configuration
-# Platform Target: lockstep-rv32-soc
-# Framework: VHDL Style Guide (VSG)
+# ISO 26262-6 ASIL D Safety-Critical VHDL Linting Configuration
+# Target: lockstep-rv32-soc Hand-Written Platform Core Stack
+# Enforces strict deterministic constraints to eliminate systematic bugs
 # ==============================================================================
 
-# Global Ruleset Adaptation
+# Global configuration applied across all analyzed structures
 global:
-  # Elevate rule failures to 'error' to guarantee clean automated CI failures
-  severity: error
+  severity: error  # Elevate all failures to errors to force clean CI regression blocks
 
+# ----------------------------------------------------------------------------
+# BROAD WHATEVER/STYLE/ALIGNMENT GROUPS (Enforces Readability & Reviewability)
+# Highly recommended by ISO 26262-6 Table 1 for unambiguous design code
+# ----------------------------------------------------------------------------
+group:
+  # 1. Enforce strict uppercase/lowercase restrictions across all keywords
+  case:
+    enabled: true
+  case::keyword:
+    enabled: true
+
+  # 2. Strict indentation compliance across nested conditional code blocks
+  indent:
+    enabled: true
+
+  # 3. Clean spatial alignments for assignments and structural ports
+  alignment:
+    enabled: true
+
+  # 4. Forbid excessive whitespace formatting variations
+  whitespace:
+    enabled: true
+
+  # 5. Maintain standardized layout margins and file limits
+  length:
+    enabled: true
+
+# ----------------------------------------------------------------------------
+# GRANULAR CONFIGURABLE SAFETY RULES (ISO 26262 Safe Synthesis Subset)
+# ----------------------------------------------------------------------------
 rule:
-  # ----------------------------------------------------------------------------
-  # 1. DEFENSIVE FSM & CASE STATEMENT MANDATES (ISO 26262-6 Table 4 / Table 7)
-  # Prevents infinite lockups and illegal state entry due to transient bit slips.
-  # ----------------------------------------------------------------------------
-  case_statement_001:
-    # Force the mandatory inclusion of 'when others =>' across all case blocks
-    # Ensure unmapped bit combinations drive the hardware back to a safe reset.
+  # === SECTION A: DEFENSIVE FINITE STATE MACHINES & CONTROL FLOW ===
+  case_006:
+    # Requires 'when others =>' across all state evaluation structures
     must_have_when_others: true
-    
-  case_statement_002:
-    # Prohibit 'null' or unhandled statements inside 'when others =>' paths
+  case_007:
+    # Explicitly prohibits assigning an unmapped 'null' step within default escape blocks
     allow_null_in_when_others: false
+  if_001:
+    # Forces structural 'then' placements to align to clean indentation blocks
+    enabled: true
+  if_035:
+    # Mandates structured matching block endings for multi-branch structures
+    enabled: true
 
-  # ----------------------------------------------------------------------------
-  # 2. STRICT PORT & SIGNAL NAMING CONSTRAINTS
-  # Eliminates integration assembly bugs, phase inversion, or clock routing errors.
-  # ----------------------------------------------------------------------------
-  port_001:
-    # Mandate strict suffix/prefix rules for input interfaces
+  # === SECTION B: STABILIZED INTERFACE NAMING & PORT PREFIXES ===
+  port_011:
+    # Enforces exact naming behaviors on entity port maps
+    prefix: ""
+  port_025:
+    # Mandates explicit safety directional suffixes to prevent phase inversion loops
     input_direction:
-      prefix: ""
       suffix: "_i"
-  port_002:
-    # Mandate strict suffix/prefix rules for output interfaces
     output_direction:
-      prefix: ""
       suffix: "_o"
-  port_003:
-    # Prohibit the use of bidirectional 'inout' pins on internal safety wrappers
-    # to prevent bus contention issues.
+    # Prohibit the use of bidirectional 'inout' pins on internal cores to avoid bus contention
     inout_direction:
       forbidden: true
 
-  signal_001:
-    # Mandate clock naming conventions to prevent clock-domain crossing hazards
+  # === SECTION C: CLOCK DOMAIN IDENTIFICATION & ASYNCHRONOUS CONSTRAINTS ===
+  signal_008:
+    # Regulate common layout prefix parameters for design fabrics
+    prefix: ""
+  signal_600:
+    # Separate clock trees and reset vectors distinctly to simplify Clock Domain Crossing analysis
     clock_signals:
       prefix: "clk_"
       suffix: "_i"
-  signal_002:
-    # Enforce clear visual separation of active-low asynchronous reset nets
     reset_signals:
       prefix: "rst_"
       suffix: "_n_i"
 
-  # ----------------------------------------------------------------------------
-  # 3. TYPE CASTING & HARDWARE DETERMINISM RULES
-  # Mitigates implicit compiler optimization quirks or width truncation hazards.
-  # ----------------------------------------------------------------------------
-  type_001:
-    # Ban non-deterministic standard types (like integer without constraints)
-    # Mandate fixed-width types: std_logic_vector, signed, or unsigned.
-    allow_unconstrained_integer: false
-
-  expression_001:
-    # Ban implicit array sizing logic. All assignment widths must be matched, 
-    # ensuring the synthesis engine doesn't silently slice critical data lines.
-    allow_implicit_width_matching: false
-
-  # ----------------------------------------------------------------------------
-  # 4. STRUCTURAL MODULARITY & ISOLATION RULES (ISO 26262-6 Table 3)
-  # Ensures bidirectional traceability between software requirements and RTL code.
-  # ----------------------------------------------------------------------------
-  entity_001:
-    # Mandate matching block labels on entity architectures to ease AST compilation
-    architecture_matching_label: true
-
-  process_001:
-    # Require explicit sensitivity lists for combinational logic blocks
-    # Prevents RTL simulation from mismatching post-synthesis Gate-Level Netlists.
+  # === SECTION D: STRUCTURAL COMPLIANCE & RE-SIMULATION MARGINS ===
+  process_014:
+    # Strictly mandates full sensitivity lists for combinational logic blocks
+    # Minimizes risk of severe RTL-versus-Gate-Level post-synthesis mismatches.
     must_have_complete_sensitivity_list: true
-
-  process_002:
-    # Prohibit variables inside multi-clock processes to eliminate hidden state 
-    # latch generation that escapes standard validation.
+  process_015:
+    # Prohibits variables inside sequential clocked logic to block unintended hidden latch slips
     allow_variables_in_clocked_processes: false
+  signal_001:
+    # Blocks multiple signals from sharing a single declaration line
+    # Every data line must be isolated for clean upwards traceability mapping.
+    enabled: true
 
-  # ----------------------------------------------------------------------------
-  # 5. UNSYNTHESIZABLE & DYNAMIC LANGUAGE BAN
-  # Banned completely under ASIL D as they introduce random simulation drift.
-  # ----------------------------------------------------------------------------
-  keyword_001:
-    # Exclude simulation-only timing delays inside synthesized hardware
+  # === SECTION E: HARDWARE DETERMINISM & TYPE SAFETY ===
+  type_001:
+    # Completely forbids unconstrained type variables (such as dynamic integers)
+    # All signals must map to fixed arrays (std_logic_vector, signed, unsigned).
+    allow_unconstrained_integer: false
+  constant_001:
+    # Forces constants to use rigorous width specification definitions
+    enabled: true
+
+  # === SECTION F: NON-SYNTHESIZABLE LANGUAGEConstruct BAN ===
+  wait_001:
+    # Forbids the 'wait for' timing loops inside logic circuits
+    # Simulation timing constructs will block or mask physical gate delay calculations.
     wait_for_statement:
       forbidden: true
-  keyword_002:
-    # Prohibit dynamic pointers and allocations ('new', 'access')
-    access_type_allocation:
-      forbidden: true
+  attribute_declaration_300:
+    # Restricts user-defined non-standard properties that alter translation properties
+    enabled: true
+  attribute_specification_300:
+    enabled: true

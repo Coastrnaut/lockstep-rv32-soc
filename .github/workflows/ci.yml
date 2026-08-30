@@ -27,19 +27,23 @@ jobs:
 
       - name: Install VUnit
         run: |
-          pip install vunit_hdl
+          pip install vunit_hdl vsg
 
       - name: Semantic safety lint (ghdl -Wall)
         run: |
           cd sim && python run.py --compile
 
-      - name: Compile all VHDL sources (skip lint)
+      - name: Style lint (vsg)
         run: |
           cd sim && python run.py --compile --skip-lint
 
+      - name: Compile all VHDL sources (skip lint)
+        run: |
+          cd sim && python run.py --compile --skip-lint --skip-vsg
+
       - name: Run full regression (auto-discover all testbenches)
         run: |
-          cd sim && mkdir -p reports && python run.py --skip-lint
+          cd sim && mkdir -p reports && python run.py --skip-lint --skip-vsg
 
       - name: Upload simulation logs on failure
         if: failure()

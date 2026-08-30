@@ -64,9 +64,10 @@ def find_simulator():
     # Nothing found
     return (None, None)
 
-# Strip --skip-lint before any VUnit.from_argv() call
+# Strip --skip-lint / --skip-vsg before any VUnit.from_argv() call
 _skip_lint = "--skip-lint" in sys.argv
-sys.argv = [a for a in sys.argv if a != "--skip-lint"]
+_skip_vsg = "--skip-vsg" in sys.argv
+sys.argv = [a for a in sys.argv if a not in ("--skip-lint", "--skip-vsg")]
 
 detected_name, detected_path = find_simulator()
 
@@ -278,7 +279,46 @@ def _run_ghdl_lint(ghdl_exe):
     print("\nLint passed — no semantic safety issues found.\n")
     return True
 
-# Resolve the GHDL executable for linting (always use GHDL for lint regardless of simulator)
+
+# ---------------------------------------------------------------------------
+# Style Lint — vsg (VHDL Style Guide)
+# Catches: whitespace, indentation, keyword alignment, naming conventions.
+# Runs on our RTL + testbenches, skips NEORV32 (third-party).
+# ---------------------------------------------------------------------------
+def _run_vsg(vsg_exe):
+    """Run vsg on all our VHDL files (RTL + testbenches, excluding NEORV32)."""
+    # Collect our own VHDL files
+    our_files = []
+    our_files.extend(sorted((root / "config").glob("*.vhd")))
+    our_files.extend(sorted((root / "rtl" / "safety_blocks").glob("*.vhd")))
+    our_files.extend(sorted((root / "rtl" / "peripherals").glob("*.vhd")))
+    top = root / "rtl" / "top_automotive_soc.vhd"
+    if top.exists():
+        our_files.append(top)
+    our_files.extend(sorted((root / "sim" / "testbenches").glob("*.vhd")))
+
+    if not our_files:
+        print("WARNING: No VHDL files found for VSG.")
+        return True
+
+    print(f"\n{'='*60}")
+    print(f"Style Lint: vsg")
+    print(f"Files: {len(our_files)}")
+    print(f"{'='*60}")
+
+    cmd = [vsg_exe, "-c", str(root / "sim" / "vsg_config.yaml"), "-ap"] + \
+          [str(f).replace("\\", "/") for f in our_files]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if r.returncode != 0:
+        print(r.stdout)
+        print(f"\nVSG FAILED (exit {r.returncode}).")
+        return False
+
+    print("\nVSG passed — no style violations found.\n")
+    return True
+
+
+# Resolve executables
 _ghdl_for_lint = None
 if os.name == "nt":
     _ghdl_hardcoded = Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin\ghdl.exe")
@@ -287,12 +327,22 @@ if os.name == "nt":
 if not _ghdl_for_lint:
     _ghdl_for_lint = _find_exe("ghdl")
 
+_vsg_exe = _find_exe("vsg")
+
+# Run lint gates
 if _ghdl_for_lint and not _skip_lint:
     if not _run_ghdl_lint(_ghdl_for_lint):
         sys.exit(1)
 elif not _ghdl_for_lint and not _skip_lint:
     print("WARNING: GHDL not found — skipping semantic safety lint.")
     print("  Install ghdl or add to PATH to enable ASIL-D lint gate.")
+
+if _vsg_exe and not _skip_vsg:
+    if not _run_vsg(_vsg_exe):
+        sys.exit(1)
+elif not _vsg_exe and not _skip_vsg:
+    print("WARNING: vsg not found — skipping style lint.")
+    print("  pip install vsg to enable style checking.")
 
 # ---------------------------------------------------------------------------
 # 6. OSVVM libraries (scoreboard, NVC reporter, etc.)

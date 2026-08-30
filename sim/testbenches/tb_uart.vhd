@@ -3,74 +3,104 @@
 -- ============================================================================
 
 library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
 
 library lockstep;
-use lockstep.package_soc_types.all;
+  use lockstep.package_soc_types.all;
 
 library vunit_lib;
-context vunit_lib.vunit_context;
+  context vunit_lib.vunit_context;
 
 entity tb_uart is
-    generic (runner_cfg : string := "");
-end entity;
+  generic (
+    runner_cfg : string := ""
+  );
+end entity tb_uart;
 
 architecture rtl of tb_uart is
-    constant CLK_PERIOD : time := 20 ns;
-    signal tb_clk   : std_logic := '0';
-    signal tb_rst_n : std_logic := '0';
-    signal bus_i    : t_rv_bus := (addr => (others => '0'),
-                                   data => (others => '0'),
-                                   we   => '0',
-                                   valid => '0');
-    signal bus_ok   : std_logic := '1';
-    signal uart_tx  : std_logic;
-    signal uart_busy: std_logic;
-    signal uart_err : std_logic;
+
+  constant clk_period : time      := 20 ns;
+  signal   tb_clk     : std_logic := '0';
+  signal   tb_rst_n   : std_logic := '0';
+  signal   bus_i      : t_rv_bus  := (addr => (others => '0'),
+                                     data => (others => '0'),
+                                     we   => '0',
+                                     valid => '0');
+  signal   bus_ok     : std_logic := '1';
+  signal   uart_tx    : std_logic;
+  signal   uart_busy  : std_logic;
+  signal   uart_err   : std_logic;
+
 begin
-    tb_clk <= not tb_clk after CLK_PERIOD / 2;
 
-    i_uart : entity lockstep.safe_uart
-        port map (clk_i      => tb_clk,
-                  rst_n_i    => tb_rst_n,
-                  bus_i      => bus_i,
-                  bus_ok_i   => bus_ok,
-                  uart_tx_o  => uart_tx,
-                  uart_busy_o => uart_busy,
-                  uart_error_o => uart_err);
+  tb_clk <= not tb_clk after clk_period / 2;
 
-    p_stim : process
-    begin
-        test_runner_setup(runner, runner_cfg);
+  i_uart : entity lockstep.safe_uart
+    port map (
+      clk_i        => tb_clk,
+      rst_n_i      => tb_rst_n,
+      bus_i        => bus_i,
+      bus_ok_i     => bus_ok,
+      uart_tx_o    => uart_tx,
+      uart_busy_o  => uart_busy,
+      uart_error_o => uart_err
+    );
 
-        tb_rst_n <= '0';
-        for dummy in 1 to 5 loop wait until rising_edge(tb_clk); end loop;
-        tb_rst_n <= '1';
-        for dummy in 1 to 5 loop wait until rising_edge(tb_clk); end loop;
+  p_stim : process is
+  begin
 
-        -- --- Test 1: Idle state ---
-        check(uart_busy = '0', "UART idle at start");
-        check(uart_tx   = '1', "TX recessive at idle");
+    test_runner_setup(runner, runner_cfg);
 
-        -- --- Test 2: Write valid data → TX starts ---
-        bus_i <= (addr  => (others => '0'),
-                  data  => x"00000041",
-                  we    => '1',
-                  valid => '1');
-        wait until rising_edge(tb_clk);  -- p_rx_regs accepts write
-        wait until rising_edge(tb_clk);  -- FSM sees r_tx_valid, transitions
-        wait until rising_edge(tb_clk);  -- extra margin
-        check(uart_busy = '1', "UART busy after write");
-        check(uart_err  = '0', "no parity error on valid write");
+    tb_rst_n <= '0';
 
-        -- --- Test 3: Wait for TX to finish (max 10000 cycles) ---
-        for dummy in 1 to 10000 loop
-            wait until rising_edge(tb_clk);
-            if uart_busy = '0' then exit; end if;
-        end loop;
-        check(uart_busy = '0', "UART idle after TX complete");
+    for dummy in 1 to 5 loop
 
-        test_runner_cleanup(runner);
-    end process;
+      wait until rising_edge(tb_clk);
+
+    end loop;
+
+    tb_rst_n <= '1';
+
+    for dummy in 1 to 5 loop
+
+      wait until rising_edge(tb_clk);
+
+    end loop;
+
+    -- --- Test 1: Idle state ---
+    check(uart_busy = '0', "UART idle at start");
+    check(uart_tx = '1', "TX recessive at idle");
+
+    -- --- Test 2: Write valid data → TX starts ---
+    bus_i <=
+    (
+      addr  => (others => '0'),
+      data  => x"00000041",
+      we    => '1',
+      valid => '1'
+    );
+    wait until rising_edge(tb_clk);                          -- p_rx_regs accepts write
+    wait until rising_edge(tb_clk);                          -- FSM sees r_tx_valid, transitions
+    wait until rising_edge(tb_clk);                          -- extra margin
+    check(uart_busy = '1', "UART busy after write");
+    check(uart_err = '0', "no parity error on valid write");
+
+    -- --- Test 3: Wait for TX to finish (max 10000 cycles) ---
+    for dummy in 1 to 10000 loop
+
+      wait until rising_edge(tb_clk);
+
+      if (uart_busy = '0') then
+        exit;
+      end if;
+
+    end loop;
+
+    check(uart_busy = '0', "UART idle after TX complete");
+
+    test_runner_cleanup(runner);
+
+  end process p_stim;
+
 end architecture rtl;
