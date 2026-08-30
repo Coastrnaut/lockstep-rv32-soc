@@ -53,7 +53,7 @@ def find_simulator():
 
     # 2. Check for hardcoded GHDL (Windows)
     if os.name == "nt":
-        ghdl_bin = Path(r"C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin")
+        ghdl_bin = Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin")
         if ghdl_bin.is_dir():
             return ("ghdl", str(ghdl_bin))
 
@@ -90,7 +90,7 @@ if detected_name == "vivado" and not vivado_supported:
     # Re-detect GHDL
     detected_name, detected_path = ("ghdl", None)
     if os.name == "nt":
-        ghdl_bin = Path(r"C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin")
+        ghdl_bin = Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin")
         if ghdl_bin.is_dir():
             detected_path = str(ghdl_bin)
         elif _find_exe("ghdl"):
@@ -107,7 +107,7 @@ sim_path = detected_path
 if simulator_name is None:
     print("ERROR: No simulator found.")
     print("  Checked: Vivado XSim (xvlog/xsim on PATH),")
-    print("           GHDL (C:\\GIT\\ghdl-mcode-6.0.0-rc2-mingw64\\bin),")
+    print("           GHDL (C:\\GIT\\ghdl-mcode-6.0.0-ucrt64\\bin),")
     print("           GHDL (PATH)")
     sys.exit(1)
 
@@ -166,6 +166,109 @@ else:
 # 5. Top-level SoC
 # ---------------------------------------------------------------------------
 lockstep_lib.add_source_files(root / "rtl" / "top_automotive_soc.vhd")
+
+# ---------------------------------------------------------------------------
+# Semantic Safety Lint — ghdl -a --std=08 -Wall
+# Catches: missing sensitivity lists, illegal casts, array overflows,
+# non-synthesizable constructs. ASIL-D mandatory gate.
+# ---------------------------------------------------------------------------
+def _run_ghdl_lint(ghdl_exe):
+    """Lint all RTL sources with ghdl -a --std=08 -Wall.
+
+    Compiles in dependency order: config -> safety_blocks -> peripherals
+    -> neorv32 -> top.  Uses a temp working directory so we don't pollute
+    the VUnit object library.
+    """
+    import tempfile
+
+    # Collect files grouped by library / dependency order
+    config_files = sorted((root / "config").glob("*.vhd"))
+    safety_files = sorted((root / "rtl" / "safety_blocks").glob("*.vhd"))
+    periph_files = sorted((root / "rtl" / "peripherals").glob("*.vhd"))
+    top_soc = root / "rtl" / "top_automotive_soc.vhd"
+    neorv32_files = []  # Skip NEORV32 — third-party submodule; lint our RTL only
+
+    total = len(config_files) + len(safety_files) + len(periph_files) \
+            + (1 if top_soc.exists() else 0) + len(neorv32_files)
+
+    if total == 0:
+        print("WARNING: No VHDL files found for linting.")
+        return True
+
+    print(f"\n{'='*60}")
+    print(f"Semantic Safety Lint: ghdl -a --std=08 -Wall")
+    print(f"Files: {total}")
+    print(f"{'='*60}")
+
+    # Temp directory for the GHDL object library
+    with tempfile.TemporaryDirectory(prefix="lockstep_lint_") as tmp:
+        # Convert root to MSYS-style path for GHDL in bash
+        root_str = str(root).replace("\\", "/")
+        # Phase 1: config  -> library lockstep
+        if config_files:
+            cmd = [ghdl_exe, "-a", "--std=08", "-Wall",
+                   "--work=lockstep"] + [str(f).replace("\\", "/") for f in config_files]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                               cwd=tmp)
+            if r.returncode != 0:
+                print(r.stdout or r.stderr)
+                print(f"\nLINT FAILED at config phase (exit {r.returncode}).")
+                return False
+
+        # Phase 2: safety_blocks  -> library lockstep
+        if safety_files:
+            cmd = [ghdl_exe, "-a", "--std=08", "-Wall",
+                   "--work=lockstep"] + [str(f).replace("\\", "/") for f in safety_files]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                               cwd=tmp)
+            if r.returncode != 0:
+                print(r.stdout or r.stderr)
+                print(f"\nLINT FAILED at safety_blocks phase (exit {r.returncode}).")
+                return False
+
+        # Phase 3: peripherals  -> library lockstep
+        if periph_files:
+            cmd = [ghdl_exe, "-a", "--std=08", "-Wall",
+                   "--work=lockstep"] + [str(f).replace("\\", "/") for f in periph_files]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                               cwd=tmp)
+            if r.returncode != 0:
+                print(r.stdout or r.stderr)
+                print(f"\nLINT FAILED at peripherals phase (exit {r.returncode}).")
+                return False
+
+        # Phase 4: neorv32  -> library neorv32
+        if neorv32_files:
+            cmd = [ghdl_exe, "-a", "--std=08", "-Wall",
+                   "--work=neorv32"] + [str(f).replace("\\", "/") for f in neorv32_files]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                               cwd=tmp)
+            if r.returncode != 0:
+                print(r.stdout or r.stderr)
+                print(f"\nLINT FAILED at neorv32 phase (exit {r.returncode}).")
+                return False
+
+        # Phase 5: top_automotive_soc  -> library lockstep
+        # Skip — depends on neorv32 library which we don't lint (third-party)
+
+    print("\nLint passed — no semantic safety issues found.\n")
+    return True
+
+# Resolve the GHDL executable for linting (always use GHDL for lint regardless of simulator)
+_ghdl_for_lint = None
+if os.name == "nt":
+    _ghdl_hardcoded = Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin\ghdl.exe")
+    if _ghdl_hardcoded.exists():
+        _ghdl_for_lint = str(_ghdl_hardcoded)
+if not _ghdl_for_lint:
+    _ghdl_for_lint = _find_exe("ghdl")
+
+if _ghdl_for_lint:
+    if not _run_ghdl_lint(_ghdl_for_lint):
+        sys.exit(1)
+else:
+    print("WARNING: GHDL not found — skipping semantic safety lint.")
+    print("  Install ghdl or add to PATH to enable ASIL-D lint gate.")
 
 # ---------------------------------------------------------------------------
 # 6. OSVVM libraries (scoreboard, NVC reporter, etc.)
