@@ -84,27 +84,27 @@ architecture structural of top_automotive_soc is
   signal w_core_b_trace1 : trace_port_t;
 
   -- Peripheral diagnostic signals
-  signal w_can_busy   : std_logic;
-  signal w_uart_busy  : std_logic;
-  signal w_uart_error : std_logic;
-  signal w_core_a_jtag_tdo : std_ulogic;
-  signal w_core_b_jtag_tdo : std_ulogic;
-  signal w_core_a_smc_ioen : std_ulogic;
-  signal w_core_b_smc_ioen : std_ulogic;
-  signal w_core_a_smc_sck : std_ulogic;
-  signal w_core_b_smc_sck : std_ulogic;
-  signal w_core_a_smc_csn : std_ulogic_vector(1 downto 0);
-  signal w_core_b_smc_csn : std_ulogic_vector(1 downto 0);
-  signal w_core_a_smc_sdo : std_ulogic;
-  signal w_core_b_smc_sdo : std_ulogic;
-  signal w_core_a_xbus_cti : std_ulogic_vector(2 downto 0);
-  signal w_core_b_xbus_cti : std_ulogic_vector(2 downto 0);
-  signal w_core_a_xbus_tag : std_ulogic_vector(2 downto 0);
-  signal w_core_b_xbus_tag : std_ulogic_vector(2 downto 0);
-  signal w_core_a_xbus_sel : std_ulogic_vector(3 downto 0);
-  signal w_core_b_xbus_sel : std_ulogic_vector(3 downto 0);
-  signal w_core_a_xbus_cyc : std_ulogic;
-  signal w_core_b_xbus_cyc : std_ulogic;
+  signal w_can_busy            : std_logic;
+  signal w_uart_busy           : std_logic;
+  signal w_uart_error          : std_logic;
+  signal w_core_a_jtag_tdo     : std_ulogic;
+  signal w_core_b_jtag_tdo     : std_ulogic;
+  signal w_core_a_smc_ioen     : std_ulogic;
+  signal w_core_b_smc_ioen     : std_ulogic;
+  signal w_core_a_smc_sck      : std_ulogic;
+  signal w_core_b_smc_sck      : std_ulogic;
+  signal w_core_a_smc_csn      : std_ulogic_vector(1 downto 0);
+  signal w_core_b_smc_csn      : std_ulogic_vector(1 downto 0);
+  signal w_core_a_smc_sdo      : std_ulogic;
+  signal w_core_b_smc_sdo      : std_ulogic;
+  signal w_core_a_xbus_cti     : std_ulogic_vector(2 downto 0);
+  signal w_core_b_xbus_cti     : std_ulogic_vector(2 downto 0);
+  signal w_core_a_xbus_tag     : std_ulogic_vector(2 downto 0);
+  signal w_core_b_xbus_tag     : std_ulogic_vector(2 downto 0);
+  signal w_core_a_xbus_sel     : std_ulogic_vector(3 downto 0);
+  signal w_core_b_xbus_sel     : std_ulogic_vector(3 downto 0);
+  signal w_core_a_xbus_cyc     : std_ulogic;
+  signal w_core_b_xbus_cyc     : std_ulogic;
   signal w_core_a_slink_rx_rdy : std_ulogic;
   signal w_core_b_slink_rx_rdy : std_ulogic;
   signal w_core_a_slink_tx_dat : std_ulogic_vector(31 downto 0);
@@ -115,42 +115,42 @@ architecture structural of top_automotive_soc is
   signal w_core_b_slink_tx_val : std_ulogic;
   signal w_core_a_slink_tx_lst : std_ulogic;
   signal w_core_b_slink_tx_lst : std_ulogic;
-  signal w_core_a_gpio_dir : std_ulogic_vector(31 downto 0);
-  signal w_core_b_gpio_dir : std_ulogic_vector(31 downto 0);
-  signal w_core_a_gpio : std_ulogic_vector(31 downto 0);
-  signal w_core_b_gpio : std_ulogic_vector(31 downto 0);
-  signal w_core_a_uart0_txd : std_ulogic;
-  signal w_core_b_uart0_txd : std_ulogic;
-  signal w_core_a_uart0_rtsn : std_ulogic;
-  signal w_core_b_uart0_rtsn : std_ulogic;
-  signal w_core_a_uart1_txd : std_ulogic;
-  signal w_core_b_uart1_txd : std_ulogic;
-  signal w_core_a_uart1_rtsn : std_ulogic;
-  signal w_core_b_uart1_rtsn : std_ulogic;
-  signal w_core_a_spi_clk : std_ulogic;
-  signal w_core_b_spi_clk : std_ulogic;
-  signal w_core_a_spi_dat : std_ulogic;
-  signal w_core_b_spi_dat : std_ulogic;
-  signal w_core_a_spi_csn : std_ulogic_vector(7 downto 0);
-  signal w_core_b_spi_csn : std_ulogic_vector(7 downto 0);
-  signal w_core_a_sdi_dat : std_ulogic;
-  signal w_core_b_sdi_dat : std_ulogic;
-  signal w_core_a_twi_sda : std_ulogic;
-  signal w_core_b_twi_sda : std_ulogic;
-  signal w_core_a_twi_scl : std_ulogic;
-  signal w_core_b_twi_scl : std_ulogic;
-  signal w_core_a_twd_sda : std_ulogic;
-  signal w_core_b_twd_sda : std_ulogic;
-  signal w_core_a_onewire : std_ulogic;
-  signal w_core_b_onewire : std_ulogic;
-  signal w_core_a_pwm : std_ulogic_vector(31 downto 0);
-  signal w_core_b_pwm : std_ulogic_vector(31 downto 0);
-  signal w_core_a_cfs_out : std_ulogic_vector(255 downto 0);
-  signal w_core_b_cfs_out : std_ulogic_vector(255 downto 0);
-  signal w_core_a_neoled : std_ulogic;
-  signal w_core_b_neoled : std_ulogic;
-  signal w_core_a_mtime_time : std_ulogic_vector(63 downto 0);
-  signal w_core_b_mtime_time : std_ulogic_vector(63 downto 0);
+  signal w_core_a_gpio_dir     : std_ulogic_vector(31 downto 0);
+  signal w_core_b_gpio_dir     : std_ulogic_vector(31 downto 0);
+  signal w_core_a_gpio         : std_ulogic_vector(31 downto 0);
+  signal w_core_b_gpio         : std_ulogic_vector(31 downto 0);
+  signal w_core_a_uart0_txd    : std_ulogic;
+  signal w_core_b_uart0_txd    : std_ulogic;
+  signal w_core_a_uart0_rtsn   : std_ulogic;
+  signal w_core_b_uart0_rtsn   : std_ulogic;
+  signal w_core_a_uart1_txd    : std_ulogic;
+  signal w_core_b_uart1_txd    : std_ulogic;
+  signal w_core_a_uart1_rtsn   : std_ulogic;
+  signal w_core_b_uart1_rtsn   : std_ulogic;
+  signal w_core_a_spi_clk      : std_ulogic;
+  signal w_core_b_spi_clk      : std_ulogic;
+  signal w_core_a_spi_dat      : std_ulogic;
+  signal w_core_b_spi_dat      : std_ulogic;
+  signal w_core_a_spi_csn      : std_ulogic_vector(7 downto 0);
+  signal w_core_b_spi_csn      : std_ulogic_vector(7 downto 0);
+  signal w_core_a_sdi_dat      : std_ulogic;
+  signal w_core_b_sdi_dat      : std_ulogic;
+  signal w_core_a_twi_sda      : std_ulogic;
+  signal w_core_b_twi_sda      : std_ulogic;
+  signal w_core_a_twi_scl      : std_ulogic;
+  signal w_core_b_twi_scl      : std_ulogic;
+  signal w_core_a_twd_sda      : std_ulogic;
+  signal w_core_b_twd_sda      : std_ulogic;
+  signal w_core_a_onewire      : std_ulogic;
+  signal w_core_b_onewire      : std_ulogic;
+  signal w_core_a_pwm          : std_ulogic_vector(31 downto 0);
+  signal w_core_b_pwm          : std_ulogic_vector(31 downto 0);
+  signal w_core_a_cfs_out      : std_ulogic_vector(255 downto 0);
+  signal w_core_b_cfs_out      : std_ulogic_vector(255 downto 0);
+  signal w_core_a_neoled       : std_ulogic;
+  signal w_core_b_neoled       : std_ulogic;
+  signal w_core_a_mtime_time   : std_ulogic_vector(63 downto 0);
+  signal w_core_b_mtime_time   : std_ulogic_vector(63 downto 0);
 
 begin
 
@@ -778,68 +778,134 @@ begin
   --     to satisfy -Wall (unused signal) and prevent synthesis optimization.
   --     In production, these conditions trigger BSM actions or fault logging.
   -- ========================================================================
-  p_diag_monitor : process (clk_i)
+  p_diag_monitor : process (clk_i) is
   begin
+
     if rising_edge(clk_i) then
       -- Monitor NEORV32 reset outputs for diagnostic retention
-      if w_core_a_rstn_ocd = '0' or w_core_b_rstn_ocd = '0' then
-        null; -- OCD reset active
+      if (w_core_a_rstn_ocd = '0' or w_core_b_rstn_ocd = '0') then
+        null;                                                                          -- OCD reset active
       end if;
-      if w_core_a_rstn_wdt = '0' or w_core_b_rstn_wdt = '0' then
-        null; -- Watchdog reset active
+      if (w_core_a_rstn_wdt = '0' or w_core_b_rstn_wdt = '0') then
+        null;                                                                          -- Watchdog reset active
       end if;
 
       -- Trace and peripheral status reads for diagnostic retention
-      if w_core_a_trace /= w_core_a_trace1 or w_core_b_trace /= w_core_b_trace1 then
-        null; -- Trace port activity
+      if (w_core_a_trace /= w_core_a_trace1 or w_core_b_trace /= w_core_b_trace1) then
+        null;                                                                          -- Trace port activity
       end if;
-      if w_core_a_trace /= w_core_b_trace then
-        null; -- Trace mismatch between cores
+      if (w_core_a_trace /= w_core_b_trace) then
+        null;                                                                          -- Trace mismatch between cores
       end if;
-      if w_can_busy = '1' then
-        null; -- CAN bus activity
+      if (w_can_busy = '1') then
+        null;                                                                          -- CAN bus activity
       end if;
-      if w_uart_busy = '1' then
-        null; -- UART activity
+      if (w_uart_busy = '1') then
+        null;                                                                          -- UART activity
       end if;
-      if w_uart_error = '1' then
-        null; -- UART error condition
+      if (w_uart_error = '1') then
+        null;                                                                          -- UART error condition
       end if;
 
       -- Read all NEORV32 peripheral output signals for diagnostic retention (-Wall compliance)
-      if w_core_a_jtag_tdo /= w_core_b_jtag_tdo then null; end if;
-      if w_core_a_smc_ioen /= w_core_b_smc_ioen then null; end if;
-      if w_core_a_smc_sck /= w_core_b_smc_sck then null; end if;
-      if w_core_a_smc_csn /= w_core_b_smc_csn then null; end if;
-      if w_core_a_smc_sdo /= w_core_b_smc_sdo then null; end if;
-      if w_core_a_xbus_cti /= w_core_b_xbus_cti then null; end if;
-      if w_core_a_xbus_tag /= w_core_b_xbus_tag then null; end if;
-      if w_core_a_xbus_sel /= w_core_b_xbus_sel then null; end if;
-      if w_core_a_xbus_cyc /= w_core_b_xbus_cyc then null; end if;
-      if w_core_a_slink_rx_rdy /= w_core_b_slink_rx_rdy then null; end if;
-      if w_core_a_slink_tx_dat /= w_core_b_slink_tx_dat then null; end if;
-      if w_core_a_slink_tx_dst /= w_core_b_slink_tx_dst then null; end if;
-      if w_core_a_slink_tx_val /= w_core_b_slink_tx_val then null; end if;
-      if w_core_a_slink_tx_lst /= w_core_b_slink_tx_lst then null; end if;
-      if w_core_a_gpio_dir /= w_core_b_gpio_dir then null; end if;
-      if w_core_a_gpio /= w_core_b_gpio then null; end if;
-      if w_core_a_uart0_txd /= w_core_b_uart0_txd then null; end if;
-      if w_core_a_uart0_rtsn /= w_core_b_uart0_rtsn then null; end if;
-      if w_core_a_uart1_txd /= w_core_b_uart1_txd then null; end if;
-      if w_core_a_uart1_rtsn /= w_core_b_uart1_rtsn then null; end if;
-      if w_core_a_spi_clk /= w_core_b_spi_clk then null; end if;
-      if w_core_a_spi_dat /= w_core_b_spi_dat then null; end if;
-      if w_core_a_spi_csn /= w_core_b_spi_csn then null; end if;
-      if w_core_a_sdi_dat /= w_core_b_sdi_dat then null; end if;
-      if w_core_a_twi_sda /= w_core_b_twi_sda then null; end if;
-      if w_core_a_twi_scl /= w_core_b_twi_scl then null; end if;
-      if w_core_a_twd_sda /= w_core_b_twd_sda then null; end if;
-      if w_core_a_onewire /= w_core_b_onewire then null; end if;
-      if w_core_a_pwm /= w_core_b_pwm then null; end if;
-      if w_core_a_cfs_out /= w_core_b_cfs_out then null; end if;
-      if w_core_a_neoled /= w_core_b_neoled then null; end if;
-      if w_core_a_mtime_time /= w_core_b_mtime_time then null; end if;
+      if (w_core_a_jtag_tdo /= w_core_b_jtag_tdo) then
+        null;
+      end if;
+      if (w_core_a_smc_ioen /= w_core_b_smc_ioen) then
+        null;
+      end if;
+      if (w_core_a_smc_sck /= w_core_b_smc_sck) then
+        null;
+      end if;
+      if (w_core_a_smc_csn /= w_core_b_smc_csn) then
+        null;
+      end if;
+      if (w_core_a_smc_sdo /= w_core_b_smc_sdo) then
+        null;
+      end if;
+      if (w_core_a_xbus_cti /= w_core_b_xbus_cti) then
+        null;
+      end if;
+      if (w_core_a_xbus_tag /= w_core_b_xbus_tag) then
+        null;
+      end if;
+      if (w_core_a_xbus_sel /= w_core_b_xbus_sel) then
+        null;
+      end if;
+      if (w_core_a_xbus_cyc /= w_core_b_xbus_cyc) then
+        null;
+      end if;
+      if (w_core_a_slink_rx_rdy /= w_core_b_slink_rx_rdy) then
+        null;
+      end if;
+      if (w_core_a_slink_tx_dat /= w_core_b_slink_tx_dat) then
+        null;
+      end if;
+      if (w_core_a_slink_tx_dst /= w_core_b_slink_tx_dst) then
+        null;
+      end if;
+      if (w_core_a_slink_tx_val /= w_core_b_slink_tx_val) then
+        null;
+      end if;
+      if (w_core_a_slink_tx_lst /= w_core_b_slink_tx_lst) then
+        null;
+      end if;
+      if (w_core_a_gpio_dir /= w_core_b_gpio_dir) then
+        null;
+      end if;
+      if (w_core_a_gpio /= w_core_b_gpio) then
+        null;
+      end if;
+      if (w_core_a_uart0_txd /= w_core_b_uart0_txd) then
+        null;
+      end if;
+      if (w_core_a_uart0_rtsn /= w_core_b_uart0_rtsn) then
+        null;
+      end if;
+      if (w_core_a_uart1_txd /= w_core_b_uart1_txd) then
+        null;
+      end if;
+      if (w_core_a_uart1_rtsn /= w_core_b_uart1_rtsn) then
+        null;
+      end if;
+      if (w_core_a_spi_clk /= w_core_b_spi_clk) then
+        null;
+      end if;
+      if (w_core_a_spi_dat /= w_core_b_spi_dat) then
+        null;
+      end if;
+      if (w_core_a_spi_csn /= w_core_b_spi_csn) then
+        null;
+      end if;
+      if (w_core_a_sdi_dat /= w_core_b_sdi_dat) then
+        null;
+      end if;
+      if (w_core_a_twi_sda /= w_core_b_twi_sda) then
+        null;
+      end if;
+      if (w_core_a_twi_scl /= w_core_b_twi_scl) then
+        null;
+      end if;
+      if (w_core_a_twd_sda /= w_core_b_twd_sda) then
+        null;
+      end if;
+      if (w_core_a_onewire /= w_core_b_onewire) then
+        null;
+      end if;
+      if (w_core_a_pwm /= w_core_b_pwm) then
+        null;
+      end if;
+      if (w_core_a_cfs_out /= w_core_b_cfs_out) then
+        null;
+      end if;
+      if (w_core_a_neoled /= w_core_b_neoled) then
+        null;
+      end if;
+      if (w_core_a_mtime_time /= w_core_b_mtime_time) then
+        null;
+      end if;
     end if;
+
   end process p_diag_monitor;
 
 end architecture structural;
