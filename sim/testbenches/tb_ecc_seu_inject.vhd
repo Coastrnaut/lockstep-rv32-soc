@@ -29,14 +29,12 @@ architecture tb of tb_ecc_seu_inject is
   signal   ecc_sbe     : std_logic;
   signal   ecc_dbe     : std_logic;
 
-  -- Component declarations (VSG compliance)
-  component hamming_ecc_wrapper is end component hamming_ecc_wrapper;
-
 begin
 
   clk <= not clk after clk_period / 2;
 
-  uut : component hamming_ecc_wrapper
+  -- Entity instantiation for correct library binding
+  uut : entity lockstep.hamming_ecc_wrapper
     port map (
       clk_i           => clk,
       rst_n_i         => rst_n,
@@ -50,7 +48,9 @@ begin
       sbe_corrected_o => ecc_sbe,
       dbe_fatal_o     => ecc_dbe
 
-    );p_test : process is
+    );
+
+p_test : process is
 
     variable v_sbe      : std_logic;
     variable v_dbe      : std_logic;
