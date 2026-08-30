@@ -80,9 +80,9 @@ sim_lib.add_source_files(root / "sim" / "testbenches" / "*.vhd")
 
 # ---------------------------------------------------------------------------
 # Ensure reports/ directory exists (OSVVM writes OsvvmRun.yml here)
+# Must be relative to sim/ since that's the working directory
 # ---------------------------------------------------------------------------
-reports_dir = root / "reports"
-reports_dir.mkdir(parents=True, exist_ok=True)
+os.makedirs("reports", exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # 8. Run

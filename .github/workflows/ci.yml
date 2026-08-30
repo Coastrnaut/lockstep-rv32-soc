@@ -36,7 +36,7 @@ jobs:
 
       - name: Run full regression (auto-discover all testbenches)
         run: |
-          cd sim && python run.py
+          cd sim && mkdir -p reports && python run.py
 
       - name: Upload simulation logs on failure
         if: failure()
