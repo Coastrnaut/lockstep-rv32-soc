@@ -429,10 +429,7 @@ if simulator_name == "vivado":
     vu.set_compile_option("vivado.vcom_flags", ["-relax"])
     vu.set_sim_option("vivado.xsim_flags", ["-v", "1"])
 else:
-    vu.set_sim_option("ghdl.elaborate_flags", ["--std=08"])
-
-# Global sim timeout: kill any testbench running > 30s (prevents hangs)
-vu.set_sim_option("time_out_ns", 30_000_000)
+    vu.set_sim_option("ghdl.elab_flags", ["--std=08"])
 
 # ---------------------------------------------------------------------------
 # Ensure reports/ directory exists (OSVVM writes OsvvmRun.yml here)
