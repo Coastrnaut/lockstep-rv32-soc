@@ -113,3 +113,11 @@ rule:
     enabled: true
   attribute_specification_300:
     enabled: true
+
+  # === SECTION G: ENTITY INSTANTIATIONS (Required for cross-library binding) ===
+  instantiation_034:
+    # Allow entity instantiations — required for NEORV32 cross-library binding
+    disable: true
+  instantiation_036:
+    # Allow entity instantiations without architecture identifier
+    disable: true
