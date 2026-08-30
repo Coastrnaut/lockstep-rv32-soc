@@ -39,3 +39,4 @@ __pycache__/
 *.swo
 .vscode/
 .idea/
+xvlog.pb

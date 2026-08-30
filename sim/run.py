@@ -19,12 +19,24 @@ from vunit import VUnit
 # ---------------------------------------------------------------------------
 # Simulator auto-detection
 # ---------------------------------------------------------------------------
+def _find_exe(name):
+    """Cross-platform find: tries shutil.which first, then PATH scan."""
+    p = shutil.which(name)
+    if p:
+        return p
+    # Fallback: scan PATH dirs manually (handles MSYS/WSL path issues)
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        for ext in ("", ".exe"):
+            candidate = os.path.join(d, name + ext)
+            if os.path.isfile(candidate):
+                return candidate
+    return None
+
 def find_simulator():
     """Return ('vivado', None), ('ghdl', path), or ('ghdl', 'auto')."""
 
     # 1. Check for Vivado XSim on PATH
-    if shutil.which("xvlog") and shutil.which("xsim"):
-        # Verify Vivado actually works (handles installed but not licensed)
+    if _find_exe("xvlog") and _find_exe("xsim"):
         try:
             result = subprocess.run(
                 ["xvlog", "--version"],
@@ -33,7 +45,11 @@ def find_simulator():
             if result.returncode == 0:
                 return ("vivado", None)
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+            # .BAT wrappers fail without Vivado env — if the files exist, trust them
+            xvlog_path = _find_exe("xvlog")
+            xsim_path = _find_exe("xsim")
+            if xvlog_path and xsim_path:
+                return ("vivado", None)
 
     # 2. Check for hardcoded GHDL (Windows)
     if os.name == "nt":
@@ -42,13 +58,51 @@ def find_simulator():
             return ("ghdl", str(ghdl_bin))
 
     # 3. Fall back to GHDL on PATH
-    if shutil.which("ghdl"):
+    if _find_exe("ghdl"):
         return ("ghdl", "auto")
 
     # Nothing found
     return (None, None)
 
-simulator_name, sim_path = find_simulator()
+detected_name, detected_path = find_simulator()
+
+# ---------------------------------------------------------------------------
+# Check if VUnit supports the detected simulator
+# ---------------------------------------------------------------------------
+# VUnit may not include Vivado/XSim in all builds. If Vivado was detected
+# but VUnit lacks it, fall back to GHDL.
+vivado_supported = False
+try:
+    # Try creating a minimal VUnit instance to probe available simulators
+    _test_vu = VUnit.from_argv()
+    # If we get here, check if vivado options exist
+    try:
+        _test_vu.set_compile_option("vivado.vcom_flags", [])
+        vivado_supported = True
+    except ValueError:
+        vivado_supported = False
+except Exception:
+    pass
+
+if detected_name == "vivado" and not vivado_supported:
+    print("Vivado XSim found on PATH but not supported by this VUnit build.")
+    print("Falling back to GHDL...")
+    # Re-detect GHDL
+    detected_name, detected_path = ("ghdl", None)
+    if os.name == "nt":
+        ghdl_bin = Path(r"C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin")
+        if ghdl_bin.is_dir():
+            detected_path = str(ghdl_bin)
+        elif _find_exe("ghdl"):
+            detected_path = "auto"
+    elif _find_exe("ghdl"):
+        detected_path = "auto"
+    if detected_path is None:
+        print("ERROR: No simulator found.")
+        sys.exit(1)
+
+simulator_name = detected_name
+sim_path = detected_path
 
 if simulator_name is None:
     print("ERROR: No simulator found.")
@@ -129,7 +183,7 @@ sim_lib.add_source_files(root / "sim" / "testbenches" / "*.vhd")
 # ---------------------------------------------------------------------------
 if simulator_name == "vivado":
     # XSim: relax strictness for mixed-std projects, verbose on failure
-    vu.set_compile_option("vivado.xvhdl_flags", ["-relax"])
+    vu.set_compile_option("vivado.vcom_flags", ["-relax"])
     vu.set_sim_option("vivado.xsim_flags", ["-v", "1"])
 else:
     # GHDL: no coverage flags (mcode backend lacks coverage support)
