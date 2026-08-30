@@ -1,2 +1,0 @@
-@echo off
-python "%~dp0ghdl_wrapper.py" %*
