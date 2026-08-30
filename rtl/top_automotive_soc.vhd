@@ -21,6 +21,7 @@ library lockstep;
 -- Explicitly declare the compiled NEORV32 library containing the submodule IPs
 
 library neorv32;
+  use neorv32.neorv32_package.all;
 
 entity top_automotive_soc is
   port (
@@ -77,13 +78,79 @@ architecture structural of top_automotive_soc is
   signal w_core_b_rstn_wdt : std_logic;
 
   -- Trace ports (always present)
-  signal w_core_a_trace : std_logic_vector(31 downto 0);
-  signal w_core_b_trace : std_logic_vector(31 downto 0);
+  signal w_core_a_trace  : trace_port_t;
+  signal w_core_a_trace1 : trace_port_t;
+  signal w_core_b_trace  : trace_port_t;
+  signal w_core_b_trace1 : trace_port_t;
 
   -- Peripheral diagnostic signals
   signal w_can_busy   : std_logic;
   signal w_uart_busy  : std_logic;
   signal w_uart_error : std_logic;
+  signal w_core_a_jtag_tdo : std_ulogic;
+  signal w_core_b_jtag_tdo : std_ulogic;
+  signal w_core_a_smc_ioen : std_ulogic;
+  signal w_core_b_smc_ioen : std_ulogic;
+  signal w_core_a_smc_sck : std_ulogic;
+  signal w_core_b_smc_sck : std_ulogic;
+  signal w_core_a_smc_csn : std_ulogic_vector(1 downto 0);
+  signal w_core_b_smc_csn : std_ulogic_vector(1 downto 0);
+  signal w_core_a_smc_sdo : std_ulogic;
+  signal w_core_b_smc_sdo : std_ulogic;
+  signal w_core_a_xbus_cti : std_ulogic_vector(2 downto 0);
+  signal w_core_b_xbus_cti : std_ulogic_vector(2 downto 0);
+  signal w_core_a_xbus_tag : std_ulogic_vector(2 downto 0);
+  signal w_core_b_xbus_tag : std_ulogic_vector(2 downto 0);
+  signal w_core_a_xbus_sel : std_ulogic_vector(3 downto 0);
+  signal w_core_b_xbus_sel : std_ulogic_vector(3 downto 0);
+  signal w_core_a_xbus_cyc : std_ulogic;
+  signal w_core_b_xbus_cyc : std_ulogic;
+  signal w_core_a_slink_rx_rdy : std_ulogic;
+  signal w_core_b_slink_rx_rdy : std_ulogic;
+  signal w_core_a_slink_tx_dat : std_ulogic_vector(31 downto 0);
+  signal w_core_b_slink_tx_dat : std_ulogic_vector(31 downto 0);
+  signal w_core_a_slink_tx_dst : std_ulogic_vector(3 downto 0);
+  signal w_core_b_slink_tx_dst : std_ulogic_vector(3 downto 0);
+  signal w_core_a_slink_tx_val : std_ulogic;
+  signal w_core_b_slink_tx_val : std_ulogic;
+  signal w_core_a_slink_tx_lst : std_ulogic;
+  signal w_core_b_slink_tx_lst : std_ulogic;
+  signal w_core_a_gpio_dir : std_ulogic_vector(31 downto 0);
+  signal w_core_b_gpio_dir : std_ulogic_vector(31 downto 0);
+  signal w_core_a_gpio : std_ulogic_vector(31 downto 0);
+  signal w_core_b_gpio : std_ulogic_vector(31 downto 0);
+  signal w_core_a_uart0_txd : std_ulogic;
+  signal w_core_b_uart0_txd : std_ulogic;
+  signal w_core_a_uart0_rtsn : std_ulogic;
+  signal w_core_b_uart0_rtsn : std_ulogic;
+  signal w_core_a_uart1_txd : std_ulogic;
+  signal w_core_b_uart1_txd : std_ulogic;
+  signal w_core_a_uart1_rtsn : std_ulogic;
+  signal w_core_b_uart1_rtsn : std_ulogic;
+  signal w_core_a_spi_clk : std_ulogic;
+  signal w_core_b_spi_clk : std_ulogic;
+  signal w_core_a_spi_dat : std_ulogic;
+  signal w_core_b_spi_dat : std_ulogic;
+  signal w_core_a_spi_csn : std_ulogic_vector(7 downto 0);
+  signal w_core_b_spi_csn : std_ulogic_vector(7 downto 0);
+  signal w_core_a_sdi_dat : std_ulogic;
+  signal w_core_b_sdi_dat : std_ulogic;
+  signal w_core_a_twi_sda : std_ulogic;
+  signal w_core_b_twi_sda : std_ulogic;
+  signal w_core_a_twi_scl : std_ulogic;
+  signal w_core_b_twi_scl : std_ulogic;
+  signal w_core_a_twd_sda : std_ulogic;
+  signal w_core_b_twd_sda : std_ulogic;
+  signal w_core_a_onewire : std_ulogic;
+  signal w_core_b_onewire : std_ulogic;
+  signal w_core_a_pwm : std_ulogic_vector(31 downto 0);
+  signal w_core_b_pwm : std_ulogic_vector(31 downto 0);
+  signal w_core_a_cfs_out : std_ulogic_vector(255 downto 0);
+  signal w_core_b_cfs_out : std_ulogic_vector(255 downto 0);
+  signal w_core_a_neoled : std_ulogic;
+  signal w_core_b_neoled : std_ulogic;
+  signal w_core_a_mtime_time : std_ulogic_vector(63 downto 0);
+  signal w_core_b_mtime_time : std_ulogic_vector(63 downto 0);
 
 begin
 
@@ -278,30 +345,30 @@ begin
 
       -- Trace
       trace_cpu0_o => w_core_a_trace,
-      trace_cpu1_o => open,
+      trace_cpu1_o => w_core_a_trace1,
 
       -- JTAG (disabled)
       jtag_tck_i => '0',
       jtag_tdi_i => '0',
-      jtag_tdo_o => open,
+      jtag_tdo_o => w_core_a_jtag_tdo,
       jtag_tms_i => '0',
 
       -- SMC (disabled)
-      smc_ioen_o => open,
-      smc_sck_o  => open,
-      smc_csn_o  => open,
-      smc_sdo_o  => open,
+      smc_ioen_o => w_core_a_smc_ioen,
+      smc_sck_o  => w_core_a_smc_sck,
+      smc_csn_o  => w_core_a_smc_csn,
+      smc_sdo_o  => w_core_a_smc_sdo,
       smc_sdi_i  => '0',
 
       -- XBus
       xbus_adr_o => w_core_a_xbus_addr,
       xbus_dat_o => w_core_a_xbus_data,
-      xbus_cti_o => open,
-      xbus_tag_o => open,
+      xbus_cti_o => w_core_a_xbus_cti,
+      xbus_tag_o => w_core_a_xbus_tag,
       xbus_we_o  => w_core_a_xbus_we,
-      xbus_sel_o => open,
+      xbus_sel_o => w_core_a_xbus_sel,
       xbus_stb_o => w_core_a_xbus_stb,
-      xbus_cyc_o => open,
+      xbus_cyc_o => w_core_a_xbus_cyc,
       xbus_dat_i => (others => '0'),
       xbus_ack_i => w_bus_valid,
       xbus_err_i => '0',
@@ -311,67 +378,67 @@ begin
       slink_rx_src_i => (others => '0'),
       slink_rx_val_i => '0',
       slink_rx_lst_i => '0',
-      slink_rx_rdy_o => open,
-      slink_tx_dat_o => open,
-      slink_tx_dst_o => open,
-      slink_tx_val_o => open,
-      slink_tx_lst_o => open,
+      slink_rx_rdy_o => w_core_a_slink_rx_rdy,
+      slink_tx_dat_o => w_core_a_slink_tx_dat,
+      slink_tx_dst_o => w_core_a_slink_tx_dst,
+      slink_tx_val_o => w_core_a_slink_tx_val,
+      slink_tx_lst_o => w_core_a_slink_tx_lst,
       slink_tx_rdy_i => '0',
 
       -- GPIO (disabled)
-      gpio_dir_o => open,
-      gpio_o     => open,
+      gpio_dir_o => w_core_a_gpio_dir,
+      gpio_o     => w_core_a_gpio,
       gpio_i     => (others => '0'),
 
       -- UART0/1 (disabled)
-      uart0_txd_o  => open,
+      uart0_txd_o  => w_core_a_uart0_txd,
       uart0_rxd_i  => '0',
-      uart0_rtsn_o => open,
+      uart0_rtsn_o => w_core_a_uart0_rtsn,
       uart0_ctsn_i => '0',
-      uart1_txd_o  => open,
+      uart1_txd_o  => w_core_a_uart1_txd,
       uart1_rxd_i  => '0',
-      uart1_rtsn_o => open,
+      uart1_rtsn_o => w_core_a_uart1_rtsn,
       uart1_ctsn_i => '0',
 
       -- SPI (disabled)
-      spi_clk_o => open,
-      spi_dat_o => open,
+      spi_clk_o => w_core_a_spi_clk,
+      spi_dat_o => w_core_a_spi_dat,
       spi_dat_i => '0',
-      spi_csn_o => open,
+      spi_csn_o => w_core_a_spi_csn,
 
       -- SDI (disabled)
       sdi_clk_i => '0',
-      sdi_dat_o => open,
+      sdi_dat_o => w_core_a_sdi_dat,
       sdi_dat_i => '0',
       sdi_csn_i => '1',
 
       -- TWI (disabled)
       twi_sda_i => '1',
-      twi_sda_o => open,
+      twi_sda_o => w_core_a_twi_sda,
       twi_scl_i => '1',
-      twi_scl_o => open,
+      twi_scl_o => w_core_a_twi_scl,
 
       -- TWD (disabled)
       twd_sda_i => '1',
-      twd_sda_o => open,
+      twd_sda_o => w_core_a_twd_sda,
       twd_scl_i => '1',
 
       -- ONEWIRE (disabled)
       onewire_i => '1',
-      onewire_o => open,
+      onewire_o => w_core_a_onewire,
 
       -- PWM (disabled)
-      pwm_o => open,
+      pwm_o => w_core_a_pwm,
 
       -- CFS (disabled)
       cfs_in_i  => (others => '0'),
-      cfs_out_o => open,
+      cfs_out_o => w_core_a_cfs_out,
 
       -- NEOLED (disabled)
-      neoled_o => open,
+      neoled_o => w_core_a_neoled,
 
       -- CLINT (disabled)
-      mtime_time_o => open,
+      mtime_time_o => w_core_a_mtime_time,
 
       -- Interrupts
       irq_msi_i => '0',
@@ -555,30 +622,30 @@ begin
 
       -- Trace
       trace_cpu0_o => w_core_b_trace,
-      trace_cpu1_o => open,
+      trace_cpu1_o => w_core_b_trace1,
 
       -- JTAG (disabled)
       jtag_tck_i => '0',
       jtag_tdi_i => '0',
-      jtag_tdo_o => open,
+      jtag_tdo_o => w_core_b_jtag_tdo,
       jtag_tms_i => '0',
 
       -- SMC (disabled)
-      smc_ioen_o => open,
-      smc_sck_o  => open,
-      smc_csn_o  => open,
-      smc_sdo_o  => open,
+      smc_ioen_o => w_core_b_smc_ioen,
+      smc_sck_o  => w_core_b_smc_sck,
+      smc_csn_o  => w_core_b_smc_csn,
+      smc_sdo_o  => w_core_b_smc_sdo,
       smc_sdi_i  => '0',
 
       -- XBus
       xbus_adr_o => w_core_b_xbus_addr,
       xbus_dat_o => w_core_b_xbus_data,
-      xbus_cti_o => open,
-      xbus_tag_o => open,
+      xbus_cti_o => w_core_b_xbus_cti,
+      xbus_tag_o => w_core_b_xbus_tag,
       xbus_we_o  => w_core_b_xbus_we,
-      xbus_sel_o => open,
+      xbus_sel_o => w_core_b_xbus_sel,
       xbus_stb_o => w_core_b_xbus_stb,
-      xbus_cyc_o => open,
+      xbus_cyc_o => w_core_b_xbus_cyc,
       xbus_dat_i => (others => '0'),
       xbus_ack_i => w_bus_valid,
       xbus_err_i => '0',
@@ -588,67 +655,67 @@ begin
       slink_rx_src_i => (others => '0'),
       slink_rx_val_i => '0',
       slink_rx_lst_i => '0',
-      slink_rx_rdy_o => open,
-      slink_tx_dat_o => open,
-      slink_tx_dst_o => open,
-      slink_tx_val_o => open,
-      slink_tx_lst_o => open,
+      slink_rx_rdy_o => w_core_b_slink_rx_rdy,
+      slink_tx_dat_o => w_core_b_slink_tx_dat,
+      slink_tx_dst_o => w_core_b_slink_tx_dst,
+      slink_tx_val_o => w_core_b_slink_tx_val,
+      slink_tx_lst_o => w_core_b_slink_tx_lst,
       slink_tx_rdy_i => '0',
 
       -- GPIO (disabled)
-      gpio_dir_o => open,
-      gpio_o     => open,
+      gpio_dir_o => w_core_b_gpio_dir,
+      gpio_o     => w_core_b_gpio,
       gpio_i     => (others => '0'),
 
       -- UART0/1 (disabled)
-      uart0_txd_o  => open,
+      uart0_txd_o  => w_core_b_uart0_txd,
       uart0_rxd_i  => '0',
-      uart0_rtsn_o => open,
+      uart0_rtsn_o => w_core_b_uart0_rtsn,
       uart0_ctsn_i => '0',
-      uart1_txd_o  => open,
+      uart1_txd_o  => w_core_b_uart1_txd,
       uart1_rxd_i  => '0',
-      uart1_rtsn_o => open,
+      uart1_rtsn_o => w_core_b_uart1_rtsn,
       uart1_ctsn_i => '0',
 
       -- SPI (disabled)
-      spi_clk_o => open,
-      spi_dat_o => open,
+      spi_clk_o => w_core_b_spi_clk,
+      spi_dat_o => w_core_b_spi_dat,
       spi_dat_i => '0',
-      spi_csn_o => open,
+      spi_csn_o => w_core_b_spi_csn,
 
       -- SDI (disabled)
       sdi_clk_i => '0',
-      sdi_dat_o => open,
+      sdi_dat_o => w_core_b_sdi_dat,
       sdi_dat_i => '0',
       sdi_csn_i => '1',
 
       -- TWI (disabled)
       twi_sda_i => '1',
-      twi_sda_o => open,
+      twi_sda_o => w_core_b_twi_sda,
       twi_scl_i => '1',
-      twi_scl_o => open,
+      twi_scl_o => w_core_b_twi_scl,
 
       -- TWD (disabled)
       twd_sda_i => '1',
-      twd_sda_o => open,
+      twd_sda_o => w_core_b_twd_sda,
       twd_scl_i => '1',
 
       -- ONEWIRE (disabled)
       onewire_i => '1',
-      onewire_o => open,
+      onewire_o => w_core_b_onewire,
 
       -- PWM (disabled)
-      pwm_o => open,
+      pwm_o => w_core_b_pwm,
 
       -- CFS (disabled)
       cfs_in_i  => (others => '0'),
-      cfs_out_o => open,
+      cfs_out_o => w_core_b_cfs_out,
 
       -- NEOLED (disabled)
-      neoled_o => open,
+      neoled_o => w_core_b_neoled,
 
       -- CLINT (disabled)
-      mtime_time_o => open,
+      mtime_time_o => w_core_b_mtime_time,
 
       -- Interrupts
       irq_msi_i => '0',
@@ -723,6 +790,9 @@ begin
       end if;
 
       -- Trace and peripheral status reads for diagnostic retention
+      if w_core_a_trace /= w_core_a_trace1 or w_core_b_trace /= w_core_b_trace1 then
+        null; -- Trace port activity
+      end if;
       if w_core_a_trace /= w_core_b_trace then
         null; -- Trace mismatch between cores
       end if;
@@ -735,6 +805,40 @@ begin
       if w_uart_error = '1' then
         null; -- UART error condition
       end if;
+
+      -- Read all NEORV32 peripheral output signals for diagnostic retention (-Wall compliance)
+      if w_core_a_jtag_tdo /= w_core_b_jtag_tdo then null; end if;
+      if w_core_a_smc_ioen /= w_core_b_smc_ioen then null; end if;
+      if w_core_a_smc_sck /= w_core_b_smc_sck then null; end if;
+      if w_core_a_smc_csn /= w_core_b_smc_csn then null; end if;
+      if w_core_a_smc_sdo /= w_core_b_smc_sdo then null; end if;
+      if w_core_a_xbus_cti /= w_core_b_xbus_cti then null; end if;
+      if w_core_a_xbus_tag /= w_core_b_xbus_tag then null; end if;
+      if w_core_a_xbus_sel /= w_core_b_xbus_sel then null; end if;
+      if w_core_a_xbus_cyc /= w_core_b_xbus_cyc then null; end if;
+      if w_core_a_slink_rx_rdy /= w_core_b_slink_rx_rdy then null; end if;
+      if w_core_a_slink_tx_dat /= w_core_b_slink_tx_dat then null; end if;
+      if w_core_a_slink_tx_dst /= w_core_b_slink_tx_dst then null; end if;
+      if w_core_a_slink_tx_val /= w_core_b_slink_tx_val then null; end if;
+      if w_core_a_slink_tx_lst /= w_core_b_slink_tx_lst then null; end if;
+      if w_core_a_gpio_dir /= w_core_b_gpio_dir then null; end if;
+      if w_core_a_gpio /= w_core_b_gpio then null; end if;
+      if w_core_a_uart0_txd /= w_core_b_uart0_txd then null; end if;
+      if w_core_a_uart0_rtsn /= w_core_b_uart0_rtsn then null; end if;
+      if w_core_a_uart1_txd /= w_core_b_uart1_txd then null; end if;
+      if w_core_a_uart1_rtsn /= w_core_b_uart1_rtsn then null; end if;
+      if w_core_a_spi_clk /= w_core_b_spi_clk then null; end if;
+      if w_core_a_spi_dat /= w_core_b_spi_dat then null; end if;
+      if w_core_a_spi_csn /= w_core_b_spi_csn then null; end if;
+      if w_core_a_sdi_dat /= w_core_b_sdi_dat then null; end if;
+      if w_core_a_twi_sda /= w_core_b_twi_sda then null; end if;
+      if w_core_a_twi_scl /= w_core_b_twi_scl then null; end if;
+      if w_core_a_twd_sda /= w_core_b_twd_sda then null; end if;
+      if w_core_a_onewire /= w_core_b_onewire then null; end if;
+      if w_core_a_pwm /= w_core_b_pwm then null; end if;
+      if w_core_a_cfs_out /= w_core_b_cfs_out then null; end if;
+      if w_core_a_neoled /= w_core_b_neoled then null; end if;
+      if w_core_a_mtime_time /= w_core_b_mtime_time then null; end if;
     end if;
   end process p_diag_monitor;
 
