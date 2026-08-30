@@ -32,7 +32,16 @@ architecture rtl of tb_can_rx_data is
   signal can_rx   : std_logic;
   signal can_busy : std_logic;begin
 
-  clk <= not clk after clk_period / 2;
+  -- Clock process: initializes clk to '0' before toggling
+  p_clk : process is
+  begin
+    clk <= '0';
+    wait for clk_period / 2;
+    loop
+      clk <= not clk;
+      wait for clk_period / 2;
+    end loop;
+  end process p_clk;
 
   i_can : entity lockstep.automotive_can_controller
     port map (
