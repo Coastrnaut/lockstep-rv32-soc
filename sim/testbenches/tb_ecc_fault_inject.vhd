@@ -12,7 +12,7 @@ library lockstep;
 use lockstep.package_soc_types.all;
 
 entity tb_ecc_fault_inject is
-  generic (runner_cfg : string);
+  generic (runner_cfg : string := "");
 end entity;
 
 architecture rtl of tb_ecc_fault_inject is

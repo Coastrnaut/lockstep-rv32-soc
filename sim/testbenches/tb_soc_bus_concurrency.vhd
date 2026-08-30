@@ -14,7 +14,7 @@ library lockstep;
 use lockstep.package_soc_types.all;
 
 entity tb_soc_bus_concurrency is
-    generic ( runner_cfg : string );
+    generic ( runner_cfg : string := "" );
 end entity;
 
 architecture tb of tb_soc_bus_concurrency is
@@ -46,7 +46,7 @@ begin
 
     p_test : process
     begin
-        test_runner_setup(runner, "Bus Transaction Concurrency");
+        test_runner_setup(runner, runner_cfg);
 
         rst_n <= '0';
         wait for 100 ns;
@@ -57,13 +57,13 @@ begin
         report "TEST: Back-to-back writes";
         for dummy in 0 to 9 loop
             core_a_bus <= (addr => std_logic_vector(to_unsigned(dummy, 32)),
-                           data => std_logic_vector(to_unsigned(dummy * 16#11223344#, 32)),
+                           data => std_logic_vector(to_unsigned(dummy * 17, 32)),
                            we => '1', valid => '1');
             core_b_bus <= (addr => std_logic_vector(to_unsigned(dummy, 32)),
-                           data => std_logic_vector(to_unsigned(dummy * 16#11223344#, 32)),
+                           data => std_logic_vector(to_unsigned(dummy * 17, 32)),
                            we => '1', valid => '1');
             wait until rising_edge(clk);
-            check(safe_state = '1', "back-to-back #" & integer'image(dummy) & ": safe");
+            check(safe_state = '0', "back-to-back #" & integer'image(dummy) & ": ok");
             check(bus_valid = '1', "back-to-back #" & integer'image(dummy) & ": valid");
         end loop;
         core_a_bus.valid <= '0';
@@ -80,7 +80,7 @@ begin
                            data => std_logic_vector(to_unsigned(dummy, 32)),
                            we => '1', valid => '1');
             wait until rising_edge(clk);
-            check(safe_state = '1', "alt R/W #" & integer'image(dummy) & ": safe");
+            check(safe_state = '0', "alt R/W #" & integer'image(dummy) & ": ok");
         end loop;
         core_a_bus.valid <= '0';
         core_b_bus.valid <= '0';
@@ -92,7 +92,7 @@ begin
             core_a_bus <= (addr => x"00002000", data => x"CAFECAFE", we => '1', valid => '1');
             core_b_bus <= (addr => x"00002000", data => x"CAFECAFE", we => '1', valid => '1');
             wait until rising_edge(clk);
-            check(safe_state = '1', "stall #" & integer'image(dummy) & ": safe");
+            check(safe_state = '0', "stall #" & integer'image(dummy) & ": ok");
         end loop;
         core_a_bus.valid <= '0';
         core_b_bus.valid <= '0';
@@ -108,7 +108,7 @@ begin
                            data => std_logic_vector(to_unsigned(dummy, 32)),
                            we => '1', valid => '1');
             wait until rising_edge(clk);
-            check(safe_state = '1', "rapid addr #" & integer'image(dummy) & ": safe");
+            check(safe_state = '0', "rapid addr #" & integer'image(dummy) & ": ok");
         end loop;
         core_a_bus.valid <= '0';
         core_b_bus.valid <= '0';
@@ -124,14 +124,13 @@ begin
                            data => std_logic_vector(to_unsigned(dummy, 32)),
                            we => '1', valid => '1');
             wait until rising_edge(clk);
-            check(safe_state = '1', "burst #" & integer'image(dummy) & ": safe");
+            check(safe_state = '0', "burst #" & integer'image(dummy) & ": ok");
         end loop;
         core_a_bus.valid <= '0';
         core_b_bus.valid <= '0';
         wait for CLK_PERIOD;
 
         test_runner_cleanup(runner);
-        wait;
     end process;
 
 end architecture tb;

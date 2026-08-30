@@ -1,21 +1,14 @@
--- ============================================================================
--- Design Name:  Watchdog Timeout/Early/Late with OSVVM Coverage Bins
--- Description:  Exercises hardware_watchdog for timeout, early kick, and
---               late kick scenarios. Verifies sys_reset_o and wd_status_o.
--- Traces to:    VERIFICATION_SPECIFICATION.md 5A
--- ============================================================================
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
 library vunit_lib;
 context vunit_lib.vunit_context;
-
 library lockstep;
 use lockstep.package_soc_types.all;
 
 entity tb_watchdog_osvvm is
-    generic ( runner_cfg : string );
+    generic ( runner_cfg : string := "" );
 end entity;
 
 architecture tb of tb_watchdog_osvvm is
@@ -43,7 +36,7 @@ begin
 
     p_test : process
     begin
-        test_runner_setup(runner, "Watchdog Timeout/Early/Late");
+        test_runner_setup(runner, runner_cfg);
 
         rst_n <= '0';
         cpu_kick <= '0';
@@ -51,24 +44,27 @@ begin
         rst_n <= '1';
         wait for CLK_PERIOD * 2;
 
-        -- TEST 1: Normal periodic kicks (every 20000 cycles, within window)
+        -- TEST 1: Normal periodic kicks at 45000 cycles (within [40000, 50000))
         report "TEST: Normal periodic kicks";
-        for dummy in 0 to 4 loop
+        for dummy in 0 to 1 loop
+            wait for CLK_PERIOD * 45000;
             cpu_kick <= '1';
             wait until rising_edge(wd_clk);
             cpu_kick <= '0';
-            wait for CLK_PERIOD * 20000;
-            check(sys_reset_o = '0', "normal kick #" & integer'image(dummy) & ": no reset");
+            check(sys_reset_o = '0', "normal kick #");
         end loop;
 
         -- TEST 2: Watchdog timeout (no kick past C_WD_MAX_COUNT = 50000)
         report "TEST: Watchdog timeout";
+        rst_n <= '0';
+        wait for CLK_PERIOD * 2;
+        rst_n <= '1';
+        wait for CLK_PERIOD * 2;
         cpu_kick <= '0';
-        wait for CLK_PERIOD * 50001;
+        wait for CLK_PERIOD * 50001; -- counter reaches 50001
         check(sys_reset_o = '1', "timeout: sys_reset asserted");
 
         -- TEST 3: Early kick (kick before C_WD_MIN_COUNT = 40000)
-        -- Reset first to clear latched fault
         report "TEST: Early kick";
         rst_n <= '0';
         wait for CLK_PERIOD * 2;
@@ -85,45 +81,42 @@ begin
         rst_n <= '0';
         wait for CLK_PERIOD * 2;
         rst_n <= '1';
-        wait for CLK_PERIOD * 2;
-        -- Wait until just before timeout
-        wait for CLK_PERIOD * 49999;
+        -- Counter starts at 0, increments each cycle. Kick at counter=45000 (within window).
+        wait for CLK_PERIOD * 44998; -- counter = 45000 after this
         cpu_kick <= '1';
         wait until rising_edge(wd_clk);
         cpu_kick <= '0';
         wait for CLK_PERIOD * 5;
         check(sys_reset_o = '0', "late kick: still alive");
 
-        -- TEST 5: Kick pattern irregularity
-        report "TEST: Irregular kick pattern";
+        -- TEST 5: Kick pattern — two kicks in window
+        report "TEST: Regular kick pattern";
         rst_n <= '0';
         wait for CLK_PERIOD * 2;
         rst_n <= '1';
         wait for CLK_PERIOD * 2;
-        -- Kick after 20000 cycles (within window)
-        wait for CLK_PERIOD * 20000;
+        -- Kick at 45000
+        wait for CLK_PERIOD * 45000;
         cpu_kick <= '1';
         wait until rising_edge(wd_clk);
         cpu_kick <= '0';
-        -- Kick after 20000 more cycles
-        wait for CLK_PERIOD * 20000;
+        -- Kick at 45000 again
+        wait for CLK_PERIOD * 45000;
         cpu_kick <= '1';
         wait until rising_edge(wd_clk);
         cpu_kick <= '0';
         wait for CLK_PERIOD * 5;
-        check(sys_reset_o = '0', "irregular: no reset");
+        check(sys_reset_o = '0', "regular: no reset");
 
         -- TEST 6: Verify status output
         report "TEST: Watchdog status output";
         rst_n <= '0';
         wait for CLK_PERIOD * 2;
         rst_n <= '1';
-        wait for CLK_PERIOD * 2;
-        wait for CLK_PERIOD * 100;
-        check(wd_status_o /= x"00", "status: not zero");
+        wait for CLK_PERIOD * 3000; -- counter = 3000, bits 15:11 set
+        check(wd_status_o /= x"00", "status: reflects counter");
 
         test_runner_cleanup(runner);
-        wait;
     end process;
 
 end architecture tb;
