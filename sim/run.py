@@ -123,6 +123,47 @@ print(f"Using simulator: {simulator_name}" + (
 # ---------------------------------------------------------------------------
 # Configure VUnit for detected simulator
 # ---------------------------------------------------------------------------
+
+root = Path(__file__).parent.parent
+# GHDL 6.0.0 in MSYS bash cannot parse Windows backslash paths in -P/--workdir.
+# Monkey-patch VUnit's GHDL interface so all library directory paths are
+# converted to MSYS forward-slash paths before GHDL sees them.
+from vunit.sim_if.ghdl import GHDLInterface
+_orig_compile_cmd = GHDLInterface.compile_vhdl_file_command
+_orig_get_command = GHDLInterface._get_command
+
+def _to_msys(p):
+    """Convert Windows backslash paths to forward-slash paths for GHDL 6.0.0."""
+    return p.replace("\\", "/")
+
+def _fix_paths_cmd(self, source_file):
+    cmd = _orig_compile_cmd(self, source_file)
+    fixed = []
+    for token in cmd:
+        # GHDL 6.0.0 does not support --workdir — skip it
+        if token.startswith("--workdir="):
+            continue
+        if token.startswith("-P"):
+            fixed.append("-P" + _to_msys(token[2:]))
+        else:
+            fixed.append(token)
+    return fixed
+
+def _fix_paths_sim(self, config, output_path, elaborate_only, ghdl_e, wave_file):
+    cmd = _orig_get_command(self, config, output_path, elaborate_only, ghdl_e, wave_file)
+    fixed = []
+    for token in cmd:
+        if token.startswith("--workdir="):
+            continue
+        if token.startswith("-P"):
+            fixed.append("-P" + _to_msys(token[2:]))
+        else:
+            fixed.append(token)
+    return fixed
+
+GHDLInterface.compile_vhdl_file_command = _fix_paths_cmd
+GHDLInterface._get_command = _fix_paths_sim
+
 if simulator_name == "vivado":
     os.environ["VUNIT_SIMULATOR"] = "vivado"
 else:
@@ -136,9 +177,6 @@ else:
 # Initialize VUnit testing context
 vu = VUnit.from_argv(compile_builtins=False)
 vu.add_vhdl_builtins()
-
-# Resolve paths relative to this script
-root = Path(__file__).parent.parent
 
 # ---------------------------------------------------------------------------
 # 1. Custom types package (must compile first — other files depend on it)
