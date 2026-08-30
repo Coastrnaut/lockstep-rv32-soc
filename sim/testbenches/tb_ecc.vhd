@@ -20,7 +20,7 @@ end entity tb_ecc;
 
 architecture rtl of tb_ecc is
 
-  constant c_dw      : positive                            := 64;
+  constant c_dw      : positive := 64;
   signal   data_wr_i : std_logic_vector(c_dw - 1 downto 0);
   signal   data_rd_i : std_logic_vector(c_dw - 1 downto 0);
   signal   ecc_rd_i  : std_logic_vector(7 downto 0);
@@ -29,28 +29,28 @@ architecture rtl of tb_ecc is
   signal   sbe_o     : std_logic;
   signal   dbe_o     : std_logic;
 
-  component hamming_ecc_wrapper
+  component hamming_ecc_wrapper is
     generic (
       g_data_width : positive
     );
     port (
-      clk_i           : in  std_logic;
-      rst_n_i         : in  std_logic;
-      wr_en_i         : in  std_logic;
-      data_wr_i       : in  std_logic_vector;
-      rd_en_i         : in  std_logic;
-      data_rd_i       : in  std_logic_vector;
-      ecc_rd_i        : in  std_logic_vector;
-      data_o          : out std_logic_vector;
-      ecc_o           : out std_logic_vector;
-      sbe_corrected_o : out std_logic;
-      dbe_fatal_o     : out std_logic
+      clk_i           : in    std_logic;
+      rst_n_i         : in    std_logic;
+      wr_en_i         : in    std_logic;
+      data_wr_i       : in    std_logic_vector;
+      rd_en_i         : in    std_logic;
+      data_rd_i       : in    std_logic_vector;
+      ecc_rd_i        : in    std_logic_vector;
+      data_o          : out   std_logic_vector;
+      ecc_o           : out   std_logic_vector;
+      sbe_corrected_o : out   std_logic;
+      dbe_fatal_o     : out   std_logic
     );
-  end component;
+  end component hamming_ecc_wrapper;
 
 begin
 
-  i_ecc : hamming_ecc_wrapper
+  i_ecc : component hamming_ecc_wrapper
     generic map (
       g_data_width => C_DW
     )
