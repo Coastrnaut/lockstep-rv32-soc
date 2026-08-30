@@ -79,6 +79,12 @@ sim_lib.add_source_files(root / "sim" / "testbenches" / "*.vhd")
 # vu.set_sim_option("ghdl.sim_flags", [...])
 
 # ---------------------------------------------------------------------------
+# Ensure reports/ directory exists (OSVVM writes OsvvmRun.yml here)
+# ---------------------------------------------------------------------------
+reports_dir = root / "reports"
+reports_dir.mkdir(parents=True, exist_ok=True)
+
+# ---------------------------------------------------------------------------
 # 8. Run
 # ---------------------------------------------------------------------------
 vu.main()
