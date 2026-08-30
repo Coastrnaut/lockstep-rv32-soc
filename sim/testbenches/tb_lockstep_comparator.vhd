@@ -13,6 +13,10 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+-- VUnit runner support
+library vunit_lib;
+context vunit_lib.vunit_context;
+
 -- Import OSVVM core packages
 library osvvm;
 use osvvm.AlertLogPkg.all;
@@ -24,7 +28,7 @@ library lockstep;
 use lockstep.package_soc_types.all;
 
 entity tb_lockstep_comparator is
--- Testbenches do not feature physical ports
+    generic ( runner_cfg : string := "" );
 end entity tb_lockstep_comparator;
 
 architecture behavior of tb_lockstep_comparator is
@@ -78,6 +82,8 @@ begin
         variable v_rand_addr  : std_logic_vector(31 downto 0);
         variable v_cov_point  : integer_vector(1 to 2);
     begin
+        test_runner_setup(runner, runner_cfg);
+
         -- Initialize the OSVVM Alert/Log naming context
         SetAlertLogName("tb_lockstep_randomized");
 
@@ -87,14 +93,13 @@ begin
         -- Create a unique coverage ID
         CovMatrix := NewID("CovMatrix");
 
-        -- --------------------------------------------------------------------
+        -- ----------------------------------------------------------------
         -- Define the Coverage Bins (Functional Matrix Geometry)
-        -- --------------------------------------------------------------------
+        -- ----------------------------------------------------------------
         -- Axis 1: Bus Operation Mode (0 = Read, 1 = Write)
         -- Axis 2: Fault Injection Vector (0 = Safe, 1 = Address Mismatch, 2 = Data Mismatch)
         -- Resulting Cross-Matrix total size = 6 distinct bins
-        AddBins(CovMatrix, GenBin(0, 1));  -- Bus Operation Axis
-        AddBins(CovMatrix, GenBin(0, 2));  -- Fault Injection Axis
+        AddCross(CovMatrix, GenBin(0, 1), GenBin(0, 2));
 
         -- System Hard Reset sequence
         rst_n_s <= '0';
@@ -102,11 +107,11 @@ begin
         rst_n_s <= '1';
         wait until rising_edge(clk_s);
 
-        log("Launching Intelligent Constrained-Random Simulation Framework...", INFO);
+        report "Launching Intelligent Constrained-Random Simulation Framework...";
 
-        -- --------------------------------------------------------------------
+        -- ----------------------------------------------------------------
         -- COVERAGE-DRIVEN LOOP: Runs until all 6 cross-bins are satisfied
-        -- --------------------------------------------------------------------
+        -- ----------------------------------------------------------------
         while not IsCovered(CovMatrix) loop
             wait until rising_edge(clk_s);
 
@@ -180,13 +185,15 @@ begin
 
         end loop;
 
-        -- --------------------------------------------------------------------
+        -- ----------------------------------------------------------------
         -- Post-Simulation Metrics Consolidation
-        -- --------------------------------------------------------------------
-        log("Coverage block satisfied!", INFO);
+        -- ----------------------------------------------------------------
+        report "Coverage block satisfied!";
         WriteBin(CovMatrix); -- Dump exact distribution frequencies to log
 
         EndOfTestReports; -- OSVVM test report finalization
+
+        test_runner_cleanup(runner);
         wait;
     end process p_stimulus;
 
