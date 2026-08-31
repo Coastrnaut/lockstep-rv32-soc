@@ -30,7 +30,20 @@ architecture rtl of tb_lockstep_fault_inject is
   signal   bus_valid  : std_logic;
   signal   sys_bus    : t_rv_bus;begin
 
-  tb_clk <= not tb_clk after clk_period / 2;
+  p_clk : process is
+  begin
+
+    tb_clk <= '0';
+    wait for clk_period / 2;
+
+    loop
+
+      tb_clk <= not tb_clk;
+      wait for clk_period / 2;
+
+    end loop;
+
+  end process p_clk;
 
   i_dut : entity lockstep.lockstep_comparator
     port map (

@@ -26,8 +26,35 @@ architecture tb of tb_watchdog_osvvm is
   signal sys_reset_o : std_logic;
   signal wd_status_o : std_logic_vector(7 downto 0);begin
 
-  clk    <= not clk after clk_period / 2;
-  wd_clk <= not wd_clk after clk_period / 2;
+  p_clk : process is
+  begin
+
+    clk <= '0';
+    wait for clk_period / 2;
+
+    loop
+
+      clk <= not clk;
+      wait for clk_period / 2;
+
+    end loop;
+
+  end process p_clk;
+
+  p_wd_clk : process is
+  begin
+
+    wd_clk <= '0';
+    wait for clk_period / 2;
+
+    loop
+
+      wd_clk <= not wd_clk;
+      wait for clk_period / 2;
+
+    end loop;
+
+  end process p_wd_clk;
 
   uut : entity lockstep.hardware_watchdog
     port map (

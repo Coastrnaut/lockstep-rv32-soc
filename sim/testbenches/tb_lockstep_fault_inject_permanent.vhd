@@ -27,7 +27,20 @@ architecture tb of tb_lockstep_fault_inject_permanent is
   signal   bus_valid  : std_logic;
   signal   sys_bus    : t_rv_bus;begin
 
-  clk <= not clk after clk_period / 2;
+  p_clk : process is
+  begin
+
+    clk <= '0';
+    wait for clk_period / 2;
+
+    loop
+
+      clk <= not clk;
+      wait for clk_period / 2;
+
+    end loop;
+
+  end process p_clk;
 
   uut : entity lockstep.lockstep_comparator
     port map (

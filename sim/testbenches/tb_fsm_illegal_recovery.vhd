@@ -27,7 +27,20 @@ architecture tb of tb_fsm_illegal_recovery is
   signal can_rx   : std_logic;
   signal can_busy : std_logic;begin
 
-  clk <= not clk after clk_period / 2;
+  p_clk : process is
+  begin
+
+    clk <= '0';
+    wait for clk_period / 2;
+
+    loop
+
+      clk <= not clk;
+      wait for clk_period / 2;
+
+    end loop;
+
+  end process p_clk;
 
   uut : entity lockstep.automotive_can_controller
     port map (

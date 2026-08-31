@@ -30,7 +30,20 @@ architecture rtl of tb_watchdog_timeout is
   signal   sys_rst       : std_logic;
   signal   wd_stat       : std_logic_vector(7 downto 0);begin
 
-  wd_clk <= not wd_clk after wd_clk_period / 2;
+  p_clk : process is
+  begin
+
+    wd_clk <= '0';
+    wait for wd_clk_period / 2;
+
+    loop
+
+      wd_clk <= not wd_clk;
+      wait for wd_clk_period / 2;
+
+    end loop;
+
+  end process p_clk;
 
   i_wdt : entity lockstep.hardware_watchdog
     port map (
