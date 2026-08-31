@@ -29,7 +29,20 @@ architecture rtl of tb_uart is
   signal   uart_busy  : std_logic;
   signal   uart_err   : std_logic;begin
 
-  tb_clk <= not tb_clk after clk_period / 2;
+  p_clk : process is
+  begin
+
+    tb_clk <= '0';
+    wait for clk_period / 2;
+
+    loop
+
+      tb_clk <= not tb_clk;
+      wait for clk_period / 2;
+
+    end loop;
+
+  end process p_clk;
 
   i_uart : entity lockstep.safe_uart
     port map (

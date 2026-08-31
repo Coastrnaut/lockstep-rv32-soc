@@ -40,8 +40,15 @@ architecture rtl of tb_ecc_fault_inject is
   clk_proc : process is
   begin
 
+    s_clk <= '0';
     wait for clk_half;
-    s_clk <= not s_clk;
+
+    loop
+
+      s_clk <= not s_clk;
+      wait for clk_half;
+
+    end loop;
 
   end process clk_proc;
 

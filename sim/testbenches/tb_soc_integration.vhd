@@ -33,7 +33,20 @@ architecture rtl of tb_soc_integration is
   signal nmi_fault     : std_logic;
   signal actuator_safe : std_logic;begin
 
-  clk <= not clk after clk_period / 2;
+  p_clk : process is
+  begin
+
+    clk <= '0';
+    wait for clk_period / 2;
+
+    loop
+
+      clk <= not clk;
+      wait for clk_period / 2;
+
+    end loop;
+
+  end process p_clk;
 
   i_soc : entity lockstep.top_automotive_soc
     port map (

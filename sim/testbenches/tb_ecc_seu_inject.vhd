@@ -31,7 +31,20 @@ architecture tb of tb_ecc_seu_inject is
 
 begin
 
-  clk <= not clk after clk_period / 2;
+  p_clk : process is
+  begin
+
+    clk <= '0';
+    wait for clk_period / 2;
+
+    loop
+
+      clk <= not clk;
+      wait for clk_period / 2;
+
+    end loop;
+
+  end process p_clk;
 
   -- Entity instantiation for correct library binding
   uut : entity lockstep.hamming_ecc_wrapper

@@ -57,8 +57,20 @@ architecture behavior of tb_lockstep_comparator is
 
 begin
 
-  -- Clock Generation Thread
-  clk_s <= not clk_s after clk_period / 2;
+  p_clk : process is
+  begin
+
+    clk_s <= '0';
+    wait for clk_period / 2;
+
+    loop
+
+      clk_s <= not clk_s;
+      wait for clk_period / 2;
+
+    end loop;
+
+  end process p_clk;
 
   -- Unit Under Test
   uut : entity lockstep.lockstep_comparator

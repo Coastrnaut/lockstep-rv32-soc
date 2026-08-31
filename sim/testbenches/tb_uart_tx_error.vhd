@@ -32,7 +32,20 @@ architecture rtl of tb_uart_tx_error is
   signal uart_err  : std_logic;
   signal uart_busy : std_logic;begin
 
-  clk <= not clk after clk_period / 2;
+  p_clk : process is
+  begin
+
+    clk <= '0';
+    wait for clk_period / 2;
+
+    loop
+
+      clk <= not clk;
+      wait for clk_period / 2;
+
+    end loop;
+
+  end process p_clk;
 
   i_uart : entity lockstep.safe_uart
     port map (

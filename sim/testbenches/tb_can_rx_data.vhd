@@ -118,6 +118,7 @@ architecture rtl of tb_can_rx_data is
     check(can_busy = '0', "rapid RX: idle");
 
     test_runner_cleanup(runner);
+    wait for 100 ns;
 
   end process p_stim;
 

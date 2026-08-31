@@ -27,7 +27,20 @@ architecture tb of tb_soc_addr_boundary is
   signal   bus_valid  : std_logic;
   signal   sys_bus    : t_rv_bus;begin
 
-  clk <= not clk after clk_per / 2;
+  p_clk : process is
+  begin
+
+    clk <= '0';
+    wait for clk_per / 2;
+
+    loop
+
+      clk <= not clk;
+      wait for clk_per / 2;
+
+    end loop;
+
+  end process p_clk;
 
   u_dut : entity lockstep.lockstep_comparator
     port map (

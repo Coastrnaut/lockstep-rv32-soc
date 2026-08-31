@@ -157,6 +157,7 @@ architecture tb of tb_lockstep_fault_inject_permanent is
     wait for clk_period;
 
     test_runner_cleanup(runner);
+    wait for 100 ns;
 
   end process p_test;
 
