@@ -216,8 +216,10 @@ begin
   -- ========================================================================
   -- 1. MAILBOX LOAD: Accept data from internal bus when safety gate is clear
   -- ========================================================================
-  -- The mailbox stays full until the frame has been sent without error, so a
-  -- failed frame can be sent again and a write cannot overwrite it.
+  -- The bus is shared with the other peripherals, so only a write to exactly
+  -- this address counts. The mailbox stays full until the frame has been sent
+  -- without error, so a failed frame can be sent again and a write cannot
+  -- overwrite it.
   -- ========================================================================
   p_mailbox : process (clk_i) is
   begin
@@ -230,7 +232,8 @@ begin
         r_mailbox_full <= '0';
       elsif (w_frame_done = '1') then
         r_mailbox_full <= '0';
-      elsif (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and r_mailbox_full = '0') then
+      elsif (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and
+             bus_i.addr = c_can_mailbox_addr and r_mailbox_full = '0') then
         -- Load frame: upper 11 bits = ID, next 4 = DLC, rest = data
         r_mailbox_id   <= bus_i.data(31 downto 21);
         r_mailbox_dlc  <= unsigned(bus_i.data(20 downto 17));

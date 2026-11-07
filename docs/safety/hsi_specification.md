@@ -144,6 +144,29 @@ The item is the **lockstep-rv32-soc** hardware platform comprising:
 | 0x40000000 | 4K    | Peripheral registers | No ECC         |
 | 0x60000000 | 1M    | Flash (program)      | ECC protected  |
 
+### 5.1 Peripheral Register Window
+
+Each block has 0x100 bytes of the window at 0x40000000:
+
+| Base       | Block               | Decoded in hardware |
+|------------|---------------------|---------------------|
+| 0x40000000 | Lockstep comparator | Reserved            |
+| 0x40000100 | ECC controller      | Reserved            |
+| 0x40000200 | Watchdog            | Reserved            |
+| 0x40000300 | CAN controller      | Offset 0x00 only    |
+| 0x40000400 | Safe UART           | Offset 0x00 only    |
+
+Both peripherals share one bus and act only on a write to exactly their address,
+so any other address, including the rest of their 0x100 bytes, does nothing:
+
+- **CAN, 0x40000300:** one 32-bit write loads the mailbox and sends a frame: bits
+  31:21 = ID, 20:17 = DLC, 15:0 = payload. The separate registers in section 3.4
+  are not implemented yet.
+- **UART, 0x40000400:** TX_DATA, with the byte in bits 7:0.
+
+The bus carries no byte enables, so a byte or halfword store to one of these
+addresses counts as a write. Use word stores for the CAN mailbox.
+
 ---
 
 ## 6. STARTUP TIMING

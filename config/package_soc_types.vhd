@@ -67,4 +67,12 @@ package package_soc_types is
   constant c_wd_min_count : unsigned(15 downto 0) := to_unsigned(40000, 16);
   constant c_wd_max_count : unsigned(15 downto 0) := to_unsigned(50000, 16);
 
+  -- ------------------------------------------------------------------------
+  -- Peripheral Address Map
+  -- ------------------------------------------------------------------------
+  -- Inside the 4K peripheral window: docs/safety/hsi_specification.md section 5.1
+  -- ------------------------------------------------------------------------
+  constant c_can_mailbox_addr  : std_logic_vector(c_addr_width - 1 downto 0) := x"40000300";
+  constant c_uart_tx_data_addr : std_logic_vector(c_addr_width - 1 downto 0) := x"40000400";
+
 end package package_soc_types;

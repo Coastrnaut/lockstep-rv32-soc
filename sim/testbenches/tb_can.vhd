@@ -199,6 +199,7 @@ begin
     variable v_edge  : time;
     variable v_end   : time;
     variable v_falls : natural;
+    variable v_addr  : std_logic_vector(31 downto 0);
 
     impure function tec return natural is
     begin
@@ -237,7 +238,8 @@ begin
     procedure write_mailbox (
       constant id      : in natural;
       constant dlc     : in natural;
-      constant payload : in natural
+      constant payload : in natural;
+      constant addr    : in std_logic_vector(31 downto 0) := c_can_mailbox_addr
     ) is
 
       constant c_id_bits      : std_logic_vector(10 downto 0) := std_logic_vector(to_unsigned(id, 11));
@@ -248,7 +250,7 @@ begin
 
       bus_i <=
       (
-        addr  => (others => '0'),
+        addr  => addr,
         data  => c_id_bits & c_dlc_bits & '0' & c_payload_bits,
         we    => '1',
         valid => '1'
@@ -556,6 +558,27 @@ begin
 
         -- The mailbox stayed empty, so the next write goes through intact
         wait until rising_edge(clk_i);
+        send_and_check(16#321#, 2, 16#5AA5#);
+      elsif run("write_to_any_other_address_is_ignored") then
+        wait for c_bit_time * 12;
+
+        -- Every address one bit away from the mailbox
+        for addr_bit in 0 to 31 loop
+
+          v_addr           := c_can_mailbox_addr;
+          v_addr(addr_bit) := not v_addr(addr_bit);
+          write_mailbox(c_id, c_dlc, c_payload, v_addr);
+          wait until rising_edge(clk_i);
+          check(can_busy_o = '0', "write to another address ignored");
+
+        end loop;
+
+        write_mailbox(c_id, c_dlc, c_payload, c_uart_tx_data_addr);
+        wait until rising_edge(clk_i);
+        check(can_busy_o = '0', "write to the UART ignored");
+        check_equal(tx_falls, 0, "no frame from another address");
+
+        -- The mailbox stayed empty, so the next write goes through intact
         send_and_check(16#321#, 2, 16#5AA5#);
       elsif run("gate_drop_forces_recessive_and_abandons_frame") then
         start_dominant_frame;

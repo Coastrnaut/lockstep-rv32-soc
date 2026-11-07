@@ -1,0 +1,248 @@
+-- ============================================================================
+-- Testbench: Peripheral Address Decode
+-- ============================================================================
+-- CAN and UART on one bus, wired as they are in top_automotive_soc. Addresses
+-- are written out from section 5.1 of docs/safety/hsi_specification.md rather
+-- than taken from the package, so that a wrong address there fails this bench.
+-- ============================================================================
+
+library ieee;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+
+library vunit_lib;
+  context vunit_lib.vunit_context;
+
+library lockstep;
+  use lockstep.package_soc_types.all;
+
+library work;
+  use work.can_test_pkg.all;
+
+entity tb_soc_periph_decode is
+  generic (
+    runner_cfg : string := ""
+  );
+end entity tb_soc_periph_decode;
+
+architecture tb of tb_soc_periph_decode is
+
+  constant c_clk_period   : time     := 20 ns;
+  constant c_clks_per_bit : positive := 8;
+  constant c_bit_time     : time     := c_clk_period * c_clks_per_bit;
+
+  -- A whole CAN frame, plus the 11 recessive bits that come before it
+  constant c_max_frame_time : time := c_bit_time * (c_max_frame_bits + 11);
+
+  -- A UART byte is 11 bits of 435 clocks, with a bit to spare
+  constant c_uart_byte_time : time := c_clk_period * 435 * 12;
+
+  constant c_can_addr  : std_logic_vector(31 downto 0) := x"40000300";
+  constant c_uart_addr : std_logic_vector(31 downto 0) := x"40000400";
+
+  -- ID 0x123, DLC 2, payload 0xA55A
+  constant c_can_data : std_logic_vector(31 downto 0) := x"2464A55A";
+
+  signal clk       : std_logic;
+  signal rst_n     : std_logic;
+  signal bus_i     : t_rv_bus;
+  signal bus_ok    : std_logic;
+  signal can_tx    : std_logic;
+  signal can_busy  : std_logic;
+  signal uart_tx   : std_logic;
+  signal uart_busy : std_logic;
+  signal uart_err  : std_logic;
+
+  -- The CAN bus: the DUT and a receiver that acknowledges
+  signal can_bus   : std_logic;
+  signal ack_tx    : std_logic;
+  signal rx_starts : natural;
+  signal rx_done   : natural;
+  signal rx_frame  : t_rx_frame;
+
+begin
+
+  p_clk : process is
+  begin
+
+    -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
+    clk <= '0', '1' after c_clk_period / 2;
+    wait for c_clk_period;
+
+  end process p_clk;
+
+  test_runner_watchdog(runner, 10 ms);
+
+  i_can : entity lockstep.automotive_can_controller
+    generic map (
+      g_clks_per_bit => c_clks_per_bit
+    )
+    port map (
+      clk_i      => clk,
+      rst_n_i    => rst_n,
+      bus_i      => bus_i,
+      bus_ok_i   => bus_ok,
+      can_tx_o   => can_tx,
+      can_rx_i   => can_bus,
+      can_busy_o => can_busy
+    );
+
+  i_uart : entity lockstep.safe_uart
+    port map (
+      clk_i        => clk,
+      rst_n_i      => rst_n,
+      bus_i        => bus_i,
+      bus_ok_i     => bus_ok,
+      uart_tx_o    => uart_tx,
+      uart_busy_o  => uart_busy,
+      uart_error_o => uart_err
+    );
+
+  can_bus <= can_tx and ack_tx;
+
+  i_node : entity work.can_test_node
+    generic map (
+      g_bit_time => c_bit_time
+    )
+    port map (
+      bus_i        => can_bus,
+      dut_tx_i     => can_tx,
+      ack_enable_i => '1',
+      ack_o        => ack_tx,
+      frame_o      => rx_frame,
+      starts_o     => rx_starts,
+      done_o       => rx_done
+    );
+
+  p_stim : process is
+
+    -- One-clock write, as a CPU store would be
+
+    procedure write_bus (
+      constant addr : in std_logic_vector(31 downto 0);
+      constant data : in std_logic_vector(31 downto 0)
+    ) is
+    begin
+
+      bus_i       <=
+      (
+        addr  => addr,
+        data  => data,
+        we    => '1',
+        valid => '1'
+      );
+      wait until rising_edge(clk);
+      bus_i.valid <= '0';
+      bus_i.we    <= '0';
+
+    end procedure write_bus;
+
+    procedure check_both_idle (
+      constant label_text : in string
+    ) is
+    begin
+
+      wait for c_clk_period * 4;
+      check(can_busy = '0', label_text & ": CAN idle");
+      check(uart_busy = '0', label_text & ": UART idle");
+
+    end procedure check_both_idle;
+
+    procedure check_can_frame is
+    begin
+
+      wait until rx_done = 1 for c_max_frame_time;
+      check_equal(rx_done, 1, "CAN frame finished");
+      check(not rx_frame.stuff_error, "CAN frame stuffing");
+      check_equal(rx_frame.id, std_logic_vector(to_unsigned(16#123#, 11)), "CAN frame ID");
+      check_equal(rx_frame.dlc, std_logic_vector(to_unsigned(2, 4)), "CAN frame DLC");
+      check_equal(rx_frame.crc, rx_frame.crc_expected, "CAN frame CRC");
+
+    end procedure check_can_frame;
+
+  begin
+
+    test_runner_setup(runner, runner_cfg);
+
+    while test_suite loop
+
+      rst_n  <= '0';
+      bus_ok <= '1';
+      bus_i  <=
+      (
+        addr  => (others => '0'),
+        data  => (others => '0'),
+        we    => '0',
+        valid => '0'
+      );
+      wait for c_clk_period * 3;
+      rst_n  <= '1';
+      wait until rising_edge(clk);
+
+      if run("can_address_reaches_only_can") then
+        write_bus(c_can_addr, c_can_data);
+        wait for c_clk_period * 4;
+        check(can_busy = '1', "CAN accepted the write");
+        wait until uart_busy = '1' or rx_done = 1 for c_max_frame_time;
+        check(uart_busy = '0', "UART stayed idle");
+        check_can_frame;
+      elsif run("uart_address_reaches_only_uart") then
+        write_bus(c_uart_addr, x"00000041");
+        wait for c_clk_period * 4;
+        check(uart_busy = '1', "UART accepted the write");
+        check(can_busy = '0', "CAN stayed idle");
+        wait until uart_busy = '0' for c_uart_byte_time;
+        check(uart_busy = '0', "UART sent the byte");
+        check(can_busy = '0', "CAN stayed idle");
+        check_equal(rx_starts, 0, "no CAN frame");
+      elsif run("other_addresses_reach_neither") then
+        -- Where every write went before there was any decoding
+        write_bus(x"00000000", c_can_data);
+        check_both_idle("address 0");
+
+        -- The other blocks in the window, and the next word of each peripheral
+        write_bus(x"40000000", c_can_data);
+        check_both_idle("lockstep block");
+        write_bus(x"40000100", c_can_data);
+        check_both_idle("ECC block");
+        write_bus(x"40000200", c_can_data);
+        check_both_idle("watchdog block");
+        write_bus(x"40000304", c_can_data);
+        check_both_idle("CAN offset 4");
+        write_bus(x"40000404", c_can_data);
+        check_both_idle("UART offset 4");
+
+        -- The same low bits outside the peripheral window
+        write_bus(x"50000300", c_can_data);
+        check_both_idle("outside the window, CAN");
+        write_bus(x"50000400", c_can_data);
+        check_both_idle("outside the window, UART");
+
+        wait for c_max_frame_time;
+        check_equal(rx_starts, 0, "no CAN frame");
+      elsif run("both_peripherals_run_at_once") then
+        write_bus(c_can_addr, c_can_data);
+        write_bus(c_uart_addr, x"00000041");
+        wait for c_clk_period * 4;
+        check(can_busy = '1', "CAN busy");
+        check(uart_busy = '1', "UART busy");
+        check_can_frame;
+        wait until uart_busy = '0' for c_uart_byte_time;
+        check(uart_busy = '0', "UART sent the byte");
+      elsif run("safety_gate_blocks_both_addresses") then
+        bus_ok <= '0';
+        write_bus(c_can_addr, c_can_data);
+        write_bus(c_uart_addr, x"00000041");
+        bus_ok <= '1';
+        check_both_idle("gate low");
+        wait for c_max_frame_time;
+        check_equal(rx_starts, 0, "no CAN frame");
+      end if;
+
+    end loop;
+
+    test_runner_cleanup(runner);
+
+  end process p_stim;
+
+end architecture tb;

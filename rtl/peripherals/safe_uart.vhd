@@ -79,7 +79,7 @@ begin
     if rising_edge(clk_i) then
       if (rst_n_i = '0') then
         r_tx_valid <= '0';
-      elsif (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1') then
+      elsif (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.addr = c_uart_tx_data_addr) then
         -- Write 8-bit payload to TX buffer
         r_tx_data <= bus_i.data(7 downto 0);
 

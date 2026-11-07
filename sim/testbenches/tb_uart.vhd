@@ -82,16 +82,17 @@ architecture rtl of tb_uart is
     check(uart_tx = '1', "TX recessive at idle");
 
     -- --- Test 2: Write valid data → TX starts ---
-    bus_i <=
+    bus_i       <=
     (
-      addr  => (others => '0'),
+      addr  => c_uart_tx_data_addr,
       data  => x"00000041",
       we    => '1',
       valid => '1'
     );
-    wait until rising_edge(tb_clk);                          -- p_rx_regs accepts write
-    wait until rising_edge(tb_clk);                          -- FSM sees r_tx_valid, transitions
-    wait until rising_edge(tb_clk);                          -- extra margin
+    wait until rising_edge(tb_clk);                                -- p_rx_regs accepts write
+    bus_i.valid <= '0';
+    wait until rising_edge(tb_clk);                                -- FSM sees r_tx_valid, transitions
+    wait until rising_edge(tb_clk);                                -- extra margin
     check(uart_busy = '1', "UART busy after write");
     check(uart_err = '0', "no parity error on valid write");
 
@@ -107,6 +108,31 @@ architecture rtl of tb_uart is
     end loop;
 
     check(uart_busy = '0', "UART idle after TX complete");
+
+    -- --- Test 4: A write one address bit away, or to the CAN mailbox, is ignored ---
+    for addr_bit in 0 to 32 loop
+
+      bus_i <=
+      (
+        addr  => c_can_mailbox_addr,
+        data  => x"00000042",
+        we    => '1',
+        valid => '1'
+      );
+
+      if (addr_bit < 32) then
+        bus_i.addr           <= c_uart_tx_data_addr;
+        bus_i.addr(addr_bit) <= not c_uart_tx_data_addr(addr_bit);
+      end if;
+
+      wait until rising_edge(tb_clk);
+      bus_i.valid <= '0';
+      wait until rising_edge(tb_clk);
+      wait until rising_edge(tb_clk);
+      wait until rising_edge(tb_clk);
+      check(uart_busy = '0', "no TX from another address");
+
+    end loop;
 
     test_runner_cleanup(runner);
 

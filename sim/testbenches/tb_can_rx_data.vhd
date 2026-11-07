@@ -100,7 +100,7 @@ architecture rtl of tb_can_rx_data is
     check(can_busy = '0', "idle: not busy");
 
     -- --- Test 2: Register write sends a frame ---
-    bus_i       <= (addr => x"00000000", data => x"000000FF", we => '1', valid => '1');
+    bus_i       <= (addr => c_can_mailbox_addr, data => x"000000FF", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     wait for clk_period * 5;
@@ -116,7 +116,7 @@ architecture rtl of tb_can_rx_data is
     check(can_busy = '0', "RX dominant: returned to idle");
 
     -- --- Test 4: Register read (WE=0) ---
-    bus_i       <= (addr => x"00000000", data => x"00000000", we => '0', valid => '1');
+    bus_i       <= (addr => c_can_mailbox_addr, data => x"00000000", we => '0', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     wait for clk_period * 2;
@@ -124,7 +124,7 @@ architecture rtl of tb_can_rx_data is
 
     -- --- Test 5: bus_ok dropped during register write ---
     bus_ok      <= '0';
-    bus_i       <= (addr => x"00000000", data => x"000000AA", we => '1', valid => '1');
+    bus_i       <= (addr => c_can_mailbox_addr, data => x"000000AA", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     bus_ok      <= '1';
