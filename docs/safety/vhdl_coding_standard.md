@@ -23,7 +23,7 @@ design targeting ASIL-D compliance.
 | M-01 | All processes must have explicit sensitivity lists | Mandatory |
 | M-02 | No inferred latches — all combinational processes must have default assignments | Mandatory |
 | M-03 | All FSMs must use explicit safe-state encoding (t_safe_state) | Mandatory |
-| M-04 | Reset must be synchronous with explicit polarity | Mandatory |
+| M-04 | Reset must be synchronous with explicit polarity. `reset_synchronizer` is the one exception, because it is where an asynchronous reset becomes a synchronous one | Mandatory |
 | M-05 | No mixed-edge clocking in a single process | Mandatory |
 | M-06 | All signals must have explicit initialization | Mandatory |
 | M-07 | No use of `std_logic_arith` or `std_logic_unsigned` — use `numeric_std` only | Mandatory |
@@ -94,7 +94,7 @@ when others =>
 | CD-01 | Each process must use exactly one clock  |
 | CD-02 | Cross-domain synchronization requires explicit synchronizer |
 | CD-03 | Watchdog must use independent clock source |
-| CD-04 | No asynchronous reset across clock domains |
+| CD-04 | No asynchronous reset across clock domains, except into a `reset_synchronizer` |
 
 ---
 

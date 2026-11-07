@@ -22,6 +22,8 @@
 |-------|------------------|--------------------|------------------------------|--------------------------------|--------|
 | SG-01 | FSR_MOTION_001   | TSR_LOCKSTEP_042   | lockstep_comparator          | tb_lockstep_comparator         | ✅     |
 | SG-01 | FSR_MOTION_001   | TSR_SAFETY_GATE_001| lockstep_comparator          | tb_lockstep_fault_inject       | ✅     |
+| SG-01 | FSR_MOTION_001   | TSR_RESET_001      | reset_synchronizer           | tb_reset_synchronizer          | ✅     |
+| SG-01 | FSR_MOTION_001   | TSR_RESET_001      | top_automotive_soc           | tb_soc_reset_network           | ✅     |
 | SG-01 | FSR_MOTION_002   | TSR_WD_001         | hardware_watchdog            | tb_watchdog                    | ✅     |
 | SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_042   | lockstep_comparator          | tb_lockstep_comparator         | ✅     |
 | SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_042   | lockstep_comparator          | tb_lockstep_fault_inject       | ✅     |
@@ -80,3 +82,4 @@
 - **TSR_WD_001**: Windowed hardware watchdog
 - **TSR_CAN_001**: Fault-hardened CAN controller
 - **TSR_UART_001**: Parity-protected UART
+- **TSR_RESET_001**: Reset asserted at once and released on a clock edge

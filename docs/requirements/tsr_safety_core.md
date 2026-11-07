@@ -27,6 +27,13 @@
 - **Verification Method:** Timeout Simulation + Fault Injection
 - **Implemented In:** `rtl/safety_blocks/hardware_watchdog.vhd`
 
+## TSR_RESET_001
+- **Description:** A reset must take effect at once, with or without a clock, and be released on a clock edge, with both cores released on the same edge. Actuators must be held safe during a reset.
+- **ASIL Allocation:** ASIL-D
+- **Mitigation:** One synchroniser drives both cores, the comparator and the peripherals, and `actuator_safe_o` is high whenever its output is low.
+- **Verification Method:** Functional Testbench + Reset Pulse Injection
+- **Implemented In:** `rtl/safety_blocks/reset_synchronizer.vhd`, `rtl/top_automotive_soc.vhd`
+
 ## TSR_SAFETY_GATE_001
 - **Description:** The lockstep comparator must use high-Hamming-distance safe state encoding to resist single-event upsets on internal FSM registers.
 - **ASIL Allocation:** ASIL-D

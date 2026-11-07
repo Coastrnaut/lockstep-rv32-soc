@@ -62,12 +62,13 @@ architecture rtl of tb_soc_integration is
     -- --- Test 1: Reset assertion ---
     rst_n <= '0';
     wait for clk_period * 5;
+    check(actuator_safe = '1', "in reset: actuators held safe");
 
     -- --- Test 2: Reset de-assertion ---
     rst_n <= '1';
     wait for clk_period * 3;
 
-    -- Safety signals: actuator_safe is registered (resets to '0')
+    -- Safety signals: actuator_safe falls once the reset has been released
     check(actuator_safe = '0', "post-reset: actuators not latched");
     check_equal(nmi_fault, '0', "post-reset: no NMI");
 

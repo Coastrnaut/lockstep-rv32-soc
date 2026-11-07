@@ -1,0 +1,170 @@
+-- ============================================================================
+-- Testbench: Reset Synchroniser
+-- ============================================================================
+-- The stimulus drives the clock by hand, so that each reset edge lands exactly
+-- where a test wants it between the clock edges.
+-- ============================================================================
+
+library ieee;
+  use ieee.std_logic_1164.all;
+
+library vunit_lib;
+  context vunit_lib.vunit_context;
+
+library lockstep;
+
+entity tb_reset_synchronizer is
+  generic (
+    runner_cfg : string := ""
+  );
+end entity tb_reset_synchronizer;
+
+architecture tb of tb_reset_synchronizer is
+
+  constant c_half_period : time := 10 ns;
+
+  -- How far apart a reset edge and the next check are. It is shorter than
+  -- c_half_period, so nothing here can be the work of a clock edge.
+  constant c_settle : time := 1 ns;
+
+  signal clk      : std_logic;
+  signal rst_n    : std_logic;
+  signal rst_syn  : std_logic; -- The default of two stages
+  signal rst_long : std_logic; -- Five stages
+
+begin
+
+  dut : entity lockstep.reset_synchronizer
+    port map (
+      clk_i       => clk,
+      rst_n_i     => rst_n,
+      rst_n_syn_o => rst_syn
+    );
+
+  dut_long : entity lockstep.reset_synchronizer
+    generic map (
+      g_stages => 5
+    )
+    port map (
+      clk_i       => clk,
+      rst_n_i     => rst_n,
+      rst_n_syn_o => rst_long
+    );
+
+  p_stim : process is
+
+    procedure rising_clock is
+    begin
+
+      clk <= '1';
+      wait for c_half_period;
+
+    end procedure rising_clock;
+
+    procedure falling_clock is
+    begin
+
+      clk <= '0';
+      wait for c_half_period;
+
+    end procedure falling_clock;
+
+    procedure tick is
+    begin
+
+      rising_clock;
+      falling_clock;
+
+    end procedure tick;
+
+    procedure set_reset (
+      constant level : in std_logic
+    ) is
+    begin
+
+      rst_n <= level;
+      wait for c_settle;
+
+    end procedure set_reset;
+
+    -- From reset to fully released
+
+    procedure run_to_released is
+    begin
+
+      set_reset('1');
+
+      for dummy in 1 to 5 loop
+
+        tick;
+
+      end loop;
+
+      check_equal(rst_syn, '1', "two stages released");
+      check_equal(rst_long, '1', "five stages released");
+
+    end procedure run_to_released;
+
+  begin
+
+    test_runner_setup(runner, runner_cfg);
+
+    while test_suite loop
+
+      clk <= '0';
+      set_reset('0');
+
+      if run("output_falls_without_a_clock") then
+        check_equal(rst_syn, '0', "low from the start");
+        check_equal(rst_long, '0', "low from the start");
+        run_to_released;
+        set_reset('0');
+        check_equal(rst_syn, '0', "fell with no clock edge");
+        check_equal(rst_long, '0', "fell with no clock edge");
+      elsif run("release_takes_one_rising_edge_per_stage") then
+        set_reset('1');
+        check_equal(rst_syn, '0', "the input alone releases nothing");
+
+        for edge in 1 to 5 loop
+
+          check_equal(rst_long, '0', "five stages still held");
+          rising_clock;
+
+          if (edge = 1) then
+            check_equal(rst_syn, '0', "two stages held for one edge");
+          else
+            check_equal(rst_syn, '1', "two stages released by the second edge");
+          end if;
+
+          falling_clock;
+
+        end loop;
+
+        check_equal(rst_long, '1', "five stages released by the fifth edge");
+      elsif run("short_pulse_between_clock_edges_is_a_full_reset") then
+        run_to_released;
+        set_reset('0');
+        set_reset('1');
+        check_equal(rst_syn, '0', "the pulse is seen");
+        tick;
+        check_equal(rst_syn, '0', "and held after it ends");
+        tick;
+        check_equal(rst_syn, '1', "then released");
+      elsif run("reset_during_a_release_starts_it_again") then
+        set_reset('1');
+        tick;
+        set_reset('0');
+        set_reset('1');
+        tick;
+        check_equal(rst_syn, '0', "the edge before the pulse no longer counts");
+        tick;
+        check_equal(rst_syn, '1', "released two edges after the pulse");
+      end if;
+
+    end loop;
+
+    test_runner_cleanup(runner);
+
+  end process p_stim;
+
+end architecture tb;

@@ -130,7 +130,7 @@ begin
   begin
 
     if (rising_edge(clk) and rst_n = '1') then
-      check(actuator_safe /= '1', "cores stayed in lockstep");
+      check(nmi_fault /= '1', "cores stayed in lockstep");
     end if;
 
   end process p_lockstep;
@@ -179,7 +179,7 @@ begin
         check_uart_byte(3, x"44");
         check_equal(uart_count, 3, "no other bytes, so no interrupt");
         check_equal(rx_starts, 1, "one CAN frame");
-        check_equal(nmi_fault, '0', "no lockstep fault");
+        check_equal(actuator_safe, '0', "actuators free");
       elsif run("program_reads_a_nonzero_error_counter") then
         -- Two attempts go unacknowledged, so STATUS holds 8 + 8 - 1 = 15
         ack_enable <= '0';
@@ -195,7 +195,7 @@ begin
         check_uart_byte(4, x"44");
         check_equal(uart_count, 4, "no other bytes");
         check_equal(rx_starts, 3, "the third attempt got through");
-        check_equal(nmi_fault, '0', "no lockstep fault");
+        check_equal(actuator_safe, '0', "actuators free");
       end if;
 
     end loop;

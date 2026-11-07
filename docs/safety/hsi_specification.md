@@ -195,10 +195,15 @@ them does nothing. TX_DATA takes any store that includes byte 0.
 | Phase          | Duration     | Description                          |
 |----------------|--------------|--------------------------------------|
 | Power-on reset | 1024 clk     | Global reset deassertion             |
+| Reset release  | 2 clk        | Rising edges before w_rst_n rises    |
 | Lockstep init  | 2 clk        | Comparator self-test                 |
 | ECC init       | 1 clk        | Parity generator self-test           |
 | Watchdog start | Immediate    | WD counter begins on first clock     |
-| Total boot     | 1027 clk     | System ready at ~20.5 µs @ 50 MHz    |
+| Total boot     | 1029 clk     | System ready at ~20.6 µs @ 50 MHz    |
+
+A reset takes effect at once, even with the clock stopped: `can_tx_o` goes
+recessive and `actuator_safe_o` goes high. A pulse of any length restarts the
+whole SoC, and `actuator_safe_o` stays high until the reset has been released.
 
 ---
 

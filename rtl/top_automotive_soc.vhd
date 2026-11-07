@@ -90,6 +90,8 @@ architecture structural of top_automotive_soc is
   -- Peripheral diagnostic signals
   signal w_can_busy            : std_logic;
   signal w_can_status          : std_logic_vector(10 downto 0);
+  signal w_rst_n               : std_logic;
+  signal w_lockstep_safe       : std_logic;
   signal w_can_irq             : std_logic;
   signal w_uart_irq            : std_logic;
   signal w_can_rdata           : std_logic_vector(31 downto 0);
@@ -165,7 +167,21 @@ architecture structural of top_automotive_soc is
 begin
 
   -- ========================================================================
-  -- 1. BUS RECORD PACKAGING
+  -- 1. RESET SYNCHRONISER (Rule 1.4)
+  -- ========================================================================
+  -- Every block takes its reset from here. The two cores cannot leave reset on
+  -- different clocks, and a pulse too short for a clock edge to catch still
+  -- resets the blocks that only look at reset on a clock edge.
+  -- ========================================================================
+  i_reset_sync : entity lockstep.reset_synchronizer
+    port map (
+      clk_i       => clk_i,
+      rst_n_i     => rst_n_i,
+      rst_n_syn_o => w_rst_n
+    );
+
+  -- ========================================================================
+  -- 2. BUS RECORD PACKAGING
   -- ========================================================================
   -- Aggregate XBus output wires into clean records for the lockstep engine.
   -- ========================================================================
@@ -182,7 +198,7 @@ begin
   w_core_b_bus.valid <= w_core_b_xbus_stb;
 
   -- ========================================================================
-  -- 2. INSTANCE: MASTER CPU (CORE A)
+  -- 3. INSTANCE: MASTER CPU (CORE A)
   -- ========================================================================
   i_cpu_master : entity neorv32.neorv32_top
     generic map (
@@ -351,7 +367,7 @@ begin
     port map (
       -- Global
       clk_i      => clk_i,
-      rstn_i     => rst_n_i,
+      rstn_i     => w_rst_n,
       rstn_ocd_o => w_core_a_rstn_ocd,
       rstn_wdt_o => w_core_a_rstn_wdt,
 
@@ -459,7 +475,7 @@ begin
     );
 
   -- ========================================================================
-  -- 3. INSTANCE: MIRROR CHECKER CPU (CORE B)
+  -- 4. INSTANCE: MIRROR CHECKER CPU (CORE B)
   -- ========================================================================
   i_cpu_checker : entity neorv32.neorv32_top
     generic map (
@@ -628,7 +644,7 @@ begin
     port map (
       -- Global
       clk_i      => clk_i,
-      rstn_i     => rst_n_i,
+      rstn_i     => w_rst_n,
       rstn_ocd_o => w_core_b_rstn_ocd,
       rstn_wdt_o => w_core_b_rstn_wdt,
 
@@ -736,12 +752,12 @@ begin
     );
 
   -- ========================================================================
-  -- 4. INSTANCE: HARDENED DUAL-CORE LOCKSTEP COMPARATOR
+  -- 5. INSTANCE: HARDENED DUAL-CORE LOCKSTEP COMPARATOR
   -- ========================================================================
   i_lockstep_gate : entity lockstep.lockstep_comparator
     port map (
       clk_i       => clk_i,
-      rst_n_syn_i => rst_n_i,
+      rst_n_syn_i => w_rst_n,
 
       -- Core Feeders
       core_a_bus_i => w_core_a_bus,
@@ -749,7 +765,7 @@ begin
 
       -- Safety Monitoring Outputs
       nmi_fault_o  => w_nmi,
-      safe_state_o => actuator_safe_o,
+      safe_state_o => w_lockstep_safe,
 
       -- Gated System Infrastructure Connections
       sys_bus_o   => w_safe_sys_bus,
@@ -757,12 +773,12 @@ begin
 
     ); -- ========================================================================
 
-  -- 5. AUTOMOTIVE BUS CONTROLLER INTEGRATION
+  -- 6. AUTOMOTIVE BUS CONTROLLER INTEGRATION
   -- ========================================================================
   i_automotive_can : entity lockstep.automotive_can_controller
     port map (
       clk_i        => clk_i,
-      rst_n_i      => rst_n_i,
+      rst_n_i      => w_rst_n,
       bus_i        => w_safe_sys_bus,
       bus_ok_i     => w_bus_valid,
       rdata_o      => w_can_rdata,
@@ -774,12 +790,12 @@ begin
 
     ); -- ========================================================================
 
-  -- 6. SAFE UART DIAGNOSTIC INTERFACE
+  -- 7. SAFE UART DIAGNOSTIC INTERFACE
   -- ========================================================================
   i_safe_uart : entity lockstep.safe_uart
     port map (
       clk_i        => clk_i,
-      rst_n_i      => rst_n_i,
+      rst_n_i      => w_rst_n,
       bus_i        => w_safe_sys_bus,
       bus_ok_i     => w_bus_valid,
       rdata_o      => w_uart_rdata,
@@ -792,12 +808,15 @@ begin
 
   nmi_fault_o <= w_nmi;
 
+  -- Nothing supervises the actuators during a reset, so it holds them safe too
+  actuator_safe_o <= w_lockstep_safe or not w_rst_n;
+
   -- Both cores read the same data, or they would leave lockstep. Each peripheral
   -- drives zero unless it is being read.
   w_periph_rdata <= w_can_rdata or w_uart_rdata;
 
   -- ========================================================================
-  -- 7. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals
+  -- 8. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals
   --     to satisfy -Wall (unused signal) and prevent synthesis optimization.
   --     In production, these conditions trigger BSM actions or fault logging.
   -- ========================================================================

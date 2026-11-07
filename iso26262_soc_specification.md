@@ -95,7 +95,7 @@ The master integration structural canvas. It takes your clock strings, instantia
 * **Library Context Mapping:** Declare the external compiled submodule library namespace at the absolute top of the file layout structure: `library neorv32;`.
 * **Identical Generic Constraining:** Instantiate `i_cpu_master` and `i_cpu_checker` side-by-side. You must explicitly configure their internal parameters (such as `CLOCK_FREQUENCY`, cache allocations, and instruction set options) identically via direct VHDL `generic map` parameters to ensure cycle-accurate execution.
 * **Record Bus Extraction:** Capture the flat individual port strings coming out of both CPU cores (like `wb_adr_o`, `wb_dat_o`, and `wb_we_o`) and map them directly into your internal `w_core_a_bus` and `w_core_b_bus` record structures.
-* **Clock and Reset Distribution:** Distribute the global clock input (`clk_i`) and raw hardware reset (`rst_n_i`) in parallel to both CPU instances and all internal safety monitoring sub-blocks.
+* **Clock and Reset Distribution:** Distribute the global clock input (`clk_i`) in parallel to both CPU instances and all internal safety monitoring sub-blocks. Pass the raw hardware reset (`rst_n_i`) through one `reset_synchronizer` and distribute its output the same way, so that it is released synchronously (PR checklist 1.4) and both cores leave reset on the same clock.
 
 ### 6. Hardened Automotive Peripheral Controllers (`rtl/peripherals/`)
 Provides safety-hardened communication blocks to handle external data transmission safely without risking system stability.
