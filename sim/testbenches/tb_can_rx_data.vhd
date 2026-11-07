@@ -22,9 +22,14 @@ end entity tb_can_rx_data;
 
 architecture rtl of tb_can_rx_data is
 
-  constant clk_period : time := 20 ns;
-  signal   clk        : std_logic;
-  signal   rst_n      : std_logic;
+  constant clk_period     : time     := 20 ns;
+  constant c_clks_per_bit : positive := 4;
+
+  -- Longest frame: 135 bits
+  constant c_max_frame_time : time := clk_period * c_clks_per_bit * 135;
+
+  signal clk   : std_logic;
+  signal rst_n : std_logic;
 
   signal bus_i    : t_rv_bus;
   signal bus_ok   : std_logic;
@@ -43,6 +48,9 @@ architecture rtl of tb_can_rx_data is
   end process p_clk;
 
   i_can : entity lockstep.automotive_can_controller
+    generic map (
+      g_clks_per_bit => c_clks_per_bit
+    )
     port map (
       clk_i      => clk,
       rst_n_i    => rst_n,
@@ -68,12 +76,13 @@ architecture rtl of tb_can_rx_data is
     -- --- Test 1: Idle baseline ---
     check(can_busy = '0', "idle: not busy");
 
-    -- --- Test 2: Register write triggers TX state machine ---
+    -- --- Test 2: Register write sends a frame ---
     bus_i       <= (addr => x"00000000", data => x"000000FF", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     wait for clk_period * 5;
-    -- State machine should have cycled through TX
+    check(can_busy = '1', "reg write: frame in progress");
+    wait for c_max_frame_time;
     check(can_busy = '0', "reg write: returned to idle");
 
     -- --- Test 3: RX dominant bit (recessive->dominant transition) ---
@@ -112,7 +121,6 @@ architecture rtl of tb_can_rx_data is
     check(can_busy = '0', "rapid RX: idle");
 
     test_runner_cleanup(runner);
-    wait for 100 ns;
 
   end process p_stim;
 

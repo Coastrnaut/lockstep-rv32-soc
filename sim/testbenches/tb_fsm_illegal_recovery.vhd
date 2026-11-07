@@ -17,9 +17,14 @@ end entity tb_fsm_illegal_recovery;
 
 architecture tb of tb_fsm_illegal_recovery is
 
-  constant clk_period : time := 20 ns;
-  signal   clk        : std_logic;
-  signal   rst_n      : std_logic;
+  constant clk_period     : time     := 20 ns;
+  constant c_clks_per_bit : positive := 4;
+
+  -- Longest frame: 135 bits
+  constant c_max_frame_time : time := clk_period * c_clks_per_bit * 135;
+
+  signal clk   : std_logic;
+  signal rst_n : std_logic;
 
   signal bus_i    : t_rv_bus;
   signal bus_ok   : std_logic;
@@ -37,6 +42,9 @@ architecture tb of tb_fsm_illegal_recovery is
   end process p_clk;
 
   uut : entity lockstep.automotive_can_controller
+    generic map (
+      g_clks_per_bit => c_clks_per_bit
+    )
     port map (
       clk_i      => clk,
       rst_n_i    => rst_n,
@@ -59,22 +67,27 @@ architecture tb of tb_fsm_illegal_recovery is
     rst_n  <= '1';
     wait for clk_period * 2;
 
-    -- TEST 1: Normal TX baseline (DLC=0, ~8 cycles to complete)
+    -- TEST 1: Normal TX baseline (DLC=0)
     report "TEST: Normal CAN TX baseline";
     bus_i       <= (addr => x"00000000", data => x"00000000", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
-    wait for clk_period * 10; -- FSM: IDLE→LOAD→SOF→ID→DATA→CRC→ACK→EOF→INTERFRAME→IDLE
+    wait for clk_period * 10;
+    check(can_busy = '1', "baseline: frame in progress");
+    wait for c_max_frame_time;
     check(can_busy = '0', "baseline: idle after tx");
 
-    -- TEST 2: Bus conflict mid-transaction
+    -- TEST 2: Bus conflict mid-transaction abandons the frame
     report "TEST: Bus conflict mid-transaction";
-    bus_i  <= (addr => x"00000000", data => x"00000000", we => '1', valid => '1');
+    bus_i       <= (addr => x"00000000", data => x"00000000", we => '1', valid => '1');
     wait until rising_edge(clk);
-    bus_ok <= '0';
-    wait until rising_edge(clk);
-    bus_ok <= '1';
+    bus_i.valid <= '0';
     wait for clk_period * 10;
+    check(can_busy = '1', "bus conflict: frame in progress");
+    bus_ok      <= '0';
+    wait until rising_edge(clk);
+    bus_ok      <= '1';
+    wait for clk_period * 2;
     check(can_busy = '0', "bus conflict: recovered to idle");
 
     -- TEST 3: Rapid bus_ok toggle
@@ -86,18 +99,24 @@ architecture tb of tb_fsm_illegal_recovery is
       wait until rising_edge(clk);
       bus_i.valid <= '0';
       wait for clk_period * 10;
+      bus_ok      <= '0';
+      wait until rising_edge(clk);
+      bus_ok      <= '1';
+      wait for clk_period * 2;
+      check(can_busy = '0', "rapid toggle: recovered");
 
     end loop;
 
-    check(can_busy = '0', "rapid toggle: recovered");
-
     -- TEST 4: Bus held invalid during TX
     report "TEST: Bus invalid during TX";
-    bus_i  <= (addr => x"00000000", data => x"00000000", we => '1', valid => '1');
+    bus_i       <= (addr => x"00000000", data => x"00000000", we => '1', valid => '1');
     wait until rising_edge(clk);
-    bus_ok <= '0';
+    bus_i.valid <= '0';
     wait for clk_period * 10;
-    bus_ok <= '1';
+    bus_ok      <= '0';
+    wait for clk_period * 10;
+    check(can_busy = '0', "bus invalid: frame abandoned");
+    bus_ok      <= '1';
     wait for clk_period * 10;
     check(can_busy = '0', "bus invalid: recovered");
 
@@ -109,6 +128,8 @@ architecture tb of tb_fsm_illegal_recovery is
     bus_i.valid <= '0';
     wait for clk_period * 10;
     can_rx      <= '0';
+    check(can_busy = '1', "simultaneous: RX does not stop TX");
+    wait for c_max_frame_time;
     check(can_busy = '0', "simultaneous: recovered");
 
     -- TEST 6: FSM valid state after stress
@@ -116,7 +137,7 @@ architecture tb of tb_fsm_illegal_recovery is
     bus_i       <= (addr => x"00000000", data => x"00000000", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
-    wait for clk_period * 10;
+    wait for c_max_frame_time;
     check(can_busy = '0', "stress: FSM idle");
 
     test_runner_cleanup(runner);
