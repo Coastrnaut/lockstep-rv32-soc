@@ -232,7 +232,11 @@ def _run_ghdl_lint(ghdl_exe):
 
     # Collect files grouped by library / dependency order
     config_files = sorted((root / "config").glob("*.vhd"))
-    safety_files = sorted((root / "rtl" / "safety_blocks").glob("*.vhd"))
+
+    # Analysis follows this order, so a block has to come after any it instantiates
+    wrappers = ("ecc_data_ram", "watchdog_supervisor")
+    safety_files = sorted((root / "rtl" / "safety_blocks").glob("*.vhd"),
+                          key=lambda f: (f.stem in wrappers, f.stem))
     periph_files = sorted((root / "rtl" / "peripherals").glob("*.vhd"))
     top_soc = root / "rtl" / "top_automotive_soc.vhd"
     # NEORV32: use file_list_core.f for correct dependency order

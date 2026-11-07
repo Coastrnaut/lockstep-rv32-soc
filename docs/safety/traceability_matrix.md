@@ -32,6 +32,9 @@
 | SG-03 | FSR_MEM_001      | TSR_ECC_001        | hamming_ecc_wrapper          | tb_ecc                         | ✅     |
 | SG-03 | FSR_MEM_001      | TSR_ECC_001        | hamming_ecc_wrapper          | tb_ecc_fault_inject            | ✅     |
 | SG-03 | FSR_MEM_002      | TSR_SAFETY_GATE_002| hamming_ecc_wrapper          | tb_ecc                         | ✅     |
+| SG-03 | FSR_MEM_001      | TSR_ECC_001        | hamming_ecc_wrapper          | tb_ecc_exhaustive              | ✅     |
+| SG-03 | FSR_MEM_001      | TSR_ECC_001        | ecc_data_ram                 | tb_ecc_data_ram                | ✅     |
+| SG-03 | FSR_MEM_002      | TSR_SAFETY_GATE_002| top_automotive_soc           | tb_soc_ecc                     | ✅     |
 | SG-04 | FSR_LOCK_001     | TSR_WD_001         | hardware_watchdog            | tb_watchdog                    | ✅     |
 | SG-04 | FSR_LOCK_001     | TSR_WD_001         | watchdog_supervisor          | tb_watchdog_supervisor         | ✅     |
 | SG-04 | FSR_LOCK_001     | TSR_WD_001         | top_automotive_soc           | tb_soc_watchdog                | ✅     |
@@ -47,10 +50,10 @@
 
 | Coverage Type       | Target | Achieved | Notes                              |
 |---------------------|--------|----------|------------------------------------|
-| RTL Implementation  | 100%   | 100%     | All 7 blocks written. The ECC wrapper is not in the SoC yet |
-| Testbench Coverage  | 100%   | 100%     | 27 testbenches, with fault injection on lockstep, ECC and UART |
+| RTL Implementation  | 100%   | 100%     | All 8 blocks written, and all in the SoC |
+| Testbench Coverage  | 100%   | 100%     | 31 testbenches, with fault injection on lockstep, ECC and UART |
 | Fault Injection     | 100%   | 100%     | Stuck-at + bit-flip on lockstep + ECC |
-| Formal Assertions   | 100%   | 100%     | Clocked assertions in all 7 blocks |
+| Formal Assertions   | 100%   | 100%     | Clocked assertions in all 8 blocks |
 | Traceability Tags   | 100%   | 100%     | VHDL attributes in all RTL files   |
 
 ---

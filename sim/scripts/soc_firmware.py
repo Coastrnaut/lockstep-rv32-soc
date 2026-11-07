@@ -76,8 +76,36 @@ PROGRAM = [
     ("sw", "s4", 0x200, "s0"),
     ("jal", "zero", "done"),
 
-    # Send ID 0x123, DLC 2, data bytes 0xA5 and 0x5A
+    # Store a word in the RAM and a byte into that word, and read it back. Say 'M'
+    # if it held, then the single-bit errors the ECC has corrected, as a digit.
     "cold_start:",
+    ("lui", "t0", 0x20000),
+    ("lui", "t1", 0x12345),
+    ("addi", "t1", "t1", 0x678),
+    ("sw", "t1", 8, "t0"),
+    ("addi", "t2", "zero", 0x5A),
+    ("sb", "t2", 9, "t0"),
+    ("lw", "t2", 8, "t0"),
+    ("lui", "t1", 0x12346),            # 0x12345A78
+    ("addi", "t1", "t1", -0x588),
+    ("addi", "t0", "zero", ord("M")),
+    ("beq", "t1", "t2", "ram_good"),
+    ("addi", "t0", "zero", ord("m")),
+    "ram_good:",
+    ("sw", "t0", 0x400, "s0"),
+    "wait_ram:",
+    ("lw", "t1", 0x404, "s0"),
+    ("andi", "t1", "t1", 1),
+    ("bne", "t1", "zero", "wait_ram"),
+    ("lw", "t2", 0x100, "s0"),
+    ("addi", "t2", "t2", ord("0")),
+    ("sw", "t2", 0x400, "s0"),
+    "wait_count:",
+    ("lw", "t1", 0x404, "s0"),
+    ("andi", "t1", "t1", 1),
+    ("bne", "t1", "zero", "wait_count"),
+
+    # Send ID 0x123, DLC 2, data bytes 0xA5 and 0x5A
     ("addi", "t0", "zero", 0x123),
     ("sw", "t0", 0x300, "s0"),
     ("addi", "t0", "zero", 2),

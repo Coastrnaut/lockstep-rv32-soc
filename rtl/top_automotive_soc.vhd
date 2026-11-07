@@ -101,6 +101,8 @@ architecture structural of top_automotive_soc is
   signal w_lockstep_safe       : std_logic;
   signal w_can_irq             : std_logic;
   signal w_uart_irq            : std_logic;
+  signal w_ecc_fatal           : std_logic;
+  signal w_ram_rdata           : std_logic_vector(31 downto 0);
   signal w_wd_rdata            : std_logic_vector(31 downto 0);
   signal w_can_rdata           : std_logic_vector(31 downto 0);
   signal w_uart_rdata          : std_logic_vector(31 downto 0);
@@ -792,6 +794,9 @@ begin
       core_a_bus_i => w_core_a_bus,
       core_b_bus_i => w_core_b_bus,
 
+      -- Both cores read the same data from the RAM, so they cannot see a bad word
+      fatal_fault_i => w_ecc_fatal,
+
       -- Safety Monitoring Outputs
       nmi_fault_o  => w_nmi,
       safe_state_o => w_lockstep_safe,
@@ -850,6 +855,22 @@ begin
       sys_reset_o => w_wd_reset
     );
 
+  -- ========================================================================
+  -- 9. ECC PROTECTED DATA RAM
+  -- ========================================================================
+  -- The cores have no memory of their own for data (dmem_en), so that every load
+  -- and store goes through the comparator. This is the RAM those reach.
+  -- ========================================================================
+  i_ecc_ram : entity lockstep.ecc_data_ram
+    port map (
+      clk_i       => clk_i,
+      rst_n_i     => w_cold_rst_n,
+      bus_i       => w_safe_sys_bus,
+      bus_ok_i    => w_bus_valid,
+      rdata_o     => w_ram_rdata,
+      dbe_fatal_o => w_ecc_fatal
+    );
+
   nmi_fault_o <= w_nmi;
 
   -- Nothing supervises the actuators during a reset, so it holds them safe too
@@ -857,10 +878,10 @@ begin
 
   -- Both cores read the same data, or they would leave lockstep. Each peripheral
   -- drives zero unless it is being read.
-  w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata;
+  w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata or w_ram_rdata;
 
   -- ========================================================================
-  -- 9. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals
+  -- 10. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals
   --     to satisfy -Wall (unused signal) and prevent synthesis optimization.
   --     In production, these conditions trigger BSM actions or fault logging.
   -- ========================================================================

@@ -38,14 +38,15 @@ architecture tb of tb_soc_addr_boundary is
 
   u_dut : entity lockstep.lockstep_comparator
     port map (
-      clk_i        => clk,
-      rst_n_syn_i  => rst_n,
-      core_a_bus_i => core_a_bus,
-      core_b_bus_i => core_b_bus,
-      safe_state_o => safe_state,
-      nmi_fault_o  => nmi_fault,
-      bus_valid_o  => bus_valid,
-      sys_bus_o    => sys_bus
+      clk_i         => clk,
+      rst_n_syn_i   => rst_n,
+      core_a_bus_i  => core_a_bus,
+      core_b_bus_i  => core_b_bus,
+      fatal_fault_i => '0',
+      safe_state_o  => safe_state,
+      nmi_fault_o   => nmi_fault,
+      bus_valid_o   => bus_valid,
+      sys_bus_o     => sys_bus
 
     );test_proc : process is
   begin

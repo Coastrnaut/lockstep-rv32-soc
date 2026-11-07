@@ -40,15 +40,37 @@ x"00090063", -- beq s2 zero wait_irq
 x"0ee00293", -- addi t0 zero 238
 x"30542023", -- sw t0 768 s0
 x"30542a23", -- sw t0 788 s0
-x"0ec0006f", -- jal zero done
+x"1440006f", -- jal zero done
 x"40442303", -- lw t1 1028 s0
 x"00137313", -- andi t1 t1 1
 x"fe031ce3", -- bne t1 zero parity_good
 x"00098a63", -- beq s3 zero cold_start
 x"00200313", -- addi t1 zero 2
-x"0c699a63", -- bne s3 t1 done
+x"12699663", -- bne s3 t1 done
 x"21442023", -- sw s4 512 s0
-x"0cc0006f", -- jal zero done
+x"1240006f", -- jal zero done
+x"200002b7", -- lui t0 131072
+x"12345337", -- lui t1 74565
+x"67830313", -- addi t1 t1 1656
+x"0062a423", -- sw t1 8 t0
+x"05a00393", -- addi t2 zero 90
+x"007284a3", -- sb t2 9 t0
+x"0082a383", -- lw t2 8 t0
+x"12346337", -- lui t1 74566
+x"a7830313", -- addi t1 t1 -1416
+x"04d00293", -- addi t0 zero 77
+x"00730463", -- beq t1 t2 ram_good
+x"06d00293", -- addi t0 zero 109
+x"40542023", -- sw t0 1024 s0
+x"40442303", -- lw t1 1028 s0
+x"00137313", -- andi t1 t1 1
+x"fe031ce3", -- bne t1 zero wait_ram
+x"10042383", -- lw t2 256 s0
+x"03038393", -- addi t2 t2 48
+x"40742023", -- sw t2 1024 s0
+x"40442303", -- lw t1 1028 s0
+x"00137313", -- andi t1 t1 1
+x"fe031ce3", -- bne t1 zero wait_count
 x"12300293", -- addi t0 zero 291
 x"30542023", -- sw t0 768 s0
 x"00200293", -- addi t0 zero 2

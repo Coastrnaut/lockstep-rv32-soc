@@ -96,6 +96,12 @@ The item is the **lockstep-rv32-soc** hardware platform comprising:
 | 0x08   | SYNDROME      | R   | Last syndrome value                  |
 | 0x0C   | STATUS        | R   | ECC status (0=no err, 1=SBE, 2=DBE)  |
 
+SBE_COUNT and DBE_COUNT count in bits 15:0 and stop at 0xFFFF. SYNDROME holds bit
+7 set if parity failed, and in bits 6:0 the position of the flipped bit. STATUS
+keeps the worst error seen. Only a cold reset clears them, so they outlast a
+watchdog reset. A double-bit error shuts the bus, as section 4 describes, so
+software cannot read these registers afterwards.
+
 ### 3.3 Watchdog Registers
 
 | Offset | Name          | R/W | Description                          |
@@ -152,11 +158,13 @@ drop of the safety gate clears them.
 
 Both cores receive these on their RISC-V interrupt lines, whose fixed priority
 gives the order above: NMI_LOCKSTEP on MEI, CAN_ERROR on MSI and UART_ERROR on
-MTI. NMI_ECC_DBE is not connected, because the ECC wrapper is not in the SoC yet.
-WD_TIMEOUT is not an interrupt either: a watchdog violation resets the SoC, as
-section 6 describes, and RESET_SRC reports it afterwards. CAN_ERROR and UART_ERROR
-stay set until software writes the block's STATUS register, and reading it does
-not clear them, so that polling cannot lose an interrupt.
+MTI. NMI_ECC_DBE shares MEI with NMI_LOCKSTEP, because a double-bit error trips
+the same latch in the comparator: the bus shuts and `actuator_safe_o` goes high
+until a cold reset. Both cores read the same word from the RAM, so they would not
+disagree about it. WD_TIMEOUT is not an interrupt: a watchdog violation resets
+the SoC, as section 6 describes, and RESET_SRC reports it afterwards. CAN_ERROR
+and UART_ERROR stay set until software writes the block's STATUS register, and
+reading it does not clear them, so that polling cannot lose an interrupt.
 
 ---
 
@@ -169,6 +177,18 @@ not clear them, so that polling cannot lose an interrupt.
 | 0x40000000 | 4K    | Peripheral registers | No ECC         |
 | 0x60000000 | 1M    | Flash (program)      | ECC protected  |
 
+The SoC implements the SRAM, on the system bus behind the comparator, so both
+cores share it and every load and store is compared. Each word is 64 data bits
+and 8 check bits, and every store is a read-modify-write, written the clock after
+the strobe, so a store the cores disagree on never lands. It takes byte, halfword
+and word stores, and answers in the cycle after the strobe, like the peripherals.
+The Boot ROM above is NEORV32's IMEM for now, 16 KB in each core with no ECC. An
+upset there makes the cores disagree, so the comparator catches it rather than
+the ECC correcting it. There is no Flash yet.
+
+The SRAM starts as zeros on an FPGA, and zeros are valid words. An ASIC would have
+to clear it before use.
+
 ### 5.1 Peripheral Register Window
 
 Each block has 0x100 bytes of the window at 0x40000000:
@@ -176,7 +196,7 @@ Each block has 0x100 bytes of the window at 0x40000000:
 | Base       | Block               | Decoded in hardware  |
 |------------|---------------------|----------------------|
 | 0x40000000 | Lockstep comparator | Reserved             |
-| 0x40000100 | ECC controller      | Reserved             |
+| 0x40000100 | ECC controller      | Offsets 0x00 to 0x0C |
 | 0x40000200 | Watchdog            | Offsets 0x00 to 0x08 |
 | 0x40000300 | CAN controller      | Offsets 0x00 to 0x14 |
 | 0x40000400 | Safe UART           | Offsets 0x00 to 0x08 |

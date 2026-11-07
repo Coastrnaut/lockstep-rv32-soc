@@ -13,7 +13,7 @@ automotive safety-critical applications. This safety case demonstrates
 compliance with ISO 26262 ASIL-D through:
 
 1. Hardware safety mechanisms (lockstep, ECC, watchdog, safety-gated I/O)
-2. Comprehensive verification (27 testbenches, fault injection, formal assertions)
+2. Comprehensive verification (31 testbenches, fault injection, formal assertions)
 3. Quantitative metrics (SPFM 96.76%, LFM 98.92%, PMHF 1.53×10⁻⁹ /h)
 4. Full bi-directional traceability from safety goals to test results
 
@@ -25,7 +25,7 @@ compliance with ISO 26262 ASIL-D through:
 |-------------|-------------|----------|--------|
 | SG-01: Prevent unintended motion | Lockstep comparator isolates actuators | tb_lockstep_comparator, tb_lockstep_fault_inject | ✅ |
 | SG-02: Detect computational divergence | Dual-core lockstep within 2 cycles | lockstep_comparator.vhd formal asserts | ✅ |
-| SG-03: Detect memory corruption | SECDED ECC on all memory buses | tb_ecc, tb_ecc_fault_inject | ✅ |
+| SG-03: Detect memory corruption | SECDED ECC on the data RAM. The instruction memory has none: each core has its own copy, so the comparator catches an upset there | tb_ecc, tb_ecc_exhaustive, tb_ecc_fault_inject, tb_ecc_data_ram, tb_soc_ecc | ✅ |
 | SG-04: Detect software lockup | Windowed watchdog on isolated clock | tb_watchdog, tb_watchdog_supervisor, tb_soc_watchdog | ✅ |
 | SG-05: Ensure fault-free communication | Safety-gated CAN + parity UART | tb_can, tb_uart | ✅ |
 
@@ -36,6 +36,9 @@ compliance with ISO 26262 ASIL-D through:
 ### 3.1 Functional Testbenches
 - `tb_lockstep_comparator` — Mismatch detection, NMI assertion, safe state latch
 - `tb_ecc` — SBE correction, DBE detection, clean path validation
+- `tb_ecc_exhaustive` — Every single and double bit flip in the 72-bit word
+- `tb_ecc_data_ram` — RAM access, read-modify-write, error registers, flips on loads and stores
+- `tb_soc_ecc` — Correction and lock-up on the running SoC, against the 50 µs FTTI
 - `tb_watchdog` — Normal kick, early violation, late timeout
 - `tb_watchdog_supervisor` — Register access and clock crossings at both clock ratios
 - `tb_soc_watchdog` — Firmware kicks, timeouts and early kicks on the running SoC
@@ -92,7 +95,7 @@ VHDL traceability attributes (`requirement_id`).
 The lockstep-rv32-soc satisfies ISO 26262 ASIL-D requirements through:
 - **Redundancy**: Dual-core lockstep with independent ECC
 - **Diagnostics**: Watchdog, safety-gated I/O, parity checks
-- **Verification**: 27 testbenches with fault injection coverage
+- **Verification**: 31 testbenches with fault injection coverage
 - **Metrics**: All quantitative thresholds exceeded by significant margins
 
 The hardware is suitable for integration into ASIL-D automotive safety systems.

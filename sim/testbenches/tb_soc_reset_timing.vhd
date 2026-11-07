@@ -44,14 +44,15 @@ architecture tb of tb_soc_reset_timing is
 
   uut : entity lockstep.lockstep_comparator
     port map (
-      clk_i        => clk,
-      rst_n_syn_i  => rst_n,
-      core_a_bus_i => core_a_bus,
-      core_b_bus_i => core_b_bus,
-      nmi_fault_o  => nmi_fault,
-      safe_state_o => safe_state,
-      bus_valid_o  => bus_valid,
-      sys_bus_o    => sys_bus
+      clk_i         => clk,
+      rst_n_syn_i   => rst_n,
+      core_a_bus_i  => core_a_bus,
+      core_b_bus_i  => core_b_bus,
+      fatal_fault_i => '0',
+      nmi_fault_o   => nmi_fault,
+      safe_state_o  => safe_state,
+      bus_valid_o   => bus_valid,
+      sys_bus_o     => sys_bus
 
     );p_test : process is
   begin

@@ -187,13 +187,16 @@ begin
         check_equal(rx_frame.data, std_logic_vector'(x"A55A000000000000"), "CAN frame data");
         check_equal(rx_frame.crc, rx_frame.crc_expected, "CAN frame CRC");
 
-        -- '0' is the reset source of a cold start. 'K' means both cores read an
-        -- error counter of zero. 'D' means they saw UART STATUS busy and then
-        -- clear, and 'B' would mean it never set.
+        -- '0' is the reset source of a cold start. 'M' means the RAM held what the
+        -- program stored, and the next '0' means the ECC had nothing to correct.
+        -- 'K' means both cores read an error counter of zero. 'D' means they saw
+        -- UART STATUS busy and then clear, and 'B' would mean it never set.
         check_uart_byte(1, x"30");
-        check_uart_byte(2, x"4B");
-        check_uart_byte(3, x"44");
-        check_equal(uart_count, 3, "no other bytes, so no interrupt");
+        check_uart_byte(2, x"4D");
+        check_uart_byte(3, x"30");
+        check_uart_byte(4, x"4B");
+        check_uart_byte(5, x"44");
+        check_equal(uart_count, 5, "no other bytes, so no interrupt");
         check_equal(rx_starts, 1, "one CAN frame");
         check_equal(actuator_safe, '0', "actuators free");
       elsif run("program_reads_a_nonzero_error_counter") then
@@ -205,15 +208,14 @@ begin
 
         -- '2' means CAN_ERROR reached the trap handler on both cores, once for
         -- each failed attempt, and that clearing it worked each time
-        check_uart_byte(1, x"30");
-        check_uart_byte(2, x"32");
-        check_uart_byte(3, x"46");
-        check_uart_byte(4, x"44");
-        check_equal(uart_count, 4, "no other bytes");
+        check_uart_byte(4, x"32");
+        check_uart_byte(5, x"46");
+        check_uart_byte(6, x"44");
+        check_equal(uart_count, 6, "no other bytes");
         check_equal(rx_starts, 3, "the third attempt got through");
         check_equal(actuator_safe, '0', "actuators free");
       elsif run("reset_source_is_ready_when_the_program_restarts") then
-        check_uart_byte(1, x"30");
+        check_uart_byte(3, x"30");
 
         -- Move the watchdog to just short of its timeout, rather than spend 50 ms
         -- getting there
@@ -228,7 +230,7 @@ begin
         wait until soc_rst_n = '1' for c_timeout;
         check_equal(soc_rst_n, '1', "and let it restart");
         check_equal(wd_status(9 downto 8), std_logic_vector'("10"), "RESET_SRC already across");
-        check_uart_byte(2, x"32");
+        check_uart_byte(4, x"32");
       end if;
 
     end loop;

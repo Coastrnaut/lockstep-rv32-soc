@@ -18,7 +18,7 @@
 - **ASIL Allocation:** ASIL-D
 - **Mitigation:** Correct SBE transparently; flag DBE and trip NMI.
 - **Verification Method:** Randomized Error Injection Testbench
-- **Implemented In:** `rtl/safety_blocks/hamming_ecc_wrapper.vhd`
+- **Implemented In:** `rtl/safety_blocks/hamming_ecc_wrapper.vhd`, `rtl/safety_blocks/ecc_data_ram.vhd`
 
 ## TSR_WD_001
 - **Description:** An independent watchdog must monitor CPU activity and assert a system reset if no valid check-in is received within the watchdog timeout window.

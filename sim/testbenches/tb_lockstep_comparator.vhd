@@ -69,14 +69,15 @@ begin
   -- Unit Under Test
   uut : entity lockstep.lockstep_comparator
     port map (
-      clk_i        => clk_s,
-      rst_n_syn_i  => rst_n_s,
-      core_a_bus_i => core_a_bus_s,
-      core_b_bus_i => core_b_bus_s,
-      nmi_fault_o  => nmi_fault_s,
-      safe_state_o => actuator_safe_s,
-      bus_valid_o  => bus_valid_s,
-      sys_bus_o    => open
+      clk_i         => clk_s,
+      rst_n_syn_i   => rst_n_s,
+      core_a_bus_i  => core_a_bus_s,
+      core_b_bus_i  => core_b_bus_s,
+      fatal_fault_i => '0',
+      nmi_fault_o   => nmi_fault_s,
+      safe_state_o  => actuator_safe_s,
+      bus_valid_o   => bus_valid_s,
+      sys_bus_o     => open
 
     ); -- ========================================================================
 

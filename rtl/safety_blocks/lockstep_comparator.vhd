@@ -36,6 +36,12 @@ entity lockstep_comparator is
     core_b_bus_i : in    t_rv_bus;
 
     -- --------------------------------------------------------------------
+    -- A fault elsewhere that the cores cannot see, because they both read the
+    -- same bad value. It trips the same latch as a mismatch.
+    -- --------------------------------------------------------------------
+    fatal_fault_i : in    std_logic;
+
+    -- --------------------------------------------------------------------
     -- Safety Supervisor & Actuator Intercept
     -- --------------------------------------------------------------------
     nmi_fault_o  : out   std_logic; -- Latching Non-Maskable Interrupt
@@ -60,6 +66,7 @@ architecture rtl of lockstep_comparator is
   -- Internal monitoring signals
   signal w_mismatch_detected : std_logic;
   signal r_fault_latched     : std_logic;
+  signal w_trip              : std_logic;
 
 begin
 
@@ -90,19 +97,21 @@ begin
 
   end process p_bus_compare;
 
+  w_trip <= w_mismatch_detected or fatal_fault_i;
+
   -- ========================================================================
   -- 2. HARDENED FINITE STATE MACHINE (Rule 3.1, 3.2, 3.3)
   -- ========================================================================
   -- Decoupled combinational process for auditability.
   -- ========================================================================
-  p_fsm_next_state : process (w_mismatch_detected, r_current_state) is
+  p_fsm_next_state : process (w_trip, r_current_state) is
   begin
 
     -- Strict default fallback assignment
     w_next_state <= ST_SYSTEM_OK;
 
     if (r_current_state = ST_SYSTEM_OK) then
-      if (w_mismatch_detected = '1') then
+      if (w_trip = '1') then
         w_next_state <= ST_FAULT_TRIPPED;
       else
         w_next_state <= ST_SYSTEM_OK;
@@ -132,7 +141,7 @@ begin
         r_current_state <= w_next_state;
 
         -- Latch the fault signal permanently on mismatch
-        if (w_mismatch_detected = '1') then
+        if (w_trip = '1') then
           r_fault_latched <= '1';
         end if;
       end if;
@@ -145,7 +154,7 @@ begin
   -- ========================================================================
   -- Unconditionally drives safety lines and isolates faulty buses.
   -- ========================================================================
-  nmi_fault_o  <= r_fault_latched or w_mismatch_detected;
+  nmi_fault_o  <= r_fault_latched or w_trip;
   safe_state_o <= '1' when (r_current_state = ST_FAULT_TRIPPED) else
                   '0';
   bus_valid_o  <= '1' when (r_current_state = ST_SYSTEM_OK) else
@@ -182,7 +191,7 @@ begin
         v_mismatch_count := 0;
         v_mismatch_seen  := '0';
       else
-        if (w_mismatch_detected = '1') then
+        if (w_trip = '1') then
           v_mismatch_seen  := '1';
           v_mismatch_count := 0;
           -- Property: NMI asserted immediately on mismatch
