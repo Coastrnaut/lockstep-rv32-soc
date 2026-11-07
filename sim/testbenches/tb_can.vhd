@@ -32,8 +32,9 @@ architecture tb of tb_can is
   p_clk : process is
   begin
 
-    wait for 5 ns;
-    clk_i <= not clk_i;
+    -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
+    clk_i <= '0', '1' after 5 ns;
+    wait for 10 ns;
 
   end process p_clk;
 

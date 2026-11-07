@@ -430,6 +430,9 @@ if simulator_name == "vivado":
     vu.set_sim_option("vivado.xsim_flags", ["-v", "1"])
 else:
     vu.set_sim_option("ghdl.elab_flags", ["--std=08"])
+    # Hang guard: a bench whose clock never starts otherwise simulates forever.
+    # The longest bench needs about 6 ms of simulated time.
+    vu.set_sim_option("ghdl.sim_flags", ["--stop-time=50ms"])
 
 # ---------------------------------------------------------------------------
 # Ensure reports/ directory exists (OSVVM writes OsvvmRun.yml here)

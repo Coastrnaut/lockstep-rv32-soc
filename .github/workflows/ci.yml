@@ -6,18 +6,23 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  # Stream output live, so a timed-out job shows which test was running.
+  PYTHONUNBUFFERED: "1"
+
 jobs:
   vhdl-regression:
-    runs-on: ubuntu-latest
+    # Pinned: this image decides the GHDL version that apt installs.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -28,7 +33,7 @@ jobs:
 
       - name: Install VUnit & VSG
         run: |
-          pip install vunit_hdl vsg
+          pip install vunit_hdl==4.7.1 vsg==3.35.0
 
       - name: Semantic safety lint (ghdl -Wall)
         run: |
@@ -39,14 +44,16 @@ jobs:
           cd sim && python run.py --vsg
 
       - name: Compile and run full regression
+        # Fails the step, not the job, so the logs below still get uploaded.
+        timeout-minutes: 5
         run: |
           cd sim && mkdir -p reports && python run.py
 
       - name: Upload simulation logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sim-logs
           path: |
-            vunit_out/test_output/**/*.txt
-            vunit_out/test_output/**/*.html
+            sim/vunit_out/test_output/**/*.txt
+            sim/vunit_out/test_output/**/*.html

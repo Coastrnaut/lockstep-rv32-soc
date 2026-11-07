@@ -33,15 +33,9 @@ architecture rtl of tb_watchdog_timeout is
   p_clk : process is
   begin
 
-    wd_clk <= '0';
-    wait for wd_clk_period / 2;
-
-    loop
-
-      wd_clk <= not wd_clk;
-      wait for wd_clk_period / 2;
-
-    end loop;
+    -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
+    wd_clk <= '0', '1' after wd_clk_period / 2;
+    wait for wd_clk_period;
 
   end process p_clk;
 

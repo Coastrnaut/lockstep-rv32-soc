@@ -32,15 +32,9 @@ architecture rtl of tb_uart is
   p_clk : process is
   begin
 
-    tb_clk <= '0';
-    wait for clk_period / 2;
-
-    loop
-
-      tb_clk <= not tb_clk;
-      wait for clk_period / 2;
-
-    end loop;
+    -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
+    tb_clk <= '0', '1' after clk_period / 2;
+    wait for clk_period;
 
   end process p_clk;
 
@@ -60,6 +54,14 @@ architecture rtl of tb_uart is
     test_runner_setup(runner, runner_cfg);
 
     tb_rst_n <= '0';
+    bus_ok   <= '1';
+    bus_i    <=
+    (
+      addr  => (others => '0'),
+      data  => (others => '0'),
+      we    => '0',
+      valid => '0'
+    );
 
     for dummy in 1 to 5 loop
 

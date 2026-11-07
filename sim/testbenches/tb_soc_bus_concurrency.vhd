@@ -36,15 +36,9 @@ architecture tb of tb_soc_bus_concurrency is
   p_clk : process is
   begin
 
-    clk <= '0';
-    wait for clk_period / 2;
-
-    loop
-
-      clk <= not clk;
-      wait for clk_period / 2;
-
-    end loop;
+    -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
+    clk <= '0', '1' after clk_period / 2;
+    wait for clk_period;
 
   end process p_clk;
 
