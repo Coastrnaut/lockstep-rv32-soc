@@ -212,12 +212,14 @@ else:
 lockstep_lib.add_source_files(root / "rtl" / "top_automotive_soc.vhd")
 
 # ---------------------------------------------------------------------------
-# Semantic Safety Lint — ghdl -a --std=08 -Wall
-# Catches: missing sensitivity lists, illegal casts, array overflows,
-# non-synthesizable constructs. ASIL-D mandatory gate.
+# Semantic Safety Lint — ghdl -a --std=08 -Wall, then ghdl --synth
+# Analysis catches type errors and incomplete sensitivity lists. Synthesis
+# catches signals driven from two processes, inferred latches and
+# non-synthesizable constructs, all of which analysis accepts. ASIL-D
+# mandatory gate.
 # ---------------------------------------------------------------------------
 def _run_ghdl_lint(ghdl_exe):
-    """Lint all RTL sources with ghdl -a --std=08 -Wall.
+    """Lint all RTL sources: ghdl -a --std=08 -Wall, then ghdl --synth.
 
     Compiles in dependency order: config -> safety_blocks -> peripherals
     -> neorv32 -> top.  Uses a temp working directory so we don't pollute
@@ -252,7 +254,7 @@ def _run_ghdl_lint(ghdl_exe):
         return True
 
     print(f"\n{'='*60}")
-    print(f"Semantic Safety Lint: ghdl -a --std=08 -Wall")
+    print(f"Semantic Safety Lint: ghdl -a --std=08 -Wall, then ghdl --synth")
     print(f"Files: {total}")
     print(f"{'='*60}")
 
@@ -260,10 +262,13 @@ def _run_ghdl_lint(ghdl_exe):
     with tempfile.TemporaryDirectory(prefix="lockstep_lint_") as tmp:
         # Convert root to MSYS-style path for GHDL in bash
         root_str = str(root).replace("\\", "/")
+        # Analysis of our own RTL: an incomplete sensitivity list is only a
+        # warning by default. NEORV32 in phase 4 is third-party.
+        analyse = [ghdl_exe, "-a", "--std=08", "-Wall", "-Werror=sensitivity",
+                   "--work=lockstep"]
         # Phase 1: config  -> library lockstep
         if config_files:
-            cmd = [ghdl_exe, "-a", "--std=08", "-Wall",
-                   "--work=lockstep"] + [str(f).replace("\\", "/") for f in config_files]
+            cmd = analyse + [str(f).replace("\\", "/") for f in config_files]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
                                cwd=tmp)
             if r.returncode != 0:
@@ -273,8 +278,7 @@ def _run_ghdl_lint(ghdl_exe):
 
         # Phase 2: safety_blocks  -> library lockstep
         if safety_files:
-            cmd = [ghdl_exe, "-a", "--std=08", "-Wall",
-                   "--work=lockstep"] + [str(f).replace("\\", "/") for f in safety_files]
+            cmd = analyse + [str(f).replace("\\", "/") for f in safety_files]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
                                cwd=tmp)
             if r.returncode != 0:
@@ -284,8 +288,7 @@ def _run_ghdl_lint(ghdl_exe):
 
         # Phase 3: peripherals  -> library lockstep
         if periph_files:
-            cmd = [ghdl_exe, "-a", "--std=08", "-Wall",
-                   "--work=lockstep"] + [str(f).replace("\\", "/") for f in periph_files]
+            cmd = analyse + [str(f).replace("\\", "/") for f in periph_files]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
                                cwd=tmp)
             if r.returncode != 0:
@@ -306,13 +309,26 @@ def _run_ghdl_lint(ghdl_exe):
 
         # Phase 5: top_automotive_soc  -> library lockstep
         if top_soc.exists():
-            cmd = [ghdl_exe, "-a", "--std=08", "-Wall",
-                   "--work=lockstep", str(top_soc).replace("\\", "/")]
+            cmd = analyse + [str(top_soc).replace("\\", "/")]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
                                cwd=tmp)
             if r.returncode != 0:
                 print(r.stdout or r.stderr)
                 print(f"\nLINT FAILED at top_soc phase (exit {r.returncode}).")
+                return False
+
+        # Phase 6: synthesis of each block, then the whole SoC. Each file holds
+        # the entity it is named after.
+        units = [f.stem for f in safety_files + periph_files]
+        if top_soc.exists():
+            units.append(top_soc.stem)
+        for unit in units:
+            cmd = [ghdl_exe, "--synth", "--std=08", "--work=lockstep", unit]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                               cwd=tmp)
+            if r.returncode != 0:
+                print(r.stderr)
+                print(f"\nLINT FAILED synthesising {unit} (exit {r.returncode}).")
                 return False
 
     print("\nLint passed — no semantic safety issues found.\n")
