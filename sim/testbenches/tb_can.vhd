@@ -47,7 +47,8 @@ architecture tb of tb_can is
     addr  => (others => '0'),
     data  => (others => '0'),
     we    => '0',
-    valid => '0'
+    valid => '0',
+    sel   => "1111"
   );
 
   -- The frame most tests send, with positions in its wire bits counted from SOF
@@ -206,6 +207,7 @@ begin
     variable v_falls : natural;
     variable v_addr  : std_logic_vector(31 downto 0);
     variable v_rdata : std_logic_vector(31 downto 0);
+    variable v_sel   : std_logic_vector(3 downto 0);
 
     impure function tec return natural is
     begin
@@ -241,7 +243,8 @@ begin
 
     procedure write_bus (
       constant addr : in std_logic_vector(31 downto 0);
-      constant data : in std_logic_vector(31 downto 0)
+      constant data : in std_logic_vector(31 downto 0);
+      constant sel  : in std_logic_vector(3 downto 0) := "1111"
     ) is
     begin
 
@@ -250,7 +253,8 @@ begin
         addr  => addr,
         data  => data,
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => sel
       );
       wait until rising_edge(clk_i);
       bus_i <= c_bus_idle;
@@ -313,7 +317,8 @@ begin
         addr  => addr,
         data  => (others => '0'),
         we    => '0',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       wait until rising_edge(clk_i);
       bus_i   <= c_bus_idle;
@@ -775,6 +780,23 @@ begin
         send_and_check(c_id, c_dlc, c_payload);
         write_bus(c_can_tx_request_addr, x"00000001");
         check_frame(c_id, c_dlc, c_payload);
+      elsif run("partial_stores_do_not_reach_the_registers") then
+        wait for c_bit_time * 12;
+
+        -- Every combination of byte enables except a full word
+        for pattern in 0 to 14 loop
+
+          v_sel := std_logic_vector(to_unsigned(pattern, 4));
+          write_bus(c_can_id_addr, x"00000123", v_sel);
+          write_bus(c_can_tx_request_addr, x"00000001", v_sel);
+          wait until rising_edge(clk_i);
+          check(can_busy_o = '0', "partial store does not start a frame");
+          read_bus(c_can_id_addr);
+          check_equal(v_rdata, std_logic_vector'(x"00000000"), "partial store leaves ID alone");
+
+        end loop;
+
+        send_and_check(c_id, c_dlc, c_payload);
       elsif run("gate_drop_clears_the_mailbox") then
         write_bus(c_can_id_addr, x"00000123");
         bus_ok_i <= '0';

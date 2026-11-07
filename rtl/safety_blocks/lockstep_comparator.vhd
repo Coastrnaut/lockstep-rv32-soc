@@ -71,6 +71,7 @@ begin
   p_bus_compare : process (
                            core_a_bus_i.addr,  core_b_bus_i.addr,
                            core_a_bus_i.data,  core_b_bus_i.data,
+                           core_a_bus_i.sel,   core_b_bus_i.sel,
                            core_a_bus_i.we,    core_b_bus_i.we,
                            core_a_bus_i.valid, core_b_bus_i.valid
                           ) is
@@ -81,6 +82,7 @@ begin
 
     if ((core_a_bus_i.addr /= core_b_bus_i.addr)  or
         (core_a_bus_i.data /= core_b_bus_i.data)  or
+        (core_a_bus_i.sel /= core_b_bus_i.sel)    or
         (core_a_bus_i.we /= core_b_bus_i.we)    or
         (core_a_bus_i.valid /= core_b_bus_i.valid)) then
       w_mismatch_detected <= '1';
@@ -154,6 +156,8 @@ begin
   sys_bus_o.addr  <= core_a_bus_i.addr when (r_current_state = ST_SYSTEM_OK) else
                      (others => '0');
   sys_bus_o.data  <= core_a_bus_i.data when (r_current_state = ST_SYSTEM_OK) else
+                     (others => '0');
+  sys_bus_o.sel   <= core_a_bus_i.sel when (r_current_state = ST_SYSTEM_OK) else
                      (others => '0');
   sys_bus_o.we    <= core_a_bus_i.we when (r_current_state = ST_SYSTEM_OK) else
                      '0';

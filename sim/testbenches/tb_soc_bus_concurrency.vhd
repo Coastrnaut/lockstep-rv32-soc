@@ -73,14 +73,16 @@ architecture tb of tb_soc_bus_concurrency is
         addr  => std_logic_vector(to_unsigned(dummy, 32)),
         data  => std_logic_vector(to_unsigned(dummy * 17, 32)),
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       core_b_bus <=
       (
         addr  => std_logic_vector(to_unsigned(dummy, 32)),
         data  => std_logic_vector(to_unsigned(dummy * 17, 32)),
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       wait until rising_edge(clk);
       check(safe_state = '0', "back-to-back #" & integer'image(dummy) & ": ok");
@@ -102,14 +104,16 @@ architecture tb of tb_soc_bus_concurrency is
         addr  => x"00001000",
         data  => std_logic_vector(to_unsigned(dummy, 32)),
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       core_b_bus <=
       (
         addr  => x"00001000",
         data  => std_logic_vector(to_unsigned(dummy, 32)),
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       wait until rising_edge(clk);
       check(safe_state = '0', "alt R/W #" & integer'image(dummy) & ": ok");
@@ -125,8 +129,8 @@ architecture tb of tb_soc_bus_concurrency is
 
     for dummy in 0 to 19 loop
 
-      core_a_bus <= (addr => x"00002000", data => x"CAFECAFE", we => '1', valid => '1');
-      core_b_bus <= (addr => x"00002000", data => x"CAFECAFE", we => '1', valid => '1');
+      core_a_bus <= (addr => x"00002000", data => x"CAFECAFE", we => '1', valid => '1', sel => "1111");
+      core_b_bus <= (addr => x"00002000", data => x"CAFECAFE", we => '1', valid => '1', sel => "1111");
       wait until rising_edge(clk);
       check(safe_state = '0', "stall #" & integer'image(dummy) & ": ok");
 
@@ -146,14 +150,16 @@ architecture tb of tb_soc_bus_concurrency is
         addr  => std_logic_vector(to_unsigned(4096 + dummy * 4, 32)),
         data  => std_logic_vector(to_unsigned(dummy, 32)),
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       core_b_bus <=
       (
         addr  => std_logic_vector(to_unsigned(4096 + dummy * 4, 32)),
         data  => std_logic_vector(to_unsigned(dummy, 32)),
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       wait until rising_edge(clk);
       check(safe_state = '0', "rapid addr #" & integer'image(dummy) & ": ok");
@@ -174,14 +180,16 @@ architecture tb of tb_soc_bus_concurrency is
         addr  => std_logic_vector(to_unsigned(dummy * 4, 32)),
         data  => std_logic_vector(to_unsigned(dummy, 32)),
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       core_b_bus <=
       (
         addr  => std_logic_vector(to_unsigned(dummy * 4, 32)),
         data  => std_logic_vector(to_unsigned(dummy, 32)),
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       wait until rising_edge(clk);
       check(safe_state = '0', "burst #" & integer'image(dummy) & ": ok");

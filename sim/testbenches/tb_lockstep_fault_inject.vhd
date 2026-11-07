@@ -51,6 +51,16 @@ architecture rtl of tb_lockstep_fault_inject is
       sys_bus_o    => sys_bus
 
     );p_stim : process is
+
+    constant c_clean_bus : t_rv_bus :=
+    (
+      addr  => x"00001000",
+      data  => x"00000001",
+      we    => '1',
+      valid => '1',
+      sel   => "1111"
+    );
+
   begin
 
     test_runner_setup(runner, runner_cfg);
@@ -76,14 +86,16 @@ architecture rtl of tb_lockstep_fault_inject is
       addr  => x"00001000",
       data  => x"00000001",
       we    => '1',
-      valid => '1'
+      valid => '1',
+      sel   => "1111"
     );
     core_b_bus <=
     (
       addr  => x"00002000",
       data  => x"00000001",
       we    => '1',
-      valid => '1'
+      valid => '1',
+      sel   => "1111"
     );
 
     for dummy in 1 to 3 loop
@@ -101,14 +113,16 @@ architecture rtl of tb_lockstep_fault_inject is
       addr  => x"00003000",
       data  => x"00000002",
       we    => '1',
-      valid => '1'
+      valid => '1',
+      sel   => "1111"
     );
     core_b_bus <=
     (
       addr  => x"00003000",
       data  => x"00000002",
       we    => '0',
-      valid => '1'
+      valid => '1',
+      sel   => "1111"
     );
 
     for dummy in 1 to 3 loop
@@ -125,14 +139,16 @@ architecture rtl of tb_lockstep_fault_inject is
       addr  => x"00004000",
       data  => x"00000000",
       we    => '1',
-      valid => '1'
+      valid => '1',
+      sel   => "1111"
     );
     core_b_bus <=
     (
       addr  => x"00004000",
       data  => x"00000001",
       we    => '1',
-      valid => '1'
+      valid => '1',
+      sel   => "1111"
     );
 
     for dummy in 1 to 3 loop
@@ -142,6 +158,66 @@ architecture rtl of tb_lockstep_fault_inject is
     end loop;
 
     check(nmi_fault = '1', "NMI on single-bit data flip (latched)");
+
+    -- --- Every bus field trips the comparator on its own, from a clean reset ---
+    for field in 0 to 4 loop
+
+      tb_rst_n   <= '0';
+      core_a_bus <= c_clean_bus;
+      core_b_bus <= c_clean_bus;
+
+      for dummy in 1 to 3 loop
+
+        wait until rising_edge(tb_clk);
+
+      end loop;
+
+      tb_rst_n <= '1';
+
+      for dummy in 1 to 3 loop
+
+        wait until rising_edge(tb_clk);
+
+      end loop;
+
+      check(nmi_fault = '0', "no fault while the cores agree");
+      check(bus_valid = '1', "bus open while the cores agree");
+
+      case field is
+
+        when 0 =>
+
+          core_b_bus.addr(31) <= '1';
+
+        when 1 =>
+
+          core_b_bus.data(31) <= '1';
+
+        when 2 =>
+
+          core_b_bus.sel(3) <= '0';
+
+        when 3 =>
+
+          core_b_bus.we <= '0';
+
+        when others =>
+
+          core_b_bus.valid <= '0';
+
+      end case;
+
+      for dummy in 1 to 3 loop
+
+        wait until rising_edge(tb_clk);
+
+      end loop;
+
+      check(nmi_fault = '1', "NMI from one field");
+      check(bus_valid = '0', "bus isolated by one field");
+      check_equal(sys_bus.sel, std_logic_vector'("0000"), "isolated bus carries no byte enables");
+
+    end loop;
 
     test_runner_cleanup(runner);
 

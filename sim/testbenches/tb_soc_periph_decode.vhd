@@ -142,7 +142,8 @@ begin
         addr  => addr,
         data  => data,
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       wait until rising_edge(clk);
       bus_i.valid <= '0';
@@ -164,7 +165,8 @@ begin
         addr  => addr,
         data  => (others => '0'),
         we    => '0',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       wait until rising_edge(clk);
       bus_i.valid <= '0';
@@ -223,7 +225,8 @@ begin
         addr  => (others => '0'),
         data  => (others => '0'),
         we    => '0',
-        valid => '0'
+        valid => '0',
+        sel   => "1111"
       );
       wait for c_clk_period * 3;
       rst_n  <= '1';

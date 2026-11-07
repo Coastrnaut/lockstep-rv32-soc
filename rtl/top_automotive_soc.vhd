@@ -169,11 +169,13 @@ begin
   -- ========================================================================
   w_core_a_bus.addr  <= w_core_a_xbus_addr;
   w_core_a_bus.data  <= w_core_a_xbus_data;
+  w_core_a_bus.sel   <= w_core_a_xbus_sel;
   w_core_a_bus.we    <= w_core_a_xbus_we;
   w_core_a_bus.valid <= w_core_a_xbus_stb;
 
   w_core_b_bus.addr  <= w_core_b_xbus_addr;
   w_core_b_bus.data  <= w_core_b_xbus_data;
+  w_core_b_bus.sel   <= w_core_b_xbus_sel;
   w_core_b_bus.we    <= w_core_b_xbus_we;
   w_core_b_bus.valid <= w_core_b_xbus_stb;
 

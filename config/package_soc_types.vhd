@@ -30,6 +30,7 @@ package package_soc_types is
   type t_rv_bus is record
     addr  : std_logic_vector(C_ADDR_WIDTH - 1 downto 0);
     data  : std_logic_vector(C_DATA_WIDTH - 1 downto 0);
+    sel   : std_logic_vector(3 downto 0); -- Byte enables: 1111 is a word store
     we    : std_logic;
     valid : std_logic;
   end record t_rv_bus;

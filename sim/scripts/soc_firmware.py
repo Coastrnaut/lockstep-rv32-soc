@@ -23,6 +23,14 @@ PROGRAM = [
     ("sw", "t0", 0x304, "s0"),
     ("lui", "t0", 0xA55A0),
     ("sw", "t0", 0x308, "s0"),
+
+    # A byte store to TX_REQUEST must not start the frame: 'X' if it did
+    ("sb", "t0", 0x314, "s0"),
+    ("lw", "t1", 0x30C, "s0"),
+    ("andi", "t1", "t1", 1),
+    ("addi", "t2", "zero", ord("X")),
+    ("bne", "t1", "zero", "report"),
+
     ("sw", "t0", 0x314, "s0"),         # any value requests the frame
 
     # Wait for CAN STATUS.busy to clear
@@ -92,6 +100,8 @@ def encode(ins, pc, labels):
         return i_type(args[2], reg[args[1]], 0b101, reg[args[0]], 0x13)
     if op == "lw":
         return i_type(args[1], reg[args[2]], 0b010, reg[args[0]], 0x03)
+    if op == "sb":
+        return s_type(args[1], reg[args[0]], reg[args[2]], 0b000, 0x23)
     if op == "sw":
         return s_type(args[1], reg[args[0]], reg[args[2]], 0b010, 0x23)
     if op == "beq":

@@ -179,8 +179,8 @@ reads zero. These status registers have the following bits:
 | 0x40000404 | UART STATUS | 1 = parity error, 0 = busy                              |
 | 0x40000408 | UART PARITY | 0 = the byte held for transmission has good parity      |
 
-The bus carries no byte enables, so a byte or halfword store to one of these
-addresses counts as a write. Use word stores for the CAN mailbox.
+The CAN registers take word stores only, so a byte or halfword store to one of
+them does nothing. TX_DATA takes any store that includes byte 0.
 
 ---
 

@@ -134,7 +134,8 @@ architecture rtl of tb_uart is
         addr  => addr,
         data  => (others => '0'),
         we    => '0',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       wait until rising_edge(tb_clk);
       bus_i.valid <= '0';
@@ -154,7 +155,8 @@ architecture rtl of tb_uart is
       addr  => (others => '0'),
       data  => (others => '0'),
       we    => '0',
-      valid => '0'
+      valid => '0',
+      sel   => "1111"
     );
 
     for dummy in 1 to 5 loop
@@ -181,7 +183,8 @@ architecture rtl of tb_uart is
       addr  => c_uart_tx_data_addr,
       data  => x"00000041",
       we    => '1',
-      valid => '1'
+      valid => '1',
+      sel   => "1111"
     );
     wait until rising_edge(tb_clk);                                                      -- p_rx_regs accepts write
     bus_i.valid <= '0';
@@ -232,7 +235,8 @@ architecture rtl of tb_uart is
         addr  => c_can_tx_request_addr,
         data  => x"00000042",
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
 
       if (addr_bit < 32) then
@@ -273,7 +277,8 @@ architecture rtl of tb_uart is
         addr  => c_uart_tx_data_addr,
         data  => x"000000" & v_data,
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       wait until rising_edge(tb_clk);
       bus_i.valid <= '0';
@@ -285,6 +290,35 @@ architecture rtl of tb_uart is
       wait for c_bit_time;
 
     end loop;
+
+    -- --- Test 7: A store has to include byte 0, where the data is ---
+    bus_i       <=
+    (
+      addr  => c_uart_tx_data_addr,
+      data  => x"00000042",
+      we    => '1',
+      valid => '1',
+      sel   => "1110"
+    );
+    wait until rising_edge(tb_clk);
+    bus_i.valid <= '0';
+    wait until rising_edge(tb_clk);
+    wait until rising_edge(tb_clk);
+    wait until rising_edge(tb_clk);
+    check(uart_busy = '0', "store without byte 0 ignored");
+
+    bus_i       <=
+    (
+      addr  => c_uart_tx_data_addr,
+      data  => x"00000042",
+      we    => '1',
+      valid => '1',
+      sel   => "0001"
+    );
+    wait until rising_edge(tb_clk);
+    bus_i.valid <= '0';
+    wait until rx_count = 8 for c_bit_time * 13;
+    check_equal(rx_byte, std_logic_vector'(x"42"), "byte store sent");
 
     test_runner_cleanup(runner);
 

@@ -57,7 +57,7 @@ architecture rtl of tb_uart_tx_error is
     test_runner_setup(runner, runner_cfg);
 
     rst_n  <= '0';
-    bus_i  <= (addr => x"00000000", data => x"00000000", we => '0', valid => '0');
+    bus_i  <= (addr => x"00000000", data => x"00000000", we => '0', valid => '0', sel => "1111");
     bus_ok <= '1';
     wait for 100 ns;
     rst_n  <= '1';
@@ -69,7 +69,7 @@ architecture rtl of tb_uart_tx_error is
 
     -- --- Test 2: TX triggers busy state ---
     -- Rising edge 1: r_tx_valid set to '1' in p_rx_regs
-    bus_i       <= (addr => c_uart_tx_data_addr, data => x"00000041", we => '1', valid => '1');
+    bus_i       <= (addr => c_uart_tx_data_addr, data => x"00000041", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     -- Rising edge 2: FSM sees r_tx_valid='1', transitions to UART_START
@@ -85,7 +85,7 @@ architecture rtl of tb_uart_tx_error is
 
     -- --- Test 3: TX while bus_ok dropped (safety gate) ---
     bus_ok      <= '0';
-    bus_i       <= (addr => c_uart_tx_data_addr, data => x"00000042", we => '1', valid => '1');
+    bus_i       <= (addr => c_uart_tx_data_addr, data => x"00000042", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     wait for clk_period * 3;
@@ -104,7 +104,7 @@ architecture rtl of tb_uart_tx_error is
     -- --- Test 5: Back-to-back TX with proper wait ---
     for dummy in 0 to 1 loop
 
-      bus_i       <= (addr => c_uart_tx_data_addr, data => std_logic_vector(to_unsigned(dummy + 65, 32)), we => '1', valid => '1');
+      bus_i       <= (addr => c_uart_tx_data_addr, data => std_logic_vector(to_unsigned(dummy + 65, 32)), we => '1', valid => '1', sel => "1111");
       wait until rising_edge(clk);
       bus_i.valid <= '0';
       wait for clk_period * 5000;

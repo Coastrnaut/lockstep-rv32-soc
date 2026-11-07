@@ -154,14 +154,16 @@ begin
             addr  => v_rand_addr,
             data  => v_rand_data,
             we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1'
+            valid => '1',
+            sel   => "1111"
           );
           core_b_bus_s <=
           (
             addr  => v_rand_addr,
             data  => v_rand_data,
             we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1'
+            valid => '1',
+            sel   => "1111"
           );
 
         when 1 =>                                                                                             -- ADDRESS MISMATCH: Corrupt Core B's address line
@@ -171,7 +173,8 @@ begin
             addr  => v_rand_addr,
             data  => v_rand_data,
             we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1'
+            valid => '1',
+            sel   => "1111"
           );
           -- Bitwise flip the lowest address byte on Core B to create divergence
           core_b_bus_s <=
@@ -179,7 +182,8 @@ begin
             addr  => v_rand_addr xor x"00000001",
             data  => v_rand_data,
             we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1'
+            valid => '1',
+            sel   => "1111"
           );
 
         when 2 =>                                                                                             -- DATA MISMATCH: Corrupt Core B's data payload
@@ -189,7 +193,8 @@ begin
             addr  => v_rand_addr,
             data  => v_rand_data,
             we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1'
+            valid => '1',
+            sel   => "1111"
           );
           -- Bitwise flip data payload on Core B
           core_b_bus_s <=
@@ -197,7 +202,8 @@ begin
             addr  => v_rand_addr,
             data  => v_rand_data xor x"00000001",
             we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1'
+            valid => '1',
+            sel   => "1111"
           );
 
         when others =>

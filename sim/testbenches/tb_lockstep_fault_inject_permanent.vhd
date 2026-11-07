@@ -59,8 +59,8 @@ architecture tb of tb_lockstep_fault_inject_permanent is
 
     -- TEST 1: Stuck-at-0 on data bit 0 (core B only)
     report "TEST: Stuck-at-0 data(0)";
-    core_a_bus       <= (addr => x"00001000", data => x"00000001", we => '1', valid => '1');
-    core_b_bus       <= (addr => x"00001000", data => x"00000000", we => '1', valid => '1');
+    core_a_bus       <= (addr => x"00001000", data => x"00000001", we => '1', valid => '1', sel => "1111");
+    core_b_bus       <= (addr => x"00001000", data => x"00000000", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     wait until rising_edge(clk);
     check(safe_state = '1', "stuck-at-0 bit0: fault tripped");
@@ -72,8 +72,8 @@ architecture tb of tb_lockstep_fault_inject_permanent is
     -- TEST 2: Stuck-at-1 on data bit 31 (core B only)
     -- Fault is latched, stays tripped
     report "TEST: Stuck-at-1 data(31)";
-    core_a_bus       <= (addr => x"00002000", data => x"00000000", we => '1', valid => '1');
-    core_b_bus       <= (addr => x"00002000", data => x"80000000", we => '1', valid => '1');
+    core_a_bus       <= (addr => x"00002000", data => x"00000000", we => '1', valid => '1', sel => "1111");
+    core_b_bus       <= (addr => x"00002000", data => x"80000000", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     wait until rising_edge(clk);
     check(safe_state = '1', "stuck-at-1 bit31: fault latched");
@@ -84,8 +84,8 @@ architecture tb of tb_lockstep_fault_inject_permanent is
 
     -- TEST 3: Stuck-at-0 on address bit 0
     report "TEST: Stuck-at-0 addr(0)";
-    core_a_bus       <= (addr => x"00003001", data => x"AAAAAAAA", we => '1', valid => '1');
-    core_b_bus       <= (addr => x"00003000", data => x"AAAAAAAA", we => '1', valid => '1');
+    core_a_bus       <= (addr => x"00003001", data => x"AAAAAAAA", we => '1', valid => '1', sel => "1111");
+    core_b_bus       <= (addr => x"00003000", data => x"AAAAAAAA", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     wait until rising_edge(clk);
     check(safe_state = '1', "stuck-at-0 addr(0): fault latched");
@@ -96,8 +96,8 @@ architecture tb of tb_lockstep_fault_inject_permanent is
 
     -- TEST 4: Stuck-at-0 on write enable
     report "TEST: Stuck-at-0 we";
-    core_a_bus       <= (addr => x"00004000", data => x"11111111", we => '1', valid => '1');
-    core_b_bus       <= (addr => x"00004000", data => x"11111111", we => '0', valid => '1');
+    core_a_bus       <= (addr => x"00004000", data => x"11111111", we => '1', valid => '1', sel => "1111");
+    core_b_bus       <= (addr => x"00004000", data => x"11111111", we => '0', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     wait until rising_edge(clk);
     check(safe_state = '1', "stuck-at-0 we: fault latched");
@@ -116,14 +116,16 @@ architecture tb of tb_lockstep_fault_inject_permanent is
         addr  => x"00005000",
         data  => std_logic_vector(to_unsigned(2 ** dummy, 32)),
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       core_b_bus       <=
       (
         addr  => x"00005000",
         data  => x"00000000",
         we    => '1',
-        valid => '1'
+        valid => '1',
+        sel   => "1111"
       );
       wait until rising_edge(clk);
       wait until rising_edge(clk);
@@ -137,8 +139,8 @@ architecture tb of tb_lockstep_fault_inject_permanent is
 
     -- TEST 6: Verify recovery after reset
     report "TEST: Recovery after reset";
-    core_a_bus       <= (addr => x"00006000", data => x"00000042", we => '1', valid => '1');
-    core_b_bus       <= (addr => x"00006000", data => x"00000042", we => '1', valid => '1');
+    core_a_bus       <= (addr => x"00006000", data => x"00000042", we => '1', valid => '1', sel => "1111");
+    core_b_bus       <= (addr => x"00006000", data => x"00000042", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     rst_n            <= '0';
     wait for 20 ns;

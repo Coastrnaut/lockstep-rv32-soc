@@ -224,11 +224,12 @@ begin
   -- ========================================================================
   -- 1. MAILBOX REGISTERS: Accept data from internal bus when safety gate is clear
   -- ========================================================================
+  -- Word stores only: a byte or halfword store holds only part of a register.
   -- Software fills the mailbox and then writes TX_REQUEST. From then until the
   -- frame has been sent without error the mailbox is locked, so a failed frame
   -- can be sent again unchanged. Its contents stay for software to send again.
   -- ========================================================================
-  w_mailbox_write <= '1' when (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and
+  w_mailbox_write <= '1' when (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel = "1111" and
                                 r_mailbox_full = '0') else
                      '0';
 

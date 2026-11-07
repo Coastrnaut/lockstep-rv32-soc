@@ -102,8 +102,8 @@ architecture tb of tb_soc_reset_timing is
 
     -- TEST 5: Reset during active transaction
     report "TEST: Reset during transaction";
-    core_a_bus       <= (addr => x"00001000", data => x"DEADBEEF", we => '1', valid => '1');
-    core_b_bus       <= (addr => x"00001000", data => x"DEADBEEF", we => '1', valid => '1');
+    core_a_bus       <= (addr => x"00001000", data => x"DEADBEEF", we => '1', valid => '1', sel => "1111");
+    core_b_bus       <= (addr => x"00001000", data => x"DEADBEEF", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     rst_n            <= '0';
     wait for clk_period * 2;

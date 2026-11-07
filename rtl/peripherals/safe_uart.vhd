@@ -89,7 +89,8 @@ begin
         r_tx_valid  <= '0';
         r_tx_data   <= (others => '0');
         r_tx_parity <= '0';
-      elsif (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.addr = c_uart_tx_data_addr) then
+      elsif (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel(0) = '1' and
+             bus_i.addr = c_uart_tx_data_addr) then
         -- Write 8-bit payload to TX buffer
         r_tx_data <= bus_i.data(7 downto 0);
 
