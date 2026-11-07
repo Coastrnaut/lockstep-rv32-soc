@@ -60,8 +60,17 @@ architecture structural of top_automotive_soc is
   attribute requirement_id of structural : architecture is "TSR_LOCKSTEP_001";
 
   -- Interconnect buses structured as explicit records to prevent routing bugs
-  signal w_core_a_bus   : t_rv_bus;
-  signal w_core_b_bus   : t_rv_bus;
+  signal w_core_a_bus : t_rv_bus;
+  signal w_core_b_bus : t_rv_bus;
+
+  -- Core A's bus once it has been held back to meet core B's
+  signal w_core_a_bus_late : t_rv_bus;
+
+  -- What each core receives
+  signal w_core_a_in : t_core_inputs;
+  signal w_core_b_in : t_core_inputs;
+  signal r_bus_ack   : std_logic;
+
   signal w_safe_sys_bus : t_rv_bus;
 
   -- Internal safety status tracking wires
@@ -229,7 +238,42 @@ begin
   w_core_b_bus.valid <= w_core_b_xbus_stb;
 
   -- ========================================================================
-  -- 3. INSTANCE: MASTER CPU (CORE A)
+  -- 3. TEMPORAL DIVERSITY
+  -- ========================================================================
+  -- Core B runs two clocks behind core A, so that a glitch on both cannot do the
+  -- same thing to both. Core A's bus is held back to meet core B's at the
+  -- comparator, and only goes on to the system bus from there.
+  -- ========================================================================
+  w_core_a_in.rst_n <= w_rst_n;
+  w_core_a_in.rdata <= w_periph_rdata;
+  w_core_a_in.ack   <= r_bus_ack;
+  w_core_a_in.msi   <= w_can_irq;
+  w_core_a_in.mti   <= w_uart_irq;
+  w_core_a_in.mei   <= w_nmi;
+
+  i_temporal_diversity : entity lockstep.temporal_diversity
+    port map (
+      clk_i        => clk_i,
+      core_a_bus_i => w_core_a_bus,
+      core_a_bus_o => w_core_a_bus_late,
+      core_a_in_i  => w_core_a_in,
+      core_b_in_o  => w_core_b_in
+    );
+
+  -- A core strobes its bus and then waits, and read data is ready in the cycle
+  -- after the strobe reaches the system bus. A strobe the gate stops is never
+  -- answered, and the core times out as it does on any dead address.
+  p_bus_ack : process (clk_i) is
+  begin
+
+    if rising_edge(clk_i) then
+      r_bus_ack <= w_safe_sys_bus.valid;
+    end if;
+
+  end process p_bus_ack;
+
+  -- ========================================================================
+  -- 4. INSTANCE: MASTER CPU (CORE A)
   -- ========================================================================
   i_cpu_master : entity neorv32.neorv32_top
     generic map (
@@ -398,7 +442,7 @@ begin
     port map (
       -- Global
       clk_i      => clk_i,
-      rstn_i     => w_rst_n,
+      rstn_i     => w_core_a_in.rst_n,
       rstn_ocd_o => w_core_a_rstn_ocd,
       rstn_wdt_o => w_core_a_rstn_wdt,
 
@@ -428,8 +472,8 @@ begin
       xbus_sel_o => w_core_a_xbus_sel,
       xbus_stb_o => w_core_a_xbus_stb,
       xbus_cyc_o => w_core_a_xbus_cyc,
-      xbus_dat_i => w_periph_rdata,
-      xbus_ack_i => w_bus_valid,
+      xbus_dat_i => w_core_a_in.rdata,
+      xbus_ack_i => w_core_a_in.ack,
       xbus_err_i => '0',
 
       -- SLINK (disabled)
@@ -500,13 +544,13 @@ begin
       mtime_time_o => w_core_a_mtime_time,
 
       -- Interrupts
-      irq_msi_i => w_can_irq,
-      irq_mti_i => w_uart_irq,
-      irq_mei_i => w_nmi
+      irq_msi_i => w_core_a_in.msi,
+      irq_mti_i => w_core_a_in.mti,
+      irq_mei_i => w_core_a_in.mei
     );
 
   -- ========================================================================
-  -- 4. INSTANCE: MIRROR CHECKER CPU (CORE B)
+  -- 5. INSTANCE: MIRROR CHECKER CPU (CORE B)
   -- ========================================================================
   i_cpu_checker : entity neorv32.neorv32_top
     generic map (
@@ -675,7 +719,7 @@ begin
     port map (
       -- Global
       clk_i      => clk_i,
-      rstn_i     => w_rst_n,
+      rstn_i     => w_core_b_in.rst_n,
       rstn_ocd_o => w_core_b_rstn_ocd,
       rstn_wdt_o => w_core_b_rstn_wdt,
 
@@ -705,8 +749,8 @@ begin
       xbus_sel_o => w_core_b_xbus_sel,
       xbus_stb_o => w_core_b_xbus_stb,
       xbus_cyc_o => w_core_b_xbus_cyc,
-      xbus_dat_i => w_periph_rdata,
-      xbus_ack_i => w_bus_valid,
+      xbus_dat_i => w_core_b_in.rdata,
+      xbus_ack_i => w_core_b_in.ack,
       xbus_err_i => '0',
 
       -- SLINK (disabled)
@@ -777,13 +821,13 @@ begin
       mtime_time_o => w_core_b_mtime_time,
 
       -- Interrupts
-      irq_msi_i => w_can_irq,
-      irq_mti_i => w_uart_irq,
-      irq_mei_i => w_nmi
+      irq_msi_i => w_core_b_in.msi,
+      irq_mti_i => w_core_b_in.mti,
+      irq_mei_i => w_core_b_in.mei
     );
 
   -- ========================================================================
-  -- 5. INSTANCE: HARDENED DUAL-CORE LOCKSTEP COMPARATOR
+  -- 6. INSTANCE: HARDENED DUAL-CORE LOCKSTEP COMPARATOR
   -- ========================================================================
   i_lockstep_gate : entity lockstep.lockstep_comparator
     port map (
@@ -791,7 +835,7 @@ begin
       rst_n_syn_i => w_cold_rst_n,
 
       -- Core Feeders
-      core_a_bus_i => w_core_a_bus,
+      core_a_bus_i => w_core_a_bus_late,
       core_b_bus_i => w_core_b_bus,
 
       -- Both cores read the same data from the RAM, so they cannot see a bad word
@@ -807,7 +851,7 @@ begin
 
     ); -- ========================================================================
 
-  -- 6. AUTOMOTIVE BUS CONTROLLER INTEGRATION
+  -- 7. AUTOMOTIVE BUS CONTROLLER INTEGRATION
   -- ========================================================================
   i_automotive_can : entity lockstep.automotive_can_controller
     port map (
@@ -824,7 +868,7 @@ begin
 
     ); -- ========================================================================
 
-  -- 7. SAFE UART DIAGNOSTIC INTERFACE
+  -- 8. SAFE UART DIAGNOSTIC INTERFACE
   -- ========================================================================
   i_safe_uart : entity lockstep.safe_uart
     port map (
@@ -841,7 +885,7 @@ begin
     );
 
   -- ========================================================================
-  -- 8. WATCHDOG SUPERVISOR
+  -- 9. WATCHDOG SUPERVISOR
   -- ========================================================================
   i_watchdog_supervisor : entity lockstep.watchdog_supervisor
     port map (
@@ -856,7 +900,7 @@ begin
     );
 
   -- ========================================================================
-  -- 9. ECC PROTECTED DATA RAM
+  -- 10. ECC PROTECTED DATA RAM
   -- ========================================================================
   -- The cores have no memory of their own for data (dmem_en), so that every load
   -- and store goes through the comparator. This is the RAM those reach.
@@ -881,7 +925,7 @@ begin
   w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata or w_ram_rdata;
 
   -- ========================================================================
-  -- 10. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals
+  -- 11. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals
   --     to satisfy -Wall (unused signal) and prevent synthesis optimization.
   --     In production, these conditions trigger BSM actions or fault logging.
   -- ========================================================================

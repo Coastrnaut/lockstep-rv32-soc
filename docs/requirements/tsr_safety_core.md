@@ -27,6 +27,13 @@
 - **Verification Method:** Timeout Simulation + Fault Injection
 - **Implemented In:** `rtl/safety_blocks/hardware_watchdog.vhd`, `rtl/safety_blocks/watchdog_supervisor.vhd`
 
+## TSR_LOCKSTEP_043
+- **Description:** Core B must run 2 clocks behind Core A, so that a transient fault on both cores cannot change them both the same way, and nothing may leave the cores before it has been compared.
+- **ASIL Allocation:** ASIL-D
+- **Mitigation:** All of Core B's changing inputs and Core A's bus pass through 2-clock delay lines, and the comparator stops a bad bus cycle in the cycle it finds it.
+- **Verification Method:** Simultaneous Glitch Injection + Functional Coverage
+- **Implemented In:** `rtl/safety_blocks/temporal_diversity.vhd`, `rtl/safety_blocks/lockstep_comparator.vhd`, `rtl/top_automotive_soc.vhd`
+
 ## TSR_RESET_001
 - **Description:** A reset must take effect at once, with or without a clock, and be released on a clock edge, with both cores released on the same edge. Actuators must be held safe during a reset.
 - **ASIL Allocation:** ASIL-D

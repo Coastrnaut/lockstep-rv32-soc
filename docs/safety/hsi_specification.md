@@ -41,11 +41,31 @@ The item is the **lockstep-rv32-soc** hardware platform comprising:
 
 | Req ID             | Requirement                                                    | ASIL |
 |--------------------|----------------------------------------------------------------|------|
-| HSR_LOCKSTEP_001   | Dual cores shall execute identical instructions cycle-by-cycle | D    |
+| HSR_LOCKSTEP_001   | Core B shall execute what core A does, exactly 2 clocks later  | D    |
 | HSR_LOCKSTEP_002   | Comparator shall detect bus mismatch within 1 clock cycle      | D    |
 | HSR_LOCKSTEP_003   | NMI shall assert within 2 clock cycles of mismatch             | D    |
 | HSR_LOCKSTEP_004   | Once fault tripped, system shall remain latched until reset     | D    |
 | HSR_LOCKSTEP_005   | System bus shall be isolated on fault (valid deasserted)       | D    |
+| HSR_LOCKSTEP_006   | A glitch on both cores shall not change both the same way      | D    |
+
+Core B runs two clocks behind core A. Reset, read data, the bus acknowledge and
+the interrupts all reach it two clocks late, so it is an exact copy of core A at
+an earlier moment, and a glitch that hits both at once finds them at different
+points in the program. Core A's bus waits two clocks to meet core B's at the
+comparator, and goes on to the system bus from there.
+
+Nothing leaves the cores before it has been compared. A bus cycle found bad stops
+in that same cycle, so a store that the cores disagree on never reaches a
+peripheral. `bus_valid_o` moves a clock later, because it reaches the CAN pin and
+the compare can glitch.
+
+The latencies above count from the comparator, as the verification specification
+does. From core A's pins, a fault takes two clocks longer to reach it. Every load
+and store now keeps a core waiting 3 clocks rather than 1.
+
+The delay protects against a glitch of up to two clocks on both cores. It cannot
+help with a fault in data they share. A wrong value upstream of core B's delay
+line reaches both cores the same way, which is why the RAM has its own ECC.
 
 ### 2.2 ECC Memory Protection (ASIL-D)
 

@@ -67,6 +67,7 @@ architecture rtl of lockstep_comparator is
   signal w_mismatch_detected : std_logic;
   signal r_fault_latched     : std_logic;
   signal w_trip              : std_logic;
+  signal w_bus_open          : std_logic;
 
 begin
 
@@ -161,16 +162,23 @@ begin
                   '0';
 
   -- System Gating: If system is operating normally, route Master Core A.
-  -- If a fault occurs, isolate the system bus by driving flat zeros.
-  sys_bus_o.addr  <= core_a_bus_i.addr when (r_current_state = ST_SYSTEM_OK) else
+  -- If a fault occurs, isolate the system bus by driving flat zeros. That starts
+  -- in the cycle the fault is found, so a store that the cores disagree on never
+  -- reaches a peripheral. bus_valid_o stays with the registered state, because it
+  -- reaches the CAN pin, and the compare can glitch while the buses settle. The
+  -- system bus is only ever sampled on a clock edge.
+  w_bus_open <= '1' when (r_current_state = ST_SYSTEM_OK and w_trip = '0') else
+                '0';
+
+  sys_bus_o.addr  <= core_a_bus_i.addr when (w_bus_open = '1') else
                      (others => '0');
-  sys_bus_o.data  <= core_a_bus_i.data when (r_current_state = ST_SYSTEM_OK) else
+  sys_bus_o.data  <= core_a_bus_i.data when (w_bus_open = '1') else
                      (others => '0');
-  sys_bus_o.sel   <= core_a_bus_i.sel when (r_current_state = ST_SYSTEM_OK) else
+  sys_bus_o.sel   <= core_a_bus_i.sel when (w_bus_open = '1') else
                      (others => '0');
-  sys_bus_o.we    <= core_a_bus_i.we when (r_current_state = ST_SYSTEM_OK) else
+  sys_bus_o.we    <= core_a_bus_i.we when (w_bus_open = '1') else
                      '0';
-  sys_bus_o.valid <= core_a_bus_i.valid when (r_current_state = ST_SYSTEM_OK) else
+  sys_bus_o.valid <= core_a_bus_i.valid when (w_bus_open = '1') else
                      '0';
 
   -- ========================================================================
@@ -197,6 +205,10 @@ begin
           -- Property: NMI asserted immediately on mismatch
           assert nmi_fault_o = '1'
             report "FORMAL FAIL: NMI not asserted on mismatch"
+            severity error;
+          -- Property: a bus cycle judged bad goes no further
+          assert sys_bus_o.valid = '0'
+            report "FORMAL FAIL: bad bus cycle reached the system bus"
             severity error;
         elsif (v_mismatch_seen = '1') then
           v_mismatch_count := v_mismatch_count + 1;

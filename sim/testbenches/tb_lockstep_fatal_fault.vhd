@@ -106,6 +106,21 @@ begin
         check_equal(safe_state, '1', "one clock of fault is enough");
         check_equal(bus_valid, '0', "still closed");
         check_equal(nmi_fault, '1', "NMI still held");
+      elsif run("bus_stops_in_the_cycle_the_fault_is_found") then
+        fatal_fault <= '1';
+        wait for 1 ns;
+        check_equal(sys_bus.addr, std_logic_vector'(x"00000000"), "address");
+        check_equal(sys_bus.data, std_logic_vector'(x"00000000"), "data");
+        check_equal(sys_bus.sel, std_logic_vector'("0000"), "byte enables");
+        check_equal(sys_bus.we, '0', "write enable");
+        check_equal(sys_bus.valid, '0', "strobe");
+
+        -- This one reaches the CAN pin, so it must not follow the compare around
+        check_equal(bus_valid, '1', "the registered gate moves on the clock");
+        wait until rising_edge(clk);
+        fatal_fault <= '0';
+        wait for 1 ns;
+        check_equal(bus_valid, '0', "and on the clock it shuts");
       elsif run("only_a_reset_clears_it") then
         fatal_fault <= '1';
         wait until rising_edge(clk);

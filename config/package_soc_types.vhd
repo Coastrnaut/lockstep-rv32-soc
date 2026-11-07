@@ -36,6 +36,22 @@ package package_soc_types is
   end record t_rv_bus;
 
   -- ------------------------------------------------------------------------
+  -- Core Input Record
+  -- ------------------------------------------------------------------------
+  -- Everything that changes on a core's inputs. Core B has to receive all of it
+  -- late, or it stops being a copy of core A.
+  -- ------------------------------------------------------------------------
+
+  type t_core_inputs is record
+    rst_n : std_logic;
+    rdata : std_logic_vector(C_DATA_WIDTH - 1 downto 0);
+    ack   : std_logic;
+    msi   : std_logic;
+    mti   : std_logic;
+    mei   : std_logic;
+  end record t_core_inputs;
+
+  -- ------------------------------------------------------------------------
   -- Peripheral Interface Record
   -- ------------------------------------------------------------------------
   -- Memory-mapped peripheral bus for safe routing to IO devices.
