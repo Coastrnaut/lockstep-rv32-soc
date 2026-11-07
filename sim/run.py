@@ -201,7 +201,10 @@ lockstep_lib.add_source_files(root / "rtl" / "peripherals" / "*.vhd")
 neorv32_lib = vu.add_library("neorv32", vhdl_standard="2008")
 neorv32_rtl = root / "rtl" / "core" / "neorv32" / "rtl" / "core"
 if neorv32_rtl.exists():
-    neorv32_lib.add_source_files(str(neorv32_rtl) + "/*.vhd")
+    # The test firmware takes the place of the default IMEM image
+    neorv32_lib.add_source_files([str(f) for f in neorv32_rtl.glob("*.vhd")
+                                  if f.name != "neorv32_imem_image.vhd"])
+    neorv32_lib.add_source_files(root / "sim" / "firmware" / "neorv32_imem_image.vhd")
 else:
     print("WARNING: NEORV32 RTL not found at", neorv32_rtl)
     print("  Run: git submodule update --init --recursive")

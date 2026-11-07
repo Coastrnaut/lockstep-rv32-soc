@@ -68,8 +68,8 @@ architecture rtl of tb_soc_integration is
     wait for clk_period * 3;
 
     -- Safety signals: actuator_safe is registered (resets to '0')
-    -- nmi_fault is combinational and depends on NEORV32 XBus convergence
     check(actuator_safe = '0', "post-reset: actuators not latched");
+    check_equal(nmi_fault, '0', "post-reset: no NMI");
 
     -- --- Test 3: CAN RX dominant bit — SoC receives ---
     can_rx <= '0';
@@ -102,10 +102,9 @@ architecture rtl of tb_soc_integration is
     rst_n <= '1';
     wait for clk_period * 3;
 
-    -- --- Test 7: Verify actuator output is valid (not X/U) ---
-    -- nmi_fault is combinational and depends on NEORV32 XBus state,
-    -- which has metavalues during boot — skip nmi_fault validity check
+    -- --- Test 7: Verify safety outputs are valid (not X/U) ---
     check((actuator_safe = '0') or (actuator_safe = '1'), "actuator: valid level");
+    check((nmi_fault = '0') or (nmi_fault = '1'), "NMI: valid level");
 
     test_runner_cleanup(runner);
     wait for 100 ns;

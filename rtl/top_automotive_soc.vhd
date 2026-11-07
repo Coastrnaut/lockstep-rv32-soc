@@ -24,6 +24,10 @@ library neorv32;
   use neorv32.neorv32_package.all;
 
 entity top_automotive_soc is
+  generic (
+    -- NEORV32 boot source: 0 = bootloader, 1 = custom address, 2 = IMEM image
+    g_boot_mode : natural range 0 to 2 := 0
+  );
   port (
     -- --------------------------------------------------------------------
     -- Global Clock and Reset System
@@ -184,7 +188,7 @@ begin
       dual_core_en    => false,
 
       -- Boot
-      boot_mode_select => 0,
+      boot_mode_select => g_boot_mode,
       boot_addr_custom => x"00000000",
 
       -- OCD
@@ -461,7 +465,7 @@ begin
       dual_core_en    => false,
 
       -- Boot
-      boot_mode_select => 0,
+      boot_mode_select => g_boot_mode,
       boot_addr_custom => x"00000000",
 
       -- OCD
@@ -779,6 +783,8 @@ begin
       uart_error_o => w_uart_error
 
     );
+
+  nmi_fault_o <= w_nmi;
 
   -- Both cores read the same data, or they would leave lockstep. Each peripheral
   -- drives zero unless it is being read.
