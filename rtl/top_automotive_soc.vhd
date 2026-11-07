@@ -71,6 +71,14 @@ architecture structural of top_automotive_soc is
   signal w_core_b_in : t_core_inputs;
   signal r_bus_ack   : std_logic;
 
+  -- The comparator self-test
+  signal w_test_flip        : t_rv_bus;
+  signal w_test_fatal       : std_logic;
+  signal w_core_b_compared  : t_rv_bus;
+  signal w_comparator_rst_n : std_logic;
+  signal w_self_test_passed : std_logic;
+  signal w_self_test_failed : std_logic;
+
   signal w_safe_sys_bus : t_rv_bus;
 
   -- Internal safety status tracking wires
@@ -192,10 +200,10 @@ begin
   -- whose fault latch must survive anything less, and the watchdog supervisor,
   -- which has to remember why it reset the SoC.
   --
-  -- w_rst_n adds the watchdog's reset, and every other block takes that one. The
-  -- two cores cannot leave reset on different clocks, and a pulse too short for
-  -- a clock edge to catch still resets the blocks that only look at reset on a
-  -- clock edge.
+  -- w_rst_n adds the watchdog's reset, and every other block takes that one. A
+  -- pulse too short for a clock edge to catch still resets the blocks that only
+  -- look at reset on a clock edge. It stays low until the comparator has passed
+  -- its self-test, so the cores do not run on an untested comparator.
   -- ========================================================================
   i_cold_reset_sync : entity lockstep.reset_synchronizer
     port map (
@@ -211,7 +219,7 @@ begin
       rst_n_syn_o => w_wd_rst_n
     );
 
-  w_rst_n_request <= w_cold_rst_n and not w_wd_reset;
+  w_rst_n_request <= w_cold_rst_n and w_self_test_passed and not w_wd_reset;
 
   i_reset_sync : entity lockstep.reset_synchronizer
     port map (
@@ -832,14 +840,14 @@ begin
   i_lockstep_gate : entity lockstep.lockstep_comparator
     port map (
       clk_i       => clk_i,
-      rst_n_syn_i => w_cold_rst_n,
+      rst_n_syn_i => w_comparator_rst_n,
 
       -- Core Feeders
       core_a_bus_i => w_core_a_bus_late,
-      core_b_bus_i => w_core_b_bus,
+      core_b_bus_i => w_core_b_compared,
 
       -- Both cores read the same data from the RAM, so they cannot see a bad word
-      fatal_fault_i => w_ecc_fatal,
+      fatal_fault_i => w_ecc_fatal or w_test_fatal,
 
       -- Safety Monitoring Outputs
       nmi_fault_o  => w_nmi,
@@ -851,7 +859,34 @@ begin
 
     ); -- ========================================================================
 
-  -- 7. AUTOMOTIVE BUS CONTROLLER INTEGRATION
+  -- 7. COMPARATOR SELF-TEST
+  -- ========================================================================
+  -- Runs after each cold reset, with the cores in reset. It reaches the
+  -- comparator here, on the way in from core B, and the comparator's reset is
+  -- otherwise the cold reset, so a watchdog reset leaves a trip latched.
+  -- ========================================================================
+  i_comparator_self_test : entity lockstep.comparator_self_test
+    port map (
+      clk_i         => clk_i,
+      rst_n_i       => w_cold_rst_n,
+      flip_bus_o    => w_test_flip,
+      fatal_fault_o => w_test_fatal,
+      rst_n_o       => w_comparator_rst_n,
+      nmi_fault_i   => w_nmi,
+      safe_state_i  => w_lockstep_safe,
+      bus_valid_i   => w_bus_valid,
+      passed_o      => w_self_test_passed,
+      failed_o      => w_self_test_failed
+    );
+
+  w_core_b_compared.addr  <= w_core_b_bus.addr xor w_test_flip.addr;
+  w_core_b_compared.data  <= w_core_b_bus.data xor w_test_flip.data;
+  w_core_b_compared.sel   <= w_core_b_bus.sel xor w_test_flip.sel;
+  w_core_b_compared.we    <= w_core_b_bus.we xor w_test_flip.we;
+  w_core_b_compared.valid <= w_core_b_bus.valid xor w_test_flip.valid;
+
+  -- ========================================================================
+  -- 8. AUTOMOTIVE BUS CONTROLLER INTEGRATION
   -- ========================================================================
   i_automotive_can : entity lockstep.automotive_can_controller
     port map (
@@ -868,7 +903,7 @@ begin
 
     ); -- ========================================================================
 
-  -- 8. SAFE UART DIAGNOSTIC INTERFACE
+  -- 9. SAFE UART DIAGNOSTIC INTERFACE
   -- ========================================================================
   i_safe_uart : entity lockstep.safe_uart
     port map (
@@ -885,7 +920,7 @@ begin
     );
 
   -- ========================================================================
-  -- 9. WATCHDOG SUPERVISOR
+  -- 10. WATCHDOG SUPERVISOR
   -- ========================================================================
   i_watchdog_supervisor : entity lockstep.watchdog_supervisor
     port map (
@@ -900,7 +935,7 @@ begin
     );
 
   -- ========================================================================
-  -- 10. ECC PROTECTED DATA RAM
+  -- 11. ECC PROTECTED DATA RAM
   -- ========================================================================
   -- The cores have no memory of their own for data (dmem_en), so that every load
   -- and store goes through the comparator. This is the RAM those reach.
@@ -915,7 +950,8 @@ begin
       dbe_fatal_o => w_ecc_fatal
     );
 
-  nmi_fault_o <= w_nmi;
+  -- The self-test trips the comparator on purpose, which is nobody else's business
+  nmi_fault_o <= (w_nmi and w_self_test_passed) or w_self_test_failed;
 
   -- Nothing supervises the actuators during a reset, so it holds them safe too
   actuator_safe_o <= w_lockstep_safe or not w_rst_n;
@@ -925,7 +961,7 @@ begin
   w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata or w_ram_rdata;
 
   -- ========================================================================
-  -- 11. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals
+  -- 12. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals
   --     to satisfy -Wall (unused signal) and prevent synthesis optimization.
   --     In production, these conditions trigger BSM actions or fault logging.
   -- ========================================================================

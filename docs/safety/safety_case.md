@@ -13,7 +13,7 @@ automotive safety-critical applications. This safety case demonstrates
 compliance with ISO 26262 ASIL-D through:
 
 1. Hardware safety mechanisms (lockstep, ECC, watchdog, safety-gated I/O)
-2. Comprehensive verification (33 testbenches, fault injection, formal assertions)
+2. Comprehensive verification (34 testbenches, fault injection, formal assertions)
 3. Quantitative metrics (SPFM 96.76%, LFM 98.92%, PMHF 1.53×10⁻⁹ /h)
 4. Full bi-directional traceability from safety goals to test results
 
@@ -48,6 +48,7 @@ compliance with ISO 26262 ASIL-D through:
 ### 3.2 Fault Injection Testbenches
 - `tb_lockstep_fault_inject` — Stuck-at and bit-flip on core bus
 - `tb_soc_lockstep` — The same glitch on both cores at once, and a store the cores disagree on
+- `tb_comparator_self_test` — A comparator broken each way the startup test has to catch
 - `tb_ecc_fault_inject` — Single/double bit injection on data path
 
 ### 3.3 Formal Verification Assertions
@@ -96,7 +97,7 @@ VHDL traceability attributes (`requirement_id`).
 The lockstep-rv32-soc satisfies ISO 26262 ASIL-D requirements through:
 - **Redundancy**: Dual-core lockstep with independent ECC
 - **Diagnostics**: Watchdog, safety-gated I/O, parity checks
-- **Verification**: 33 testbenches with fault injection coverage
+- **Verification**: 34 testbenches with fault injection coverage
 - **Metrics**: All quantitative thresholds exceeded by significant margins
 
 The hardware is suitable for integration into ASIL-D automotive safety systems.

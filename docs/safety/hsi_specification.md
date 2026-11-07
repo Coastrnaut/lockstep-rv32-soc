@@ -47,6 +47,7 @@ The item is the **lockstep-rv32-soc** hardware platform comprising:
 | HSR_LOCKSTEP_004   | Once fault tripped, system shall remain latched until reset     | D    |
 | HSR_LOCKSTEP_005   | System bus shall be isolated on fault (valid deasserted)       | D    |
 | HSR_LOCKSTEP_006   | A glitch on both cores shall not change both the same way      | D    |
+| HSR_LOCKSTEP_007   | Cores shall not start unless the comparator passes a self-test | D    |
 
 Core B runs two clocks behind core A. Reset, read data, the bus acknowledge and
 the interrupts all reach it two clocks late, so it is an exact copy of core A at
@@ -66,6 +67,14 @@ and store now keeps a core waiting 3 clocks rather than 1.
 The delay protects against a glitch of up to two clocks on both cores. It cannot
 help with a fault in data they share. A wrong value upstream of core B's delay
 line reaches both cores the same way, which is why the RAM has its own ECC.
+
+The comparator tests itself after every cold reset, with the cores in reset. It
+flips each of the 70 bits of the compare in turn, and then raises the fatal fault
+input, and each time checks that it trips, that the trip holds once the cause has
+gone, and that a reset clears it. If any of that fails, the cores never start,
+`actuator_safe_o` stays high and `nmi_fault_o` goes high. A watchdog reset does
+not repeat the test. A fault that appears in the comparator after the test stays
+hidden until the next cold reset, so that is the latent fault interval.
 
 ### 2.2 ECC Memory Protection (ASIL-D)
 
@@ -250,10 +259,10 @@ them does nothing. TX_DATA takes any store that includes byte 0.
 |----------------|--------------|--------------------------------------|
 | Power-on reset | 1024 clk     | Global reset deassertion             |
 | Reset release  | 4 clk        | Rising edges before w_rst_n rises    |
-| Lockstep init  | 2 clk        | Comparator self-test                 |
+| Lockstep init  | 288 clk      | Comparator self-test                 |
 | ECC init       | 1 clk        | Parity generator self-test           |
 | Watchdog start | Immediate    | WD counter begins on first clock     |
-| Total boot     | 1031 clk     | System ready at ~20.6 µs @ 50 MHz    |
+| Total boot     | 1317 clk     | System ready at ~26.3 µs @ 50 MHz    |
 
 A reset takes effect at once, even with the clock stopped: `can_tx_o` goes
 recessive and `actuator_safe_o` goes high. A pulse of any length restarts the

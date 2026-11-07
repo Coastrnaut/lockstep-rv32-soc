@@ -33,6 +33,9 @@ architecture tb of tb_soc_reset_network is
   -- Long enough for the reset to have been released again
   constant c_after_reset : time := c_clk_period * 6;
 
+  -- More than the comparator self-test takes after a cold reset
+  constant c_self_test : time := c_clk_period * 300;
+
   signal clk           : std_logic;
   signal wd_clk        : std_logic;
   signal clk_stopped   : boolean;
@@ -147,8 +150,10 @@ begin
         short_reset;
         check_equal(actuator_safe, '1', "safe until the reset has been released");
         wait for c_after_reset;
-        check_equal(actuator_safe, '0', "released");
         check_equal(uart_tx, '1', "the byte stopped");
+        check_equal(actuator_safe, '1', "still safe during the self-test");
+        wait for c_self_test;
+        check_equal(actuator_safe, '0', "released");
 
         wait until rx_done = 1 for c_timeout;
         check_equal(rx_done, 1, "the program ran again");
@@ -162,6 +167,7 @@ begin
         wait for c_after_reset;
         check_equal(can_tx, '1', "the frame stopped");
       elsif run("short_pulse_clears_a_lockstep_fault") then
+        wait for c_self_test;
         wait until rising_edge(clk);
         << signal i_soc.w_core_b_xbus_data : std_logic_vector(31 downto 0) >> <= force x"FFFFFFFF";
         wait until rising_edge(clk);
@@ -175,6 +181,7 @@ begin
         short_reset;
         wait for c_after_reset;
         check_equal(nmi_fault, '0', "fault cleared");
+        wait for c_self_test;
         check_equal(actuator_safe, '0', "actuators released");
       end if;
 

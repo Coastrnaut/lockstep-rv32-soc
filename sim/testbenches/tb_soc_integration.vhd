@@ -24,9 +24,13 @@ end entity tb_soc_integration;
 architecture rtl of tb_soc_integration is
 
   constant clk_period : time := 20 ns;
-  signal   clk        : std_logic;
-  signal   wd_clk     : std_logic;
-  signal   rst_n      : std_logic;
+
+  -- More than the reset and the comparator self-test take
+  constant c_boot : time := clk_period * 300;
+
+  signal clk    : std_logic;
+  signal wd_clk : std_logic;
+  signal rst_n  : std_logic;
 
   signal can_tx        : std_logic;
   signal can_rx        : std_logic;
@@ -78,6 +82,8 @@ architecture rtl of tb_soc_integration is
     -- --- Test 2: Reset de-assertion ---
     rst_n <= '1';
     wait for clk_period * 6;
+    check(actuator_safe = '1', "self-test: actuators still held safe");
+    wait for c_boot;
 
     -- Safety signals: actuator_safe falls once the reset has been released
     check(actuator_safe = '0', "post-reset: actuators not latched");
@@ -98,7 +104,7 @@ architecture rtl of tb_soc_integration is
     rst_n  <= '0';
     wait for clk_period * 3;
     rst_n  <= '1';
-    wait for clk_period * 6;
+    wait for c_boot;
     can_rx <= '1';
 
     -- Safety signals recover after reset

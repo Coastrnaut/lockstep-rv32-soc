@@ -34,6 +34,13 @@
 - **Verification Method:** Simultaneous Glitch Injection + Functional Coverage
 - **Implemented In:** `rtl/safety_blocks/temporal_diversity.vhd`, `rtl/safety_blocks/lockstep_comparator.vhd`, `rtl/top_automotive_soc.vhd`
 
+## TSR_LOCKSTEP_044
+- **Description:** The cores must not start unless the lockstep comparator has proved, since the last cold reset, that it can detect a fault on every line it compares, latch it, and clear it.
+- **ASIL Allocation:** ASIL-D
+- **Mitigation:** A startup self-test trips the comparator through its real logic, and holds the cores in reset unless every step passes. A failure leaves `actuator_safe_o` and `nmi_fault_o` high.
+- **Verification Method:** Comparator Fault Injection
+- **Implemented In:** `rtl/safety_blocks/comparator_self_test.vhd`, `rtl/top_automotive_soc.vhd`
+
 ## TSR_RESET_001
 - **Description:** A reset must take effect at once, with or without a clock, and be released on a clock edge, with both cores released on the same edge. Actuators must be held safe during a reset.
 - **ASIL Allocation:** ASIL-D

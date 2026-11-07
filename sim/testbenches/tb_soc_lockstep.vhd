@@ -326,6 +326,19 @@ begin
 
         end loop;
 
+      elsif run("comparator_stuck_at_no_error_keeps_the_soc_safe") then
+        << signal i_soc.i_lockstep_gate.w_mismatch_detected : std_logic >> <= force '0';
+        cold_reset;
+        wait for c_boot;
+        check_equal(actuator_safe, '1', "actuators safe");
+        check_equal(nmi_fault, '1', "reported on the pin");
+        check_equal(<< signal i_soc.w_rst_n : std_logic >>, '0', "the cores never started");
+
+        -- Well past the first bytes the program would send
+        wait for c_uart_bit_time * 24;
+        check_equal(uart_starts, 0, "nothing from the UART");
+        check_equal(rx_done, 0, "nothing on the CAN bus");
+        check_equal(actuator_safe, '1', "actuators still safe");
       elsif run("store_the_cores_disagree_on_never_reaches_a_peripheral") then
         cold_reset;
 

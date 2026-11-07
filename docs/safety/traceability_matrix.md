@@ -27,6 +27,7 @@
 | SG-01 | FSR_MOTION_002   | TSR_WD_001         | hardware_watchdog            | tb_watchdog                    | ✅     |
 | SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_042   | lockstep_comparator          | tb_lockstep_comparator         | ✅     |
 | SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_042   | lockstep_comparator          | tb_lockstep_fault_inject       | ✅     |
+| SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_044   | comparator_self_test         | tb_comparator_self_test        | ✅     |
 | SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_043   | temporal_diversity           | tb_temporal_diversity          | ✅     |
 | SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_043   | top_automotive_soc           | tb_soc_lockstep                | ✅     |
 | SG-02 | FSR_DIV_002      | TSR_ECC_001        | hamming_ecc_wrapper          | tb_ecc                         | ✅     |
@@ -52,8 +53,8 @@
 
 | Coverage Type       | Target | Achieved | Notes                              |
 |---------------------|--------|----------|------------------------------------|
-| RTL Implementation  | 100%   | 100%     | All 9 blocks written, and all in the SoC |
-| Testbench Coverage  | 100%   | 100%     | 33 testbenches, with fault injection on lockstep, ECC and UART |
+| RTL Implementation  | 100%   | 100%     | All 10 blocks written, and all in the SoC |
+| Testbench Coverage  | 100%   | 100%     | 34 testbenches, with fault injection on lockstep, ECC and UART |
 | Fault Injection     | 100%   | 100%     | Stuck-at + bit-flip on lockstep + ECC |
 | Formal Assertions   | 100%   | 100%     | Clocked assertions in all but the temporal_diversity delay line |
 | Traceability Tags   | 100%   | 100%     | VHDL attributes in all RTL files   |
@@ -91,3 +92,4 @@
 - **TSR_UART_001**: Parity-protected UART
 - **TSR_RESET_001**: Reset asserted at once and released on a clock edge
 - **TSR_LOCKSTEP_043**: Core B 2 clocks behind core A, with nothing leaving uncompared
+- **TSR_LOCKSTEP_044**: Comparator self-test before the cores may start

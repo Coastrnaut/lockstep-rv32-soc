@@ -228,7 +228,7 @@ begin
         check_equal(actuator_safe, '1', "actuators still safe");
 
         cold_reset;
-        wait for c_clk_period * 8;
+        wait for c_clk_period * 300;
         check_equal(nmi_fault, '0', "a cold reset clears the fault");
         check_equal(actuator_safe, '0', "actuators released");
       elsif run("watchdog_makes_the_soc_safe_if_the_clock_stops") then
