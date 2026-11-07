@@ -43,6 +43,7 @@
 | SG-04 | FSR_LOCK_001     | TSR_WD_001         | top_automotive_soc           | tb_soc_watchdog                | ✅     |
 | SG-04 | FSR_LOCK_001     | TSR_SAFETY_GATE_003| hardware_watchdog            | tb_watchdog                    | ✅     |
 | SG-05 | FSR_COMM_001     | TSR_CAN_001        | automotive_can_controller    | tb_can                         | ✅     |
+| SG-05 | FSR_COMM_001     | TSR_CAN_002        | can_receiver                 | tb_can_receive                 | ✅     |
 | SG-05 | FSR_COMM_001     | TSR_CAN_001        | automotive_can_controller    | tb_can                         | ✅     |
 | SG-05 | FSR_COMM_002     | TSR_UART_001       | safe_uart                    | tb_uart                        | ✅     |
 | SG-05 | FSR_COMM_002     | TSR_UART_001       | safe_uart                    | tb_uart                        | ✅     |
@@ -53,8 +54,8 @@
 
 | Coverage Type       | Target | Achieved | Notes                              |
 |---------------------|--------|----------|------------------------------------|
-| RTL Implementation  | 100%   | 100%     | All 10 blocks written, and all in the SoC |
-| Testbench Coverage  | 100%   | 100%     | 34 testbenches, with fault injection on lockstep, ECC and UART |
+| RTL Implementation  | 100%   | 100%     | All 11 blocks written, and all in the SoC |
+| Testbench Coverage  | 100%   | 100%     | 35 testbenches, with fault injection on lockstep, ECC, CAN and UART |
 | Fault Injection     | 100%   | 100%     | Stuck-at + bit-flip on lockstep + ECC |
 | Formal Assertions   | 100%   | 100%     | Clocked assertions in all but the temporal_diversity delay line |
 | Traceability Tags   | 100%   | 100%     | VHDL attributes in all RTL files   |
@@ -89,6 +90,7 @@
 - **TSR_ECC_001**: SECDED Hamming ECC wrapper
 - **TSR_WD_001**: Windowed hardware watchdog
 - **TSR_CAN_001**: Fault-hardened CAN controller
+- **TSR_CAN_002**: CAN reception and error signalling
 - **TSR_UART_001**: Parity-protected UART
 - **TSR_RESET_001**: Reset asserted at once and released on a clock edge
 - **TSR_LOCKSTEP_043**: Core B 2 clocks behind core A, with nothing leaving uncompared

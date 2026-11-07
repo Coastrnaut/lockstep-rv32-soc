@@ -19,11 +19,21 @@ WD_WINDOW_OPEN = 20                    # Watchdog STATUS value once the counter 
 PROGRAM = [
     ("jal", "zero", "main"),
 
-    # Interrupts: count them in s1 (CAN_ERROR) and s2 (UART_ERROR), and clear them
+    # Interrupts: count them in s1 (CAN_ERROR) and s2 (UART_ERROR), and clear them.
+    # A received frame comes in on the same line as CAN_ERROR. Send the low byte of
+    # its identifier to the UART, and release it.
     "trap:",
     ("csrr", "t3", "mcause"),
     ("andi", "t3", "t3", 4),           # 7 = MTI has this bit, 3 = MSI does not
     ("bne", "t3", "zero", "trap_uart"),
+    ("lw", "t3", 0x328, "s0"),
+    ("andi", "t3", "t3", 1),
+    ("beq", "t3", "zero", "trap_can_error"),
+    ("lw", "t3", 0x318, "s0"),
+    ("sw", "t3", 0x400, "s0"),
+    ("sw", "zero", 0x328, "s0"),
+    ("mret",),
+    "trap_can_error:",
     ("sw", "zero", 0x30C, "s0"),
     ("addi", "s1", "s1", 1),
     ("mret",),
@@ -44,6 +54,8 @@ PROGRAM = [
     ("csrw", "mie", "t0"),
     ("addi", "t0", "zero", 8),
     ("csrs", "mstatus", "t0"),
+    ("addi", "t0", "zero", 1),         # An interrupt for each received frame
+    ("sw", "t0", 0x32C, "s0"),
 
     # A write to KICK with the wrong value must do nothing. A kick this early would
     # reset the SoC, and the first byte below would come out twice.

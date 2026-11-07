@@ -11,10 +11,11 @@
 --               failed frame stays in the mailbox and is sent again, with
 --               ISO 11898-1 error counting to keep a faulty node off the bus.
 --
---               Transmit only: it does not receive or acknowledge other nodes'
---               frames, or send overload frames. Bus-off is latched until reset.
+--               can_receiver takes in and acknowledges frames from other nodes,
+--               and a one-frame buffer here holds what it delivers. Neither
+--               direction sends overload frames. Bus-off is latched until reset.
 --
--- Traces to:    TSR_CAN_001
+-- Traces to:    TSR_CAN_001, TSR_CAN_002
 -- ============================================================================
 
 library ieee;
@@ -48,7 +49,8 @@ entity automotive_can_controller is
     can_busy_o   : out   std_logic;
     can_status_o : out   std_logic_vector(10 downto 0); -- 10: bus-off, 9: error passive, 8:0: TEC
 
-    -- CAN_ERROR interrupt: set by a failed frame until STATUS is written
+    -- CAN_ERROR interrupt: set by a failed frame until STATUS is written. A
+    -- received frame raises it too, if software has enabled that.
     can_irq_o : out   std_logic
   );
 end entity automotive_can_controller;
@@ -57,7 +59,7 @@ architecture rtl of automotive_can_controller is
 
   -- ISO 26262 Automated Traceability Attributes
   attribute requirement_id : string;
-  attribute requirement_id of rtl : architecture is "TSR_CAN_001";
+  attribute requirement_id of rtl : architecture is "TSR_CAN_001, TSR_CAN_002";
 
   -- Frame field lengths in bits
   constant c_id_bits       : unsigned(7 downto 0) := to_unsigned(12, 8); -- ID + RTR
@@ -84,6 +86,11 @@ architecture rtl of automotive_can_controller is
   constant c_sample_cnt : natural := g_clks_per_bit - (3 * g_clks_per_bit) / 4;
   constant c_sync_cnt   : natural := g_clks_per_bit - 3;
 
+  -- Where the timer is when an edge arrives on time, and the most that one
+  -- edge may move the sample point within a frame
+  constant c_edge_cnt : natural := c_sync_cnt + 1;
+  constant c_sjw      : natural := maximum(g_clks_per_bit / 8, 1);
+
   -- Recessive bits that end a transfer: ACK delimiter, EOF and intermission,
   -- or error delimiter and intermission. An error passive transmitter then
   -- waits out the suspend time as well.
@@ -94,6 +101,7 @@ architecture rtl of automotive_can_controller is
   constant c_tec_step    : unsigned(8 downto 0) := to_unsigned(8, 9);
   constant c_tec_passive : unsigned(8 downto 0) := to_unsigned(128, 9);
   constant c_tec_bus_off : unsigned(8 downto 0) := to_unsigned(256, 9);
+  constant c_rec_passive : unsigned(7 downto 0) := to_unsigned(128, 8);
 
   -- CAN frame state machine: the state names the field of the next bit to send
 
@@ -128,6 +136,9 @@ architecture rtl of automotive_can_controller is
   signal w_bit_tick    : std_logic;
   signal w_sample_tick : std_logic;
   signal w_hard_sync   : std_logic;
+  signal w_resync      : std_logic;
+  signal r_sampled     : std_logic;
+  signal r_resynced    : std_logic;
 
   -- Bus state
   signal r_recessive_run : integer range 0 to c_idle_bits + c_suspend_bits;
@@ -184,6 +195,32 @@ architecture rtl of automotive_can_controller is
 
   -- Reset, a dropped safety gate or bus-off clears the whole TX path at once
   signal w_tx_clear : std_logic;
+
+  -- Receiver
+  signal w_rx_pin       : std_logic;
+  signal w_rx_in_frame  : std_logic;
+  signal w_rx_flag_done : std_logic;
+  signal w_rec          : unsigned(7 downto 0);
+  signal w_sof_allowed  : std_logic;
+  signal w_transmitting : std_logic;
+  signal w_rx_valid     : std_logic;
+  signal w_rx_id        : std_logic_vector(28 downto 0);
+  signal w_rx_rtr       : std_logic;
+  signal w_rx_ide       : std_logic;
+  signal w_rx_dlc       : unsigned(3 downto 0);
+  signal w_rx_data      : std_logic_vector(63 downto 0);
+
+  -- Receive buffer: holds one frame until software releases it
+  signal r_buf_id       : std_logic_vector(28 downto 0);
+  signal r_buf_rtr      : std_logic;
+  signal r_buf_ide      : std_logic;
+  signal r_buf_dlc      : unsigned(3 downto 0);
+  signal r_buf_data     : std_logic_vector(63 downto 0);
+  signal r_buf_full     : std_logic;
+  signal r_buf_overrun  : std_logic;
+  signal r_buf_irq_en   : std_logic;
+  signal w_buf_release  : std_logic;
+  signal w_rx_irq_write : std_logic;
 
   -- Register reads
   signal w_busy  : std_logic;
@@ -292,11 +329,20 @@ begin
   -- ========================================================================
   -- 3. BIT TIMING: One tick per CAN bit, one sample per CAN bit
   -- ========================================================================
-  -- Bus edges re-phase the timer while listening. A node sending a frame has
-  -- hard-synchronised already and keeps its own timing.
+  -- A dominant edge outside a frame is a SOF, so the timer takes its phase from
+  -- it outright. Within a frame a sender's clock can still drift away from this
+  -- one, so a receiver follows the edges, but only by c_sjw at a time, so that
+  -- noise cannot throw it far. That is one edge per bit, from a recessive bit,
+  -- since nothing else is a bit starting. A node sending a frame has
+  -- hard-synchronised already and keeps its own timing, and an edge from its own
+  -- ACK or error flag would only tell it about its own loop delay.
   -- ========================================================================
-  w_hard_sync <= '1' when (w_rx_fall = '1' and r_state = idle) else
+  w_hard_sync <= '1' when (w_rx_fall = '1' and r_state = idle and w_rx_in_frame = '0') else
                  '0';
+
+  w_resync <= '1' when (w_rx_fall = '1' and r_state = idle and w_rx_in_frame = '1' and w_rx_pin = '1' and
+                         r_sampled = '1' and r_resynced = '0') else
+              '0';
 
   p_bit_timer : process (clk_i) is
   begin
@@ -308,8 +354,24 @@ begin
         r_bit_cnt <= c_sync_cnt;
       elsif (r_bit_cnt = 0) then
         r_bit_cnt <= g_clks_per_bit - 1;
+      elsif (w_resync = '1' and r_bit_cnt > c_sample_cnt) then
+        -- Before the sample point, so this bit started late: wait for it
+        r_bit_cnt <= r_bit_cnt - 1 + minimum(maximum(c_edge_cnt - r_bit_cnt, 0), c_sjw);
+      elsif (w_resync = '1') then
+        -- After it, so the next bit has started early: cut this one short
+        r_bit_cnt <= maximum(r_bit_cnt - 1 - c_sjw, 0);
       else
         r_bit_cnt <= r_bit_cnt - 1;
+      end if;
+
+      if (rst_n_i = '0') then
+        r_sampled  <= '1';
+        r_resynced <= '0';
+      elsif (w_sample_tick = '1') then
+        r_sampled  <= r_rx;
+        r_resynced <= '0';
+      elsif (w_resync = '1') then
+        r_resynced <= '1';
       end if;
     end if;
 
@@ -318,7 +380,9 @@ begin
   w_bit_tick <= '1' when (r_bit_cnt = 0) else
                 '0';
 
-  w_sample_tick <= '1' when (r_bit_cnt = c_sample_cnt) else
+  -- A hard sync starts a new bit, so the old bit's sample point goes with it. If
+  -- it fired on that clock it would see the SOF, and the new bit would see it again.
+  w_sample_tick <= '1' when (r_bit_cnt = c_sample_cnt and w_hard_sync = '0') else
                    '0';
 
   -- ========================================================================
@@ -365,7 +429,7 @@ begin
         end if;
 
         -- The error delimiter is counted from the end of the error flag
-        if (w_flag_done = '1') then
+        if (w_flag_done = '1' or w_rx_flag_done = '1') then
           r_recessive_run <= 0;
         end if;
 
@@ -376,6 +440,11 @@ begin
     end if;
 
   end process p_bus_monitor;
+
+  -- A dominant bit here starts a frame, on an idle bus or in the third bit of
+  -- the intermission
+  w_sof_allowed <= '1' when (r_recessive_run >= c_idle_bits - 1) else
+                   '0';
 
   -- A dominant third intermission bit is a SOF from another node
   w_ifs_sof <= '1' when (w_sample_tick = '1' and r_rx = '0' and r_suspend = '0' and
@@ -634,7 +703,7 @@ begin
   -- stuff bit before RTR, and a missing ACK while error passive when nothing
   -- on the bus answers the flag, so a node alone on a bus cannot reach bus-off.
   -- ========================================================================
-  w_error_passive <= '1' when (r_tec >= c_tec_passive) else
+  w_error_passive <= '1' when (r_tec >= c_tec_passive or w_rec >= c_rec_passive) else
                      '0';
 
   w_count_error <= not (r_uncounted or (r_ack_error and w_error_passive and not r_flag_dominant));
@@ -692,7 +761,7 @@ begin
   -- p_tx_fsm then abandons the frame, so it cannot resume when the gate
   -- returns. Receivers reject the cut-off frame on its stuff error.
   -- ========================================================================
-  can_tx_o <= r_tx_pin when (bus_ok_i = '1' and rst_n_i = '1') else
+  can_tx_o <= (r_tx_pin and w_rx_pin) when (bus_ok_i = '1' and rst_n_i = '1') else
               '1';
 
   -- Busy flag for diagnostics: a frame is in the mailbox or on the bus
@@ -701,14 +770,97 @@ begin
 
   can_busy_o <= w_busy;
 
-  can_irq_o <= r_error_irq;
+  can_irq_o <= r_error_irq or (r_buf_full and r_buf_irq_en);
 
   can_status_o(10)         <= r_bus_off;
   can_status_o(9)          <= w_error_passive;
   can_status_o(8 downto 0) <= std_logic_vector(r_tec);
 
   -- ========================================================================
-  -- 11. REGISTER READS: MAILBOX AND STATUS
+  -- 11. RECEIVER AND RECEIVE BUFFER
+  -- ========================================================================
+  -- The buffer holds one frame, and keeps it until software has finished with
+  -- it. A frame that arrives before then is still acknowledged, as the bus
+  -- expects, but it is dropped and RX_STATUS shows the overrun, so that the
+  -- frame software is reading cannot change under it.
+  -- ========================================================================
+  w_transmitting <= '1' when (r_state /= idle) else
+                    '0';
+
+  i_receiver : entity lockstep.can_receiver
+    port map (
+      clk_i           => clk_i,
+      rst_n_i         => rst_n_i,
+      rx_i            => r_rx,
+      sample_tick_i   => w_sample_tick,
+      bit_tick_i      => w_bit_tick,
+      sof_allowed_i   => w_sof_allowed,
+      clear_i         => w_tx_clear,
+      transmitting_i  => w_transmitting,
+      tx_failed_i     => w_tx_fail,
+      error_passive_i => w_error_passive,
+      pin_o           => w_rx_pin,
+      in_frame_o      => w_rx_in_frame,
+      flag_done_o     => w_rx_flag_done,
+      rec_o           => w_rec,
+      frame_valid_o   => w_rx_valid,
+      id_o            => w_rx_id,
+      rtr_o           => w_rx_rtr,
+      ide_o           => w_rx_ide,
+      dlc_o           => w_rx_dlc,
+      data_o          => w_rx_data
+    );
+
+  w_buf_release <= '1' when (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel = "1111" and
+                              bus_i.addr = c_can_rx_status_addr) else
+                   '0';
+
+  w_rx_irq_write <= '1' when (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel = "1111" and
+                               bus_i.addr = c_can_rx_irq_en_addr) else
+                    '0';
+
+  p_receive_buffer : process (clk_i) is
+  begin
+
+    if rising_edge(clk_i) then
+      if (rst_n_i = '0') then
+        r_buf_id      <= (others => '0');
+        r_buf_rtr     <= '0';
+        r_buf_ide     <= '0';
+        r_buf_dlc     <= (others => '0');
+        r_buf_data    <= (others => '0');
+        r_buf_full    <= '0';
+        r_buf_overrun <= '0';
+        r_buf_irq_en  <= '0';
+      else
+        if (w_buf_release = '1') then
+          r_buf_full    <= '0';
+          r_buf_overrun <= '0';
+        end if;
+
+        if (w_rx_valid = '1') then
+          if (r_buf_full = '0' or w_buf_release = '1') then
+            r_buf_id   <= w_rx_id;
+            r_buf_rtr  <= w_rx_rtr;
+            r_buf_ide  <= w_rx_ide;
+            r_buf_dlc  <= w_rx_dlc;
+            r_buf_data <= w_rx_data;
+            r_buf_full <= '1';
+          else
+            r_buf_overrun <= '1';
+          end if;
+        end if;
+
+        if (w_rx_irq_write = '1') then
+          r_buf_irq_en <= bus_i.data(0);
+        end if;
+      end if;
+    end if;
+
+  end process p_receive_buffer;
+
+  -- ========================================================================
+  -- 12. REGISTER READS: MAILBOX, STATUS AND RECEIVE BUFFER
   -- ========================================================================
   -- The bus acknowledges every access at once, so read data has to be ready in
   -- the cycle after the strobe. It is zero at all other times, which lets the
@@ -729,12 +881,28 @@ begin
           r_rdata <= r_mailbox_data(63 downto 32);
         elsif (bus_i.addr = c_can_data_hi_addr) then
           r_rdata <= r_mailbox_data(31 downto 0);
+        elsif (bus_i.addr = c_can_rx_id_addr) then
+          r_rdata(28 downto 0) <= r_buf_id;
+        elsif (bus_i.addr = c_can_rx_info_addr) then
+          r_rdata(5)          <= r_buf_ide;
+          r_rdata(4)          <= r_buf_rtr;
+          r_rdata(3 downto 0) <= std_logic_vector(r_buf_dlc);
+        elsif (bus_i.addr = c_can_rx_data_addr) then
+          r_rdata <= r_buf_data(63 downto 32);
+        elsif (bus_i.addr = c_can_rx_data_hi_addr) then
+          r_rdata <= r_buf_data(31 downto 0);
+        elsif (bus_i.addr = c_can_rx_status_addr) then
+          r_rdata(1) <= r_buf_overrun;
+          r_rdata(0) <= r_buf_full;
+        elsif (bus_i.addr = c_can_rx_irq_en_addr) then
+          r_rdata(0) <= r_buf_irq_en;
         elsif (bus_i.addr = c_can_status_addr) then
-          r_rdata(16 downto 8) <= std_logic_vector(r_tec);
-          r_rdata(3)           <= r_error_irq;
-          r_rdata(2)           <= r_bus_off;
-          r_rdata(1)           <= w_error_passive;
-          r_rdata(0)           <= w_busy;
+          r_rdata(31 downto 24) <= std_logic_vector(w_rec);
+          r_rdata(16 downto 8)  <= std_logic_vector(r_tec);
+          r_rdata(3)            <= r_error_irq;
+          r_rdata(2)            <= r_bus_off;
+          r_rdata(1)            <= w_error_passive;
+          r_rdata(0)            <= w_busy;
         end if;
       end if;
     end if;
@@ -744,10 +912,10 @@ begin
   rdata_o <= r_rdata;
 
   -- ========================================================================
-  -- 12. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
+  -- 13. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
   -- ========================================================================
   -- Property: CAN TX forced recessive when safety gate drops
-  -- Property: CAN TX recessive while no frame is in progress
+  -- Property: CAN TX recessive while the node has nothing to send
   -- Property: No more than 5 identical bits in the stuffed fields
   -- Property: Mailbox only loaded when bus_ok asserted
   -- Property: A bus-off node stays off the bus
@@ -771,7 +939,7 @@ begin
         end if;
 
         -- Property: TX recessive while idle
-        if (r_state = idle) then
+        if (r_state = idle and w_rx_pin = '1') then
           assert can_tx_o = '1'
             report "FORMAL FAIL: CAN TX not recessive while idle"
             severity error;

@@ -159,11 +159,36 @@ to treat that as a fault.
 | 0x0C   | STATUS        | RW  | Error counter and state, busy. A word write clears the interrupt |
 | 0x10   | MAILBOX_DATA_HI | RW | Data bytes 4-7, byte 4 in bits 31:24 |
 | 0x14   | TX_REQUEST    | W   | Any write sends the mailbox's frame  |
+| 0x18   | RX_ID         | R   | Received identifier, 11 or 29 bits   |
+| 0x1C   | RX_INFO       | R   | 5 = extended, 4 = remote, 3:0 = DLC  |
+| 0x20   | RX_DATA       | R   | Data bytes 0-3, byte 0 in bits 31:24 |
+| 0x24   | RX_DATA_HI    | R   | Data bytes 4-7, byte 4 in bits 31:24 |
+| 0x28   | RX_STATUS     | RW  | 1 = overrun, 0 = frame waiting. A word write releases the frame |
+| 0x2C   | RX_IRQ_EN     | RW  | 0 = a waiting frame raises CAN_ERROR's line |
 
 The mailbox registers are locked from TX_REQUEST until the frame has been sent
 without error, so that a failed frame is sent again unchanged. They keep their
 contents afterwards, so that another TX_REQUEST sends the same frame again. A
 drop of the safety gate clears them.
+
+The controller receives and acknowledges every good frame on the bus, base or
+extended, data or remote, whatever its identifier: there is no acceptance filter.
+The receive registers hold one frame, and keep it until a word write to RX_STATUS
+releases it. Reading does not. A frame that arrives while one is waiting is still
+acknowledged, but it is dropped and RX_STATUS shows the overrun, so that the frame
+software is reading cannot change under it.
+
+Reception follows ISO 11898-1. A stuff, CRC or form error, or an ACK of its own
+that does not reach the bus, makes the node send an error flag, recessive if it is
+error passive. The receive error counter in STATUS adds 1 for the error, and 8 if
+the bus is dominant straight after the flag, and it stops at 255. A good frame
+takes away 1, and brings it back to 127 from anything above that. The node is
+error passive once either counter reaches 128. It hard-synchronises on a SOF, and
+within a frame it follows each recessive to dominant edge by up to 1/8 of a bit,
+so it can follow a sender 1.5% away from its own bit rate. It does not send
+overload frames, but an overload flag from another node just puts off the next
+frame. A safety gate drop or bus-off stops reception and keeps the node off the
+bus, and neither ACKs nor flags go out.
 
 ### 3.5 Safe UART Registers
 
@@ -187,7 +212,10 @@ drop of the safety gate clears them.
 
 Both cores receive these on their RISC-V interrupt lines, whose fixed priority
 gives the order above: NMI_LOCKSTEP on MEI, CAN_ERROR on MSI and UART_ERROR on
-MTI. NMI_ECC_DBE shares MEI with NMI_LOCKSTEP, because a double-bit error trips
+MTI. A received frame has no line of its own, because all three RISC-V lines are
+taken. It shares MSI with CAN_ERROR if RX_IRQ_EN is set, and it is off otherwise,
+so a handler has to look at RX_STATUS and release any frame it finds, or the line
+stays up. NMI_ECC_DBE shares MEI with NMI_LOCKSTEP, because a double-bit error trips
 the same latch in the comparator: the bus shuts and `actuator_safe_o` goes high
 until a cold reset. Both cores read the same word from the RAM, so they would not
 disagree about it. WD_TIMEOUT is not an interrupt: a watchdog violation resets
@@ -227,14 +255,14 @@ Each block has 0x100 bytes of the window at 0x40000000:
 | 0x40000000 | Lockstep comparator | Reserved             |
 | 0x40000100 | ECC controller      | Offsets 0x00 to 0x0C |
 | 0x40000200 | Watchdog            | Offsets 0x00 to 0x08 |
-| 0x40000300 | CAN controller      | Offsets 0x00 to 0x14 |
+| 0x40000300 | CAN controller      | Offsets 0x00 to 0x2C |
 | 0x40000400 | Safe UART           | Offsets 0x00 to 0x08 |
 
 Both peripherals share one bus and act only on a write to exactly their address,
 so a write to any other address, including the rest of their 0x100 bytes, does
 nothing:
 
-- **CAN:** the registers in section 3.4, up to offset 0x14.
+- **CAN:** the registers in section 3.4, up to offset 0x2C.
 - **UART:** the registers in section 3.5, with the byte for TX_DATA in bits 7:0.
 
 Data for a read is ready in the cycle after the strobe, and any other address
@@ -244,7 +272,7 @@ reads zero. These status registers have the following bits:
 |------------|-------------|---------------------------------------------------------|
 | 0x40000204 | WD STATUS   | 7 = violation held, 6 = early, 5 = late, 4:0 = counter 15:11 |
 | 0x40000208 | RESET_SRC   | 1:0 = 0 for no watchdog reset, 1 for early, 2 for late  |
-| 0x4000030C | CAN STATUS  | 16:8 = TEC, 3 = interrupt, 2 = bus-off, 1 = error passive, 0 = busy |
+| 0x4000030C | CAN STATUS  | 31:24 = REC, 16:8 = TEC, 3 = interrupt, 2 = bus-off, 1 = error passive, 0 = busy |
 | 0x40000404 | UART STATUS | 1 = parity error interrupt, 0 = busy                    |
 | 0x40000408 | UART PARITY | 0 = the byte held for transmission has good parity      |
 

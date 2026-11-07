@@ -61,3 +61,10 @@
 - **Mitigation:** `bus_ok_i` input blocks all CAN traffic when `bus_valid_o` is low.
 - **Verification Method:** Functional Testbench
 - **Implemented In:** `rtl/peripherals/automotive_can_controller.vhd`
+
+## TSR_CAN_002
+- **Description:** The CAN-Bus controller must receive and acknowledge frames from other nodes, reject any that fail a stuff, CRC or form check, and signal those with an error flag, following ISO 11898-1.
+- **ASIL Allocation:** ASIL-B
+- **Mitigation:** A bus-off node or a dropped `bus_ok_i` keeps it off the bus. A received frame is held until software releases it, and a later one cannot overwrite it.
+- **Verification Method:** Reference Model Frames + Error Injection
+- **Implemented In:** `rtl/peripherals/can_receiver.vhd`, `rtl/peripherals/automotive_can_controller.vhd`

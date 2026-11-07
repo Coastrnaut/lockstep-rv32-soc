@@ -19,6 +19,7 @@ library lockstep;
 
 library work;
   use work.can_test_pkg.all;
+  use work.can_rx_frames_pkg.all;
 
 entity tb_soc_firmware is
   generic (
@@ -47,6 +48,7 @@ architecture tb of tb_soc_firmware is
 
   -- The CAN bus: the SoC and a receiver that acknowledges
   signal can_bus    : std_logic;
+  signal sender_tx  : std_logic;
   signal ack_tx     : std_logic;
   signal ack_enable : std_logic;
   signal rx_starts  : natural;
@@ -97,7 +99,7 @@ begin
       actuator_safe_o => actuator_safe
     );
 
-  can_bus <= can_tx and ack_tx;
+  can_bus <= can_tx and ack_tx and sender_tx;
 
   i_node : entity work.can_test_node
     generic map (
@@ -174,6 +176,7 @@ begin
     while test_suite loop
 
       ack_enable <= '1';
+      sender_tx  <= '1';
       rst_n      <= '0';
       wait for c_clk_period * 5;
       rst_n      <= '1';
@@ -214,6 +217,26 @@ begin
         check_equal(uart_count, 6, "no other bytes");
         check_equal(rx_starts, 3, "the third attempt got through");
         check_equal(actuator_safe, '0', "actuators free");
+      elsif run("frame_from_another_node_reaches_the_program") then
+        check_uart_byte(5, x"44");
+
+        -- The program is polling the watchdog by now, so this comes as an interrupt.
+        -- It sends the low byte of the identifier, which is 0x23, to the UART.
+        for wire_bit in 1 to c_rx_vectors(2).length loop
+
+          if (c_rx_vectors(2).wire(wire_bit) = '0') then
+            sender_tx <= '0';
+          else
+            sender_tx <= '1';
+          end if;
+
+          wait for c_can_bit_time;
+
+        end loop;
+
+        sender_tx <= '1';
+        check_uart_byte(6, x"23");
+        check_equal(actuator_safe, '0', "both cores read the same frame");
       elsif run("reset_source_is_ready_when_the_program_restarts") then
         check_uart_byte(3, x"30");
 

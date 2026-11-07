@@ -384,6 +384,17 @@ begin
 
     end procedure wait_for_sof;
 
+    -- The DUT acknowledges another node's frame, which looks like a SOF from here
+
+    procedure wait_for_ack is
+    begin
+
+      wait until can_tx_o = '0' for c_max_frame_time;
+      check(can_tx_o = '0', "DUT acknowledges");
+      wait until can_tx_o = '1' for c_bit_time * 2;
+
+    end procedure wait_for_ack;
+
     procedure wait_for_frame is
     begin
 
@@ -398,9 +409,10 @@ begin
     end procedure wait_for_frame;
 
     procedure check_frame_data (
-      constant id   : in natural;
-      constant dlc  : in natural;
-      constant data : in std_logic_vector(63 downto 0)
+      constant id       : in natural;
+      constant dlc      : in natural;
+      constant data     : in std_logic_vector(63 downto 0);
+      constant from_dut : in boolean := true
     ) is
     begin
 
@@ -413,20 +425,29 @@ begin
       check_equal(rx_frame.crc, rx_frame.crc_expected, "CRC sequence");
       check_equal(rx_frame.crc_delimiter, '1', "CRC delimiter recessive");
       check_equal(rx_frame.ack_slot, '0', "receiver acknowledged");
-      check_equal(rx_frame.wire(rx_frame.wire_length - 12), '1', "DUT leaves the ACK slot recessive");
+
+      -- A transmitter leaves the ACK to its receivers, and the DUT is one of those
+      -- for any other node's frame
+      if (from_dut) then
+        check_equal(rx_frame.wire(rx_frame.wire_length - 12), '1', "DUT leaves the ACK slot recessive");
+      else
+        check_equal(rx_frame.wire(rx_frame.wire_length - 12), '0', "DUT acknowledges");
+      end if;
+
       check_equal(rx_frame.ack_delimiter, '1', "ACK delimiter recessive");
       check_equal(rx_frame.tail_recessive, 10, "EOF and intermission recessive");
 
     end procedure check_frame_data;
 
     procedure check_frame (
-      constant id      : in natural;
-      constant dlc     : in natural;
-      constant payload : in natural
+      constant id       : in natural;
+      constant dlc      : in natural;
+      constant payload  : in natural;
+      constant from_dut : in boolean := true
     ) is
     begin
 
-      check_frame_data(id, dlc, data_for(dlc, payload));
+      check_frame_data(id, dlc, data_for(dlc, payload), from_dut);
 
     end procedure check_frame;
 
@@ -786,7 +807,7 @@ begin
         write_mailbox(c_id, c_dlc, c_payload);
         wait_for_sof;
         start_rival(c_rival_win);
-        check_frame(16#122#, c_dlc, c_payload);
+        check_frame(16#122#, c_dlc, c_payload, false);
         check_frame(c_id, c_dlc, c_payload);
         check_equal(can_irq_o, '0', "losing arbitration is not an error");
       elsif run("safety_gate_blocks_clearing_the_interrupt") then
@@ -942,12 +963,13 @@ begin
           wait for c_bit_time * 10;
           wait until rising_edge(clk_i);
           write_mailbox(c_id, c_dlc, c_payload);
+          wait_for_ack;
           wait_for_sof;
           check(
                 abs((v_sof - v_edge) - c_bit_time * c_rival_win'length) <= c_clk_period * 3,
                 "SOF right after the rival's intermission"
               );
-          check_frame(16#122#, c_dlc, c_payload);
+          check_frame(16#122#, c_dlc, c_payload, false);
           check_frame(c_id, c_dlc, c_payload);
           wait for c_bit_time * 12;
 
@@ -973,9 +995,10 @@ begin
         v_edge := now;
 
         -- The rival's frame is undisturbed
-        check_frame(16#122#, c_dlc, c_payload);
+        check_frame(16#122#, c_dlc, c_payload, false);
         check_equal(to_string(rx_frame.wire(0 to 11)), c_wire(1 to 12), "DUT sends until it loses");
-        check_equal(and rx_frame.wire(12 to rx_frame.wire_length - 1), '1', "DUT recessive after losing");
+        check_equal(and rx_frame.wire(12 to rx_frame.wire_length - 13), '1', "DUT recessive after losing");
+        check_equal(and rx_frame.wire(rx_frame.wire_length - 11 to rx_frame.wire_length - 1), '1', "and after the ACK");
         check_equal(tec, 0, "losing arbitration is not an error");
 
         -- The DUT tries again as soon as the bus is idle
@@ -1065,10 +1088,20 @@ begin
         v_falls := tx_falls;
         v_edge  := v_sof;
         force_bit(force_dominant, 3);
+
+        -- It lost to nobody, so the bus goes quiet and it has become a receiver of
+        -- a frame that has stopped. Six recessive bits are a stuff error, and four
+        -- dominant bits and those six make ten.
         wait_for_sof;
-        check_equal(v_sof - v_edge, c_bit_time * (3 + 1 + 11), "retry after 11 recessive bits, with no error flag");
-        check_equal(tx_falls, v_falls + 1, "no dominant bit before the retry");
-        check_equal(tec, 0, "no error");
+        check_equal(v_sof - v_edge, c_bit_time * 10, "error flag, as a receiver");
+        check_equal(tx_falls, v_falls + 1, "nothing before the flag");
+        check_equal(tec, 0, "no transmit error");
+
+        -- Flag, delimiter and intermission
+        wait until can_tx_o = '1' for c_bit_time * 7;
+        wait_for_sof;
+        check_equal(v_sof - v_edge, c_bit_time * (10 + 6 + 11), "then the retry");
+        wait_for_frame;
         wait_for_frame;
         check_frame(c_id, c_dlc, c_payload);
       elsif run("dominant_stuff_bit_in_arbitration_is_not_counted") then
@@ -1160,6 +1193,7 @@ begin
         start_rival(c_rival_win);
         v_edge := now;
         wait for c_bit_time * 2;
+        wait_for_ack;
         wait_for_sof;
         check(
               abs((v_sof - v_edge) - c_bit_time * c_rival_win'length) <= c_clk_period * 3,

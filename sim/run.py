@@ -234,10 +234,11 @@ def _run_ghdl_lint(ghdl_exe):
     config_files = sorted((root / "config").glob("*.vhd"))
 
     # Analysis follows this order, so a block has to come after any it instantiates
-    wrappers = ("ecc_data_ram", "watchdog_supervisor")
+    wrappers = ("automotive_can_controller", "ecc_data_ram", "watchdog_supervisor")
     safety_files = sorted((root / "rtl" / "safety_blocks").glob("*.vhd"),
                           key=lambda f: (f.stem in wrappers, f.stem))
-    periph_files = sorted((root / "rtl" / "peripherals").glob("*.vhd"))
+    periph_files = sorted((root / "rtl" / "peripherals").glob("*.vhd"),
+                          key=lambda f: (f.stem in wrappers, f.stem))
     top_soc = root / "rtl" / "top_automotive_soc.vhd"
     # NEORV32: use file_list_core.f for correct dependency order
     neorv32_files = []
@@ -443,6 +444,7 @@ vu.add_osvvm()
 # ---------------------------------------------------------------------------
 sim_lib = vu.add_library("sim_lib", vhdl_standard="2008")
 sim_lib.add_source_files(root / "sim" / "testbenches" / "*.vhd")
+sim_lib.add_source_files(root / "sim" / "generated" / "*.vhd")
 
 # ---------------------------------------------------------------------------
 # Simulator-specific options

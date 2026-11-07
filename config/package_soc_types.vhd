@@ -98,6 +98,12 @@ package package_soc_types is
   constant c_can_status_addr     : std_logic_vector(c_addr_width - 1 downto 0) := x"4000030C";
   constant c_can_data_hi_addr    : std_logic_vector(c_addr_width - 1 downto 0) := x"40000310";
   constant c_can_tx_request_addr : std_logic_vector(c_addr_width - 1 downto 0) := x"40000314";
+  constant c_can_rx_id_addr      : std_logic_vector(c_addr_width - 1 downto 0) := x"40000318";
+  constant c_can_rx_info_addr    : std_logic_vector(c_addr_width - 1 downto 0) := x"4000031C";
+  constant c_can_rx_data_addr    : std_logic_vector(c_addr_width - 1 downto 0) := x"40000320";
+  constant c_can_rx_data_hi_addr : std_logic_vector(c_addr_width - 1 downto 0) := x"40000324";
+  constant c_can_rx_status_addr  : std_logic_vector(c_addr_width - 1 downto 0) := x"40000328";
+  constant c_can_rx_irq_en_addr  : std_logic_vector(c_addr_width - 1 downto 0) := x"4000032C";
   constant c_ram_base_addr       : std_logic_vector(c_addr_width - 1 downto 0) := x"20000000";
   constant c_ecc_sbe_count_addr  : std_logic_vector(c_addr_width - 1 downto 0) := x"40000100";
   constant c_ecc_dbe_count_addr  : std_logic_vector(c_addr_width - 1 downto 0) := x"40000104";

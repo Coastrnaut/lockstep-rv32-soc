@@ -9,10 +9,17 @@ package neorv32_imem_image is
 type rom_t is array (0 to 255) of std_ulogic_vector(31 downto 0);
 constant image_size_c : natural := 1024;
 constant image_data_c : rom_t := (
-x"0280006f", -- jal zero main
+x"0440006f", -- jal zero main
 x"34202e73", -- csrr t3 mcause
 x"004e7e13", -- andi t3 t3 4
-x"000e1863", -- bne t3 zero trap_uart
+x"020e1663", -- bne t3 zero trap_uart
+x"32842e03", -- lw t3 808 s0
+x"001e7e13", -- andi t3 t3 1
+x"000e0a63", -- beq t3 zero trap_can_error
+x"31842e03", -- lw t3 792 s0
+x"41c42023", -- sw t3 1024 s0
+x"32042423", -- sw zero 808 s0
+x"30200073", -- mret
 x"30042623", -- sw zero 780 s0
 x"00148493", -- addi s1 s1 1
 x"30200073", -- mret
@@ -30,6 +37,8 @@ x"08800293", -- addi t0 zero 136
 x"30429073", -- csrw mie t0
 x"00800293", -- addi t0 zero 8
 x"3002a073", -- csrs mstatus t0
+x"00100293", -- addi t0 zero 1
+x"32542623", -- sw t0 812 s0
 x"20042023", -- sw zero 512 s0
 x"20842983", -- lw s3 520 s0
 x"03098393", -- addi t2 s3 48
