@@ -47,10 +47,10 @@
 
 | Coverage Type       | Target | Achieved | Notes                              |
 |---------------------|--------|----------|------------------------------------|
-| RTL Implementation  | 100%   | 100%     | All 5 safety blocks implemented    |
-| Testbench Coverage  | 100%   | 100%     | 7 testbenches (5 functional + 2 fault inject) |
+| RTL Implementation  | 100%   | 100%     | All 7 blocks written. The ECC wrapper is not in the SoC yet |
+| Testbench Coverage  | 100%   | 100%     | 27 testbenches, with fault injection on lockstep, ECC and UART |
 | Fault Injection     | 100%   | 100%     | Stuck-at + bit-flip on lockstep + ECC |
-| Formal Assertions   | 100%   | 100%     | Clocked assertions in all 5 blocks |
+| Formal Assertions   | 100%   | 100%     | Clocked assertions in all 7 blocks |
 | Traceability Tags   | 100%   | 100%     | VHDL attributes in all RTL files   |
 
 ---

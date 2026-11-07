@@ -141,6 +141,17 @@ begin
         end loop;
 
         check_equal(rst_long, '1', "five stages released by the fifth edge");
+      elsif run("release_exactly_on_a_rising_edge_still_takes_every_stage") then
+        -- VERIFICATION_SPECIFICATION section 2, item 3
+        rst_n <= '1';
+        clk   <= '1';
+        wait for c_half_period;
+        falling_clock;
+        check_equal(rst_syn, '0', "that edge cannot be the last");
+        check_equal(rst_long, '0', "that edge cannot be the last");
+        rising_clock;
+        check_equal(rst_syn, '1', "the next edge releases two stages");
+        check_equal(rst_long, '0', "and five stages go on counting");
       elsif run("short_pulse_between_clock_edges_is_a_full_reset") then
         run_to_released;
         set_reset('0');
