@@ -1,10 +1,11 @@
 -- ============================================================================
--- Testbench: CAN Controller — Frame TX + Safety Gate
+-- Testbench: CAN Controller — Frame TX, Bus Access + Safety Gate
 -- ============================================================================
--- p_monitor is an independent CAN receiver on can_tx_o. It samples mid-bit on
--- its own timing, removes and checks stuff bits, and recomputes the CRC. That
--- CRC is tested against the published CRC-15/CAN check value, and whole frames
--- are compared with wire bits from sim/scripts/can_frame_model.py.
+-- can_test_node is an independent CAN receiver on the bus. Its CRC is tested
+-- against the published CRC-15/CAN check value, and whole frames are compared
+-- with wire bits from sim/scripts/can_frame_model.py. p_rival plays another
+-- transmitter from those same wire bits, and the force signals inject bus
+-- faults. Expected timings come from ISO 11898-1.
 -- ============================================================================
 
 library ieee;
@@ -17,6 +18,9 @@ library vunit_lib;
 library lockstep;
   use lockstep.package_soc_types.all;
 
+library work;
+  use work.can_test_pkg.all;
+
 entity tb_can is
   generic (
     runner_cfg : string
@@ -26,12 +30,17 @@ end entity tb_can;
 architecture tb of tb_can is
 
   constant c_clk_period   : time     := 10 ns;
-  constant c_clks_per_bit : positive := 4;
+  constant c_clks_per_bit : positive := 8;
   constant c_bit_time     : time     := c_clk_period * c_clks_per_bit;
 
-  -- Worst case: 98 stuffed bits, 24 stuff bits and a 13 bit tail
-  constant c_max_frame_bits : positive := 135;
-  constant c_max_frame_time : time     := c_bit_time * c_max_frame_bits;
+  -- A whole frame, plus the 11 recessive bits that come before it
+  constant c_max_frame_time : time := c_bit_time * (c_max_frame_bits + 11);
+
+  -- Transceiver and bus delay from can_tx_o back to can_rx_i
+  constant c_loop_delay : time := c_clk_period;
+
+  constant c_status_bus_off : natural := 10;
+  constant c_status_passive : natural := 9;
 
   constant c_bus_idle : t_rv_bus :=
   (
@@ -41,76 +50,55 @@ architecture tb of tb_can is
     valid => '0'
   );
 
-  -- What the independent receiver saw on can_tx_o
+  -- The frame most tests send, with positions in its wire bits counted from SOF
+  constant c_id       : natural := 16#123#;
+  constant c_dlc      : natural := 2;
+  constant c_payload  : natural := 16#A55A#;
+  constant c_wire     : string  := "0001001000110000011010100101010110101001001010111001111111111111";
+  constant c_ack_slot : natural := 52;
+  constant c_last_eof : natural := 60;
+  constant c_ifs_1    : natural := 61;
 
-  type t_rx_frame is record
-    id             : std_logic_vector(10 downto 0);
-    flags          : std_logic_vector(2 downto 0);  -- RTR, IDE, r0
-    dlc            : std_logic_vector(3 downto 0);
-    data           : std_logic_vector(63 downto 0); -- First byte on the wire in 63:56
-    crc            : std_logic_vector(14 downto 0);
-    crc_expected   : std_logic_vector(14 downto 0);
-    crc_delimiter  : std_logic;
-    ack_slot       : std_logic;
-    ack_delimiter  : std_logic;
-    tail_recessive : natural;                       -- EOF and intermission
-    busy_at_end    : boolean;
-    stuff_error    : boolean;
-    wire           : std_logic_vector(0 to c_max_frame_bits - 1);
-    wire_length    : natural;
-  end record t_rx_frame;
+  -- The tail of a frame from the CRC delimiter, with an error flag after the ACK slot
+  constant c_tail_active_flag : string := "1100000011111";
 
-  constant c_empty_frame : t_rx_frame :=
-  (
-    id             => (others => '0'),
-    flags          => (others => '0'),
-    dlc            => (others => '0'),
-    data           => (others => '0'),
-    crc            => (others => '0'),
-    crc_expected   => (others => '0'),
-    crc_delimiter  => '0',
-    ack_slot       => '0',
-    ack_delimiter  => '0',
-    tail_recessive => 0,
-    busy_at_end    => false,
-    stuff_error    => false,
-    wire           => (others => '0'),
-    wire_length    => 0
-  );
+  -- Bits from SOF to the next SOF after an error flag that follows the ACK slot
+  constant c_retry_bits         : natural := c_ack_slot + 1 + 6 + 11;
+  constant c_passive_retry_bits : natural := c_retry_bits + 8;
 
-  signal clk_i      : std_logic;
-  signal rst_n_i    : std_logic;
-  signal bus_i      : t_rv_bus;
-  signal bus_ok_i   : std_logic;
-  signal can_rx_i   : std_logic;
-  signal can_tx_o   : std_logic;
-  signal can_busy_o : std_logic;
+  -- Wire bits of rival frames that beat 0x123 and lose to it
+  constant c_rival_win  : string := "00010010001000001010101001010101101010001100010000011111111111111";
+  constant c_rival_lose : string := "0001001001";
+
+  signal clk_i        : std_logic;
+  signal rst_n_i      : std_logic;
+  signal bus_i        : t_rv_bus;
+  signal bus_ok_i     : std_logic;
+  signal can_rx_i     : std_logic;
+  signal can_tx_o     : std_logic;
+  signal can_busy_o   : std_logic;
+  signal can_status_o : std_logic_vector(10 downto 0);
+
+  -- The bus and what else is on it
+  signal can_bus         : std_logic;
+  signal ack_tx          : std_logic;
+  signal ack_enable      : std_logic;
+  signal rival_tx        : std_logic;
+  signal force_dominant  : std_logic;
+  signal force_recessive : std_logic;
 
   -- Receiver results: SOFs seen, and frames finished or given up on
   signal rx_starts : natural;
   signal rx_done   : natural;
   signal rx_frame  : t_rx_frame;
 
-  -- Shift-register sequence from the Bosch CAN 2.0 specification
+  -- Dominant edges driven by the DUT
+  signal tx_falls : natural;
 
-  function crc15_next (
-    crc      : std_logic_vector(14 downto 0);
-    data_bit : std_logic
-  ) return std_logic_vector is
-
-    variable v_crc : std_logic_vector(14 downto 0);
-
-  begin
-
-    v_crc := crc(13 downto 0) & '0';
-
-    if ((data_bit xor crc(14)) = '1') then
-      v_crc := v_crc xor std_logic_vector(to_unsigned(16#4599#, 15));
-    end if;
-
-    return v_crc;
-
-  end function crc15_next;
+  -- Wire bits for p_rival to send, started by toggling rival_go
+  signal rival_wire   : string(1 to 2 * c_max_frame_bits);
+  signal rival_length : natural;
+  signal rival_go     : boolean;
 
 begin
 
@@ -132,150 +120,71 @@ begin
       g_clks_per_bit => c_clks_per_bit
     )
     port map (
-      clk_i      => clk_i,
-      rst_n_i    => rst_n_i,
-      bus_i      => bus_i,
-      bus_ok_i   => bus_ok_i,
-      can_tx_o   => can_tx_o,
-      can_rx_i   => can_rx_i,
-      can_busy_o => can_busy_o
+      clk_i        => clk_i,
+      rst_n_i      => rst_n_i,
+      bus_i        => bus_i,
+      bus_ok_i     => bus_ok_i,
+      can_tx_o     => can_tx_o,
+      can_rx_i     => can_rx_i,
+      can_busy_o   => can_busy_o,
+      can_status_o => can_status_o
     );
 
-  -- ========================================================================
-  -- Independent CAN receiver
-  -- ========================================================================
-  p_monitor : process is
+  -- A wired-AND bus. force_recessive stands for a broken RX path, so only the
+  -- DUT reads it.
+  can_bus  <= can_tx_o and ack_tx and rival_tx and not force_dominant;
+  can_rx_i <= transport (can_bus or force_recessive) after c_loop_delay;
 
-    variable v_frame : t_rx_frame;
-    variable v_crc   : std_logic_vector(14 downto 0);
-    variable v_run   : natural;
-    variable v_last  : std_logic;
-    variable v_bit   : std_logic;
+  i_node : entity work.can_test_node
+    generic map (
+      g_bit_time => c_bit_time
+    )
+    port map (
+      bus_i        => can_bus,
+      dut_tx_i     => can_tx_o,
+      ack_enable_i => ack_enable,
+      ack_o        => ack_tx,
+      frame_o      => rx_frame,
+      starts_o     => rx_starts,
+      done_o       => rx_done
+    );
 
-    procedure sample_wire (
-      variable sampled : out std_logic
-    ) is
-    begin
-
-      sampled                           := can_tx_o;
-      v_frame.wire(v_frame.wire_length) := can_tx_o;
-      v_frame.wire_length               := v_frame.wire_length + 1;
-
-    end procedure sample_wire;
-
-    procedure next_wire_bit (
-      variable sampled : out std_logic
-    ) is
-    begin
-
-      wait for c_bit_time;
-      sample_wire(sampled);
-
-    end procedure next_wire_bit;
-
-    -- After 5 identical bits the next wire bit must be their complement
-
-    procedure skip_stuff_bit is
-    begin
-
-      if (v_run = 5) then
-        next_wire_bit(v_bit);
-
-        if (v_bit = v_last) then
-          v_frame.stuff_error := true;
-        end if;
-
-        v_last := v_bit;
-        v_run  := 1;
-      end if;
-
-    end procedure skip_stuff_bit;
-
-    procedure receive_field (
-      variable field  : out std_logic_vector;
-      constant in_crc : in boolean
-    ) is
-    begin
-
-      for i in field'range loop
-
-        skip_stuff_bit;
-        exit when v_frame.stuff_error;
-        next_wire_bit(v_bit);
-        field(i) := v_bit;
-
-        if (v_bit = v_last) then
-          v_run := v_run + 1;
-        else
-          v_last := v_bit;
-          v_run  := 1;
-        end if;
-
-        if (in_crc) then
-          v_crc := crc15_next(v_crc, v_bit);
-        end if;
-
-      end loop;
-
-    end procedure receive_field;
-
-    procedure receive_frame is
-
-      variable v_bytes : natural;
-
-    begin
-
-      v_frame := c_empty_frame;
-
-      -- SOF: the falling edge starts the receiver's own bit timing
-      wait for c_bit_time / 2;
-      sample_wire(v_bit);
-      v_crc  := crc15_next((others => '0'), v_bit);
-      v_last := v_bit;
-      v_run  := 1;
-
-      receive_field(v_frame.id, true);
-      receive_field(v_frame.flags, true);
-      receive_field(v_frame.dlc, true);
-      v_bytes              := minimum(to_integer(unsigned(v_frame.dlc)), 8);
-      receive_field(v_frame.data(63 downto 64 - v_bytes * 8), true);
-      v_frame.crc_expected := v_crc;
-      receive_field(v_frame.crc, false);
-
-      -- Stuffing also covers the bit after the last CRC bit
-      skip_stuff_bit;
-
-      if (v_frame.stuff_error) then
-        return;
-      end if;
-
-      next_wire_bit(v_frame.crc_delimiter);
-      next_wire_bit(v_frame.ack_slot);
-      next_wire_bit(v_frame.ack_delimiter);
-
-      for dummy in 1 to 10 loop
-
-        next_wire_bit(v_bit);
-
-        if (v_bit = '1') then
-          v_frame.tail_recessive := v_frame.tail_recessive + 1;
-        end if;
-
-      end loop;
-
-      v_frame.busy_at_end := can_busy_o = '1';
-
-    end procedure receive_frame;
-
+  p_count_tx : process (can_tx_o) is
   begin
 
-    wait until can_tx_o = '0';
-    rx_starts <= rx_starts + 1;
-    receive_frame;
-    rx_frame  <= v_frame;
-    rx_done   <= rx_done + 1;
+    if falling_edge(can_tx_o) then
+      tx_falls <= tx_falls + 1;
+    end if;
 
-  end process p_monitor;
+  end process p_count_tx;
+
+  -- Another transmitter, playing back wire bits and then letting go of the bus
+  p_rival : process is
+  begin
+
+    rival_tx <= '1';
+
+    loop
+
+      wait on rival_go;
+
+      for i in 1 to rival_length loop
+
+        if (rival_wire(i) = '0') then
+          rival_tx <= '0';
+        else
+          rival_tx <= '1';
+        end if;
+
+        wait for c_bit_time;
+
+      end loop;
+
+      rival_tx <= '1';
+
+    end loop;
+
+  end process p_rival;
 
   -- ========================================================================
   -- Stimulus
@@ -284,20 +193,41 @@ begin
 
     constant c_crc_check_input : string := "123456789";
 
-    variable v_seen : natural;
-    variable v_crc  : std_logic_vector(14 downto 0);
-    variable v_sof  : time;
-    variable v_edge : time;
+    variable v_seen  : natural;
+    variable v_crc   : std_logic_vector(14 downto 0);
+    variable v_sof   : time;
+    variable v_edge  : time;
+    variable v_end   : time;
+    variable v_falls : natural;
+
+    impure function tec return natural is
+    begin
+
+      return to_integer(unsigned(can_status_o(8 downto 0)));
+
+    end function tec;
+
+    -- The last 13 bits the DUT drove, from the CRC delimiter to the third
+    -- intermission bit of a complete frame
+
+    impure function wire_tail return string is
+    begin
+
+      return to_string(rx_frame.wire(rx_frame.wire_length - 13 to rx_frame.wire_length - 1));
+
+    end function wire_tail;
 
     procedure reset_dut is
     begin
 
-      rst_n_i  <= '0';
-      bus_ok_i <= '1';
-      can_rx_i <= '1';
-      bus_i    <= c_bus_idle;
+      rst_n_i         <= '0';
+      bus_ok_i        <= '1';
+      bus_i           <= c_bus_idle;
+      ack_enable      <= '1';
+      force_dominant  <= '0';
+      force_recessive <= '0';
       wait for c_clk_period * 3;
-      rst_n_i  <= '1';
+      rst_n_i         <= '1';
       wait until rising_edge(clk_i);
 
     end procedure reset_dut;
@@ -310,16 +240,16 @@ begin
       constant payload : in natural
     ) is
 
-      constant c_id      : std_logic_vector(10 downto 0) := std_logic_vector(to_unsigned(id, 11));
-      constant c_dlc     : std_logic_vector(3 downto 0)  := std_logic_vector(to_unsigned(dlc, 4));
-      constant c_payload : std_logic_vector(15 downto 0) := std_logic_vector(to_unsigned(payload, 16));
+      constant c_id_bits      : std_logic_vector(10 downto 0) := std_logic_vector(to_unsigned(id, 11));
+      constant c_dlc_bits     : std_logic_vector(3 downto 0)  := std_logic_vector(to_unsigned(dlc, 4));
+      constant c_payload_bits : std_logic_vector(15 downto 0) := std_logic_vector(to_unsigned(payload, 16));
 
     begin
 
       bus_i <=
       (
         addr  => (others => '0'),
-        data  => c_id & c_dlc & '0' & c_payload,
+        data  => c_id_bits & c_dlc_bits & '0' & c_payload_bits,
         we    => '1',
         valid => '1'
       );
@@ -327,6 +257,43 @@ begin
       bus_i <= c_bus_idle;
 
     end procedure write_mailbox;
+
+    procedure start_rival (
+      constant wire : in string
+    ) is
+    begin
+
+      rival_wire(1 to wire'length) <= wire;
+      rival_length                 <= wire'length;
+      rival_go                     <= not rival_go;
+
+    end procedure start_rival;
+
+    -- Hold a force signal for one wire bit, counted from a SOF happening now.
+    -- The extra clock overlaps the next bit, so that an error flag starting
+    -- there does not leave a zero-width recessive gap on the bus.
+
+    procedure force_bit (
+      signal force_s : out std_logic;
+      constant index : in natural
+    ) is
+    begin
+
+      wait for c_bit_time * index;
+      force_s <= '1';
+      wait for c_bit_time + c_clk_period;
+      force_s <= '0';
+
+    end procedure force_bit;
+
+    procedure wait_for_sof is
+    begin
+
+      wait until can_tx_o = '0' for c_max_frame_time;
+      check(can_tx_o = '0', "DUT starts a frame");
+      v_sof := now;
+
+    end procedure wait_for_sof;
 
     procedure wait_for_frame is
     begin
@@ -347,8 +314,8 @@ begin
       constant payload : in natural
     ) is
 
-      constant c_payload : std_logic_vector(15 downto 0) := std_logic_vector(to_unsigned(payload, 16));
-      constant c_bytes   : natural                       := minimum(dlc, 8);
+      constant c_payload_bits : std_logic_vector(15 downto 0) := std_logic_vector(to_unsigned(payload, 16));
+      constant c_bytes        : natural                       := minimum(dlc, 8);
 
     begin
 
@@ -359,16 +326,16 @@ begin
       check_equal(rx_frame.dlc, std_logic_vector(to_unsigned(dlc, 4)), "DLC");
       check_equal(
                   rx_frame.data,
-                  std_logic_vector(shift_left(unsigned(c_payload & c_payload & c_payload & c_payload),
+                  std_logic_vector(shift_left(unsigned(c_payload_bits & c_payload_bits & c_payload_bits & c_payload_bits),
                                                64 - c_bytes * 8)),
                   "data bytes"
                 );
       check_equal(rx_frame.crc, rx_frame.crc_expected, "CRC sequence");
       check_equal(rx_frame.crc_delimiter, '1', "CRC delimiter recessive");
-      check_equal(rx_frame.ack_slot, '1', "transmitter leaves the ACK slot recessive");
+      check_equal(rx_frame.ack_slot, '0', "receiver acknowledged");
+      check_equal(rx_frame.wire(rx_frame.wire_length - 12), '1', "DUT leaves the ACK slot recessive");
       check_equal(rx_frame.ack_delimiter, '1', "ACK delimiter recessive");
       check_equal(rx_frame.tail_recessive, 10, "EOF and intermission recessive");
-      check(rx_frame.busy_at_end, "busy through the last intermission bit");
 
     end procedure check_frame;
 
@@ -381,7 +348,6 @@ begin
 
       write_mailbox(id, dlc, payload);
       check_frame(id, dlc, payload);
-      wait until can_busy_o = '0' for c_bit_time;
       check(can_busy_o = '0', "idle after the frame");
       wait until rising_edge(clk_i);
 
@@ -400,7 +366,6 @@ begin
       write_mailbox(id, dlc, payload);
       check_frame(id, dlc, payload);
       check_equal(to_string(rx_frame.wire(0 to rx_frame.wire_length - 1)), expected, "wire bits");
-      wait until can_busy_o = '0' for c_bit_time;
       wait until rising_edge(clk_i);
 
     end procedure check_wire;
@@ -411,7 +376,7 @@ begin
     begin
 
       write_mailbox(16#000#, 8, 16#0000#);
-      wait until can_tx_o = '0' for c_max_frame_time;
+      wait_for_sof;
       wait for c_bit_time * 2;
       check(can_tx_o = '0', "TX dominant mid-frame");
       check(can_busy_o = '1', "busy mid-frame");
@@ -429,6 +394,26 @@ begin
 
     end procedure check_no_more_traffic;
 
+    -- Run failed attempts with no ACK until the error counter reaches 128
+
+    procedure become_error_passive is
+    begin
+
+      ack_enable <= '0';
+      write_mailbox(c_id, c_dlc, c_payload);
+
+      for attempt in 1 to 16 loop
+
+        wait_for_frame;
+        check_equal(wire_tail, c_tail_active_flag, "active error flag");
+        check_equal(tec, attempt * 8, "error counter");
+
+      end loop;
+
+      check_equal(can_status_o(c_status_passive), '1', "error passive at 128");
+
+    end procedure become_error_passive;
+
   begin
 
     test_runner_setup(runner, runner_cfg);
@@ -445,14 +430,14 @@ begin
         -- Traffic from other nodes must not start a frame
         for dummy in 1 to 8 loop
 
-          can_rx_i <= '0';
+          force_dominant <= '1';
           wait for c_bit_time;
-          can_rx_i <= '1';
+          force_dominant <= '0';
           wait for c_bit_time;
 
         end loop;
 
-        check_equal(rx_starts, 0, "no frame without a mailbox write");
+        check_equal(tx_falls, 0, "no frame without a mailbox write");
         check(can_busy_o = '0', "idle without a mailbox write");
       elsif run("reference_crc_matches_published_check_value") then
         -- CRC-15/CAN in the reveng catalogue: check=0x059E over ASCII "123456789"
@@ -495,10 +480,7 @@ begin
         end loop;
 
       elsif run("wire_bits_match_reference_model") then
-        check_wire(
-                   16#123#, 2, 16#A55A#,
-                   "0001001000110000011010100101010110101001001010111001111111111111"
-                 );
+        check_wire(c_id, c_dlc, c_payload, c_wire);
         check_wire(
                    16#000#, 8, 16#0000#,
                    "000001000001000001100000100000100000100000100000100000100000100000" &
@@ -536,8 +518,7 @@ begin
                  );
       elsif run("bits_last_exactly_one_bit_time") then
         write_mailbox(16#555#, 8, 16#AAAA#);
-        wait until can_tx_o = '0' for c_max_frame_time;
-        v_sof  := now;
+        wait_for_sof;
         v_edge := now;
 
         while (can_busy_o = '1') loop
@@ -551,22 +532,23 @@ begin
 
         end loop;
 
+        v_end := now;
         wait_for_frame;
-        check_equal(now - v_sof, c_bit_time * rx_frame.wire_length, "busy for the whole frame");
+        check_equal(v_end - v_sof, c_bit_time * (rx_frame.wire_length - 3), "busy until the end of EOF");
       elsif run("back_to_back_frames_keep_intermission") then
-        write_mailbox(16#123#, 2, 16#A55A#);
-        wait until can_tx_o = '0' for c_max_frame_time;
-        v_sof := now;
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
         wait until can_busy_o = '0' for c_max_frame_time;
         wait until rising_edge(clk_i);
         write_mailbox(16#321#, 2, 16#5AA5#);
-        wait until can_tx_o = '0' for c_max_frame_time;
-        check_frame(16#123#, 2, 16#A55A#);
-        check(now - v_sof >= c_bit_time * rx_frame.wire_length, "second SOF after the first frame's intermission");
+        v_edge := v_sof;
+        wait_for_sof;
+        check_equal(v_sof - v_edge, c_bit_time * c_wire'length, "second SOF right after the intermission");
+        check_frame(c_id, c_dlc, c_payload);
         check_frame(16#321#, 2, 16#5AA5#);
       elsif run("write_blocked_while_gate_low") then
         bus_ok_i <= '0';
-        write_mailbox(16#123#, 2, 16#A55A#);
+        write_mailbox(c_id, c_dlc, c_payload);
         bus_ok_i <= '1';
         wait for c_max_frame_time;
         check_equal(rx_starts, 0, "no frame from a blocked write");
@@ -604,12 +586,12 @@ begin
         for step in 1 to 8 loop
 
           wait until rising_edge(clk_i);
-          write_mailbox(16#123#, 8, 16#A55A#);
+          write_mailbox(c_id, 8, c_payload);
+          wait_for_sof;
           wait for c_bit_time * step * step;
           wait until rising_edge(clk_i);
           write_mailbox(16#321#, 2, 16#5AA5#);
-          check_frame(16#123#, 8, 16#A55A#);
-          wait until can_busy_o = '0' for c_bit_time;
+          check_frame(c_id, 8, c_payload);
           check_no_more_traffic("second write not queued");
           check_equal(rx_starts, step, "one frame per mailbox write");
 
@@ -624,6 +606,309 @@ begin
         rst_n_i <= '1';
         check_no_more_traffic("no frame tail after reset");
         check_equal(rx_starts, 1, "only the interrupted frame started");
+      elsif run("waits_for_11_recessive_bits_after_reset") then
+        v_edge := now;
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        check(v_sof - v_edge >= c_bit_time * 11 - c_clk_period * 4, "bus integrated before the first frame");
+        check_frame(c_id, c_dlc, c_payload);
+      elsif run("defers_to_a_frame_already_on_the_bus") then
+        wait for c_bit_time * 12;
+
+        -- Whatever the rival's phase, the DUT lines up with its edges
+        for phase in 1 to c_clks_per_bit loop
+
+          wait for c_clk_period * phase;
+          start_rival(c_rival_win);
+          v_edge := now;
+          wait for c_bit_time * 10;
+          wait until rising_edge(clk_i);
+          write_mailbox(c_id, c_dlc, c_payload);
+          wait_for_sof;
+          check(
+                abs((v_sof - v_edge) - c_bit_time * c_rival_win'length) <= c_clk_period * 3,
+                "SOF right after the rival's intermission"
+              );
+          check_frame(16#122#, c_dlc, c_payload);
+          check_frame(c_id, c_dlc, c_payload);
+          wait for c_bit_time * 12;
+
+        end loop;
+
+      elsif run("stuck_dominant_bus_blocks_transmission") then
+        force_dominant <= '1';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait until can_tx_o = '0' for c_max_frame_time;
+        check(can_tx_o = '1', "no frame on a dominant bus");
+        check(can_busy_o = '1', "frame stays pending");
+        wait_for_frame;
+
+        force_dominant <= '0';
+        v_edge         := now;
+        wait_for_sof;
+        check(v_sof - v_edge >= c_bit_time * 11 - c_clk_period * 4, "11 recessive bits after the bus clears");
+        check_frame(c_id, c_dlc, c_payload);
+      elsif run("lost_arbitration_stops_and_retries") then
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        start_rival(c_rival_win);
+        v_edge := now;
+
+        -- The rival's frame is undisturbed
+        check_frame(16#122#, c_dlc, c_payload);
+        check_equal(to_string(rx_frame.wire(0 to 11)), c_wire(1 to 12), "DUT sends until it loses");
+        check_equal(and rx_frame.wire(12 to rx_frame.wire_length - 1), '1', "DUT recessive after losing");
+        check_equal(tec, 0, "losing arbitration is not an error");
+
+        -- The DUT tries again as soon as the bus is idle
+        wait_for_sof;
+        check(
+              abs((v_sof - v_edge) - c_bit_time * c_rival_win'length) <= c_clk_period * 3,
+              "retry right after the rival's intermission"
+            );
+        check_frame(c_id, c_dlc, c_payload);
+        check(can_busy_o = '0', "frame sent");
+      elsif run("won_arbitration_keeps_sending") then
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        start_rival(c_rival_lose);
+        check_frame(c_id, c_dlc, c_payload);
+        check_equal(to_string(rx_frame.wire(0 to rx_frame.wire_length - 1)), c_wire, "wire bits");
+        check_equal(tec, 0, "no error");
+      elsif run("joins_a_simultaneous_start_at_any_phase") then
+        wait for c_bit_time * 12;
+
+        -- Move the start around the DUT's bit timer, so that it sometimes sees
+        -- the rival's SOF edge first and has to join it
+        for phase in 1 to c_clks_per_bit loop
+
+          wait for c_clk_period * phase;
+          wait until rising_edge(clk_i);
+          write_mailbox(c_id, c_dlc, c_payload);
+          start_rival(c_rival_lose);
+          check_frame(c_id, c_dlc, c_payload);
+          check_equal(tec, 0, "no error");
+          wait for c_bit_time * 12;
+
+        end loop;
+
+      elsif run("joins_a_sof_in_the_third_intermission_bit") then
+        wait for c_bit_time * 12;
+
+        -- The rival's first frame without its last bit, then a second frame
+        start_rival(c_rival_win(1 to c_rival_win'length - 1) & c_rival_lose);
+        wait for c_bit_time * 10;
+        wait until rising_edge(clk_i);
+        write_mailbox(c_id, c_dlc, c_payload);
+
+        wait_for_frame;
+        check_equal(rx_frame.id, std_logic_vector(to_unsigned(16#122#, 11)), "first frame ID");
+        check_frame(c_id, c_dlc, c_payload);
+        check_equal(rx_starts, 2, "the DUT took part in the frame that started in intermission");
+      elsif run("missing_ack_sends_error_flag_and_retries") then
+        ack_enable <= '0';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        wait_for_frame;
+        check_equal(rx_frame.ack_slot, '1', "nobody acknowledged");
+        check_equal(wire_tail, c_tail_active_flag, "6 dominant bits from the bit after the ACK slot");
+        check_equal(tec, 8, "an ACK error adds 8");
+        check(can_busy_o = '1', "frame still pending");
+
+        v_edge     := v_sof;
+        ack_enable <= '1';
+        wait_for_sof;
+        check_equal(v_sof - v_edge, c_bit_time * c_retry_bits, "retry after the error delimiter and intermission");
+        check_frame(c_id, c_dlc, c_payload);
+        check_equal(tec, 7, "a good frame takes away 1");
+        check(can_busy_o = '0', "frame sent");
+      elsif run("dominant_on_recessive_bit_is_a_bit_error") then
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        force_bit(force_dominant, 22);
+        wait_for_frame;
+        check_equal(to_string(rx_frame.wire(23 to rx_frame.wire_length - 1)), "0000", "flag from the next bit");
+        wait for c_bit_time * 20;
+        check_equal(tec, 8, "a bit error adds 8");
+        check_frame(c_id, c_dlc, c_payload);
+        check_equal(tec, 7, "a good frame takes away 1");
+      elsif run("recessive_on_dominant_bit_is_a_bit_error") then
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        force_bit(force_recessive, 4);
+        wait_for_frame;
+        check_equal(to_string(rx_frame.wire(5 to rx_frame.wire_length - 1)), "00000", "flag from the next bit");
+        wait for c_bit_time * 20;
+        check_equal(tec, 8, "a bit error adds 8");
+        check_frame(c_id, c_dlc, c_payload);
+      elsif run("dominant_on_id_bit_loses_arbitration_without_a_flag") then
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        v_falls := tx_falls;
+        v_edge  := v_sof;
+        force_bit(force_dominant, 3);
+        wait_for_sof;
+        check_equal(v_sof - v_edge, c_bit_time * (3 + 1 + 11), "retry after 11 recessive bits, with no error flag");
+        check_equal(tx_falls, v_falls + 1, "no dominant bit before the retry");
+        check_equal(tec, 0, "no error");
+        wait_for_frame;
+        check_frame(c_id, c_dlc, c_payload);
+      elsif run("dominant_stuff_bit_in_arbitration_is_not_counted") then
+        -- ID 0: the stuff bit at position 5 is recessive and comes before RTR
+        write_mailbox(16#000#, 8, 16#0000#);
+        wait_for_sof;
+        force_bit(force_dominant, 5);
+        wait for c_bit_time;
+        check(can_tx_o = '0', "an error flag, not lost arbitration");
+        wait_for_frame;
+        wait for c_bit_time * 10;
+        check_equal(tec, 0, "exception 2 in ISO 11898-1");
+        check_frame(16#000#, 8, 16#0000#);
+        check_equal(tec, 0, "still no error");
+      elsif run("dominant_on_control_bit_is_a_bit_error") then
+        -- Position 18 is a recessive DLC bit: arbitration ended with RTR
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        force_bit(force_dominant, 18);
+        wait for c_bit_time;
+        check(can_tx_o = '0', "an error flag, not lost arbitration");
+        wait_for_frame;
+        wait for c_bit_time * 6;
+        check_equal(tec, 8, "a bit error adds 8");
+        check_frame(c_id, c_dlc, c_payload);
+      elsif run("dominant_on_last_eof_bit_fails_the_frame") then
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        force_bit(force_dominant, c_last_eof);
+        wait until can_busy_o = '0' for c_max_frame_time * 2;
+        check_equal(rx_starts, 3, "good frame, error flag read as a SOF, then the retry");
+        check_equal(tec, 7, "failed once, then sent");
+      elsif run("dominant_in_intermission_does_not_repeat_the_frame") then
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        force_bit(force_dominant, c_ifs_1);
+        wait_for_frame;
+        check_no_more_traffic("frame was already sent");
+        check_equal(tec, 0, "no error");
+      elsif run("error_passive_sends_recessive_flags_and_suspends") then
+        become_error_passive;
+
+        wait_for_sof;
+        v_edge := v_sof;
+        wait_for_frame;
+        check_equal(wire_tail, "1111111111111", "error passive flag is recessive");
+        check_equal(tec, 128, "a lone node does not count a missing ACK while passive");
+        wait_for_sof;
+        check_equal(v_sof - v_edge, c_bit_time * c_passive_retry_bits, "retry after the suspend time");
+
+        ack_enable <= '1';
+        check_frame(c_id, c_dlc, c_payload);
+        check_equal(tec, 127, "a good frame takes away 1");
+        check_equal(can_status_o(c_status_passive), '0', "error active again");
+      elsif run("error_passive_flag_answered_on_the_bus_is_counted") then
+        become_error_passive;
+
+        wait_for_sof;
+        wait for c_bit_time * (c_ack_slot + 3);
+        force_dominant <= '1';
+        wait for c_bit_time;
+        force_dominant <= '0';
+        wait for c_bit_time * 6;
+        check_equal(tec, 136, "dominant bit during the passive flag");
+      elsif run("error_passive_suspends_after_a_good_frame") then
+        become_error_passive;
+
+        ack_enable <= '1';
+        wait_for_sof;
+        v_edge     := v_sof;
+        wait until can_busy_o = '0' for c_max_frame_time;
+        check_equal(tec, 127, "frame sent");
+        wait until rising_edge(clk_i);
+        write_mailbox(16#321#, 2, 16#5AA5#);
+        wait_for_sof;
+        check_equal(v_sof - v_edge, c_bit_time * (c_wire'length + 8), "SOF after intermission and suspend time");
+      elsif run("suspend_time_gives_way_to_another_node") then
+        become_error_passive;
+
+        ack_enable <= '1';
+        wait_for_sof;
+        wait until can_busy_o = '0' for c_max_frame_time;
+        wait until rising_edge(clk_i);
+        write_mailbox(16#321#, 2, 16#5AA5#);
+
+        -- A rival starts after the intermission, during the suspend time
+        wait for c_bit_time * 7;
+        check(can_tx_o = '1', "still suspended");
+        start_rival(c_rival_win);
+        v_edge := now;
+        wait for c_bit_time * 2;
+        wait_for_sof;
+        check(
+              abs((v_sof - v_edge) - c_bit_time * c_rival_win'length) <= c_clk_period * 3,
+              "only the rival's intermission, with no suspend time left"
+            );
+      elsif run("bus_off_after_32_errors_until_reset") then
+        -- A broken RX path: every SOF reads back recessive
+        force_recessive <= '1';
+        write_mailbox(c_id, c_dlc, c_payload);
+
+        for attempt in 1 to 32 loop
+
+          wait until tx_falls = attempt for c_max_frame_time;
+          check_equal(tx_falls, attempt, "attempt");
+          check_equal(tec, (attempt - 1) * 8, "error counter");
+          check_equal(can_status_o(c_status_passive) = '1', attempt > 16, "error state");
+          check_equal(can_status_o(c_status_bus_off), '0', "not bus-off yet");
+
+        end loop;
+
+        wait for c_bit_time * 8;
+        check_equal(tec, 256, "error counter");
+        check_equal(can_status_o(c_status_bus_off), '1', "bus-off");
+        check(can_tx_o = '1', "bus-off is recessive");
+        check(can_busy_o = '0', "pending frame dropped");
+
+        -- A write does not get through, and neither does a healthy bus help
+        force_recessive <= '0';
+        wait until rising_edge(clk_i);
+        write_mailbox(c_id, c_dlc, c_payload);
+        check(can_busy_o = '0', "writes are ignored while bus-off");
+        wait until can_tx_o = '0' for c_max_frame_time * 2;
+        check(can_tx_o = '1', "no automatic recovery");
+
+        reset_dut;
+        check_equal(can_status_o, std_logic_vector(to_unsigned(0, 11)), "reset clears the fault state");
+        v_seen := rx_done;
+        send_and_check(c_id, c_dlc, c_payload);
+      elsif run("gate_drop_during_error_flag_forces_recessive") then
+        ack_enable <= '0';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        wait for c_bit_time * (c_ack_slot + 3);
+        check(can_tx_o = '0', "error flag in progress");
+
+        bus_ok_i <= '0';
+        wait for 1 ns;
+        check(can_tx_o = '1', "recessive without waiting for a clock");
+        wait until rising_edge(clk_i);
+        wait until rising_edge(clk_i);
+        bus_ok_i <= '1';
+        check_no_more_traffic("no retry after the gate returns");
+        check_equal(tec, 0, "the flag never finished");
+      elsif run("gate_drop_while_waiting_to_retry_drops_the_frame") then
+        ack_enable <= '0';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        wait_for_frame;
+        check_equal(tec, 8, "failed once");
+        check(can_busy_o = '1', "waiting to retry");
+
+        wait until rising_edge(clk_i);
+        bus_ok_i <= '0';
+        wait until rising_edge(clk_i);
+        bus_ok_i <= '1';
+        check_no_more_traffic("frame dropped with the gate");
+        check_equal(tec, 8, "the gate does not clear the error counter");
       end if;
 
     end loop;

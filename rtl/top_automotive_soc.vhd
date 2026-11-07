@@ -85,6 +85,7 @@ architecture structural of top_automotive_soc is
 
   -- Peripheral diagnostic signals
   signal w_can_busy            : std_logic;
+  signal w_can_status          : std_logic_vector(10 downto 0);
   signal w_uart_busy           : std_logic;
   signal w_uart_error          : std_logic;
   signal w_core_a_jtag_tdo     : std_ulogic;
@@ -749,13 +750,14 @@ begin
   -- ========================================================================
   i_automotive_can : entity lockstep.automotive_can_controller
     port map (
-      clk_i      => clk_i,
-      rst_n_i    => rst_n_i,
-      bus_i      => w_safe_sys_bus,
-      bus_ok_i   => w_bus_valid,
-      can_tx_o   => can_tx_o,
-      can_rx_i   => can_rx_i,
-      can_busy_o => w_can_busy
+      clk_i        => clk_i,
+      rst_n_i      => rst_n_i,
+      bus_i        => w_safe_sys_bus,
+      bus_ok_i     => w_bus_valid,
+      can_tx_o     => can_tx_o,
+      can_rx_i     => can_rx_i,
+      can_busy_o   => w_can_busy,
+      can_status_o => w_can_status
 
     ); -- ========================================================================
 
@@ -799,6 +801,9 @@ begin
       end if;
       if (w_can_busy = '1') then
         null;                                                                          -- CAN bus activity
+      end if;
+      if (w_can_status /= "00000000000") then
+        null;                                                                          -- CAN error state
       end if;
       if (w_uart_busy = '1') then
         null;                                                                          -- UART activity

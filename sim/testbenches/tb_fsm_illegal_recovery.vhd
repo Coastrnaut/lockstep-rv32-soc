@@ -9,6 +9,9 @@ library vunit_lib;
 library lockstep;
   use lockstep.package_soc_types.all;
 
+library work;
+  use work.can_test_pkg.all;
+
 entity tb_fsm_illegal_recovery is
   generic (
     runner_cfg : string := ""
@@ -18,10 +21,11 @@ end entity tb_fsm_illegal_recovery;
 architecture tb of tb_fsm_illegal_recovery is
 
   constant clk_period     : time     := 20 ns;
-  constant c_clks_per_bit : positive := 4;
+  constant c_clks_per_bit : positive := 8;
+  constant c_bit_time     : time     := clk_period * c_clks_per_bit;
 
-  -- Longest frame: 135 bits
-  constant c_max_frame_time : time := clk_period * c_clks_per_bit * 135;
+  -- A whole frame, plus the 11 recessive bits that come before it
+  constant c_max_frame_time : time := c_bit_time * (c_max_frame_bits + 11);
 
   signal clk   : std_logic;
   signal rst_n : std_logic;
@@ -30,7 +34,11 @@ architecture tb of tb_fsm_illegal_recovery is
   signal bus_ok   : std_logic;
   signal can_tx   : std_logic;
   signal can_rx   : std_logic;
-  signal can_busy : std_logic;begin
+  signal can_busy : std_logic;
+
+  -- The bus: the DUT, a receiver that acknowledges, and dominant stimulus
+  signal can_bus : std_logic;
+  signal ack_tx  : std_logic;begin
 
   p_clk : process is
   begin
@@ -51,16 +59,31 @@ architecture tb of tb_fsm_illegal_recovery is
       bus_i      => bus_i,
       bus_ok_i   => bus_ok,
       can_tx_o   => can_tx,
-      can_rx_i   => can_rx,
+      can_rx_i   => can_bus,
       can_busy_o => can_busy
 
-    );p_test : process is
+    );
+
+  can_bus <= can_tx and ack_tx and can_rx;
+
+  i_node : entity work.can_test_node
+    generic map (
+      g_bit_time => c_bit_time
+    )
+    port map (
+      bus_i        => can_bus,
+      dut_tx_i     => can_tx,
+      ack_enable_i => '1',
+      ack_o        => ack_tx
+    );
+
+  p_test : process is
   begin
 
     test_runner_setup(runner, runner_cfg);
 
     rst_n  <= '0';
-    can_rx <= '0';
+    can_rx <= '1';
     bus_i  <= (addr => x"00000000", data => x"00000000", we => '0', valid => '0');
     bus_ok <= '1';
     wait for 100 ns;
@@ -120,17 +143,20 @@ architecture tb of tb_fsm_illegal_recovery is
     wait for clk_period * 10;
     check(can_busy = '0', "bus invalid: recovered");
 
-    -- TEST 5: Simultaneous RX+TX
-    report "TEST: Simultaneous RX+TX bus access";
-    can_rx      <= '1';
+    -- TEST 5: Dominant bus traffic during TX is a bit error, and the frame is sent again
+    report "TEST: Bus disturbance during TX";
     bus_i       <= (addr => x"00000000", data => x"00000000", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
-    wait for clk_period * 10;
+    wait for c_bit_time * 30;
+    check(can_busy = '1', "disturbance: frame in progress");
     can_rx      <= '0';
-    check(can_busy = '1', "simultaneous: RX does not stop TX");
-    wait for c_max_frame_time;
-    check(can_busy = '0', "simultaneous: recovered");
+    wait for c_bit_time * 2;
+    can_rx      <= '1';
+    wait for c_bit_time * 2;
+    check(can_busy = '1', "disturbance: frame still pending");
+    wait for c_max_frame_time * 2;
+    check(can_busy = '0', "disturbance: frame sent again");
 
     -- TEST 6: FSM valid state after stress
     report "TEST: FSM valid state after stress";

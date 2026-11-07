@@ -14,6 +14,9 @@ library lockstep;
 library vunit_lib;
   context vunit_lib.vunit_context;
 
+library work;
+  use work.can_test_pkg.all;
+
 entity tb_can_rx_data is
   generic (
     runner_cfg : string := ""
@@ -23,10 +26,11 @@ end entity tb_can_rx_data;
 architecture rtl of tb_can_rx_data is
 
   constant clk_period     : time     := 20 ns;
-  constant c_clks_per_bit : positive := 4;
+  constant c_clks_per_bit : positive := 8;
+  constant c_bit_time     : time     := clk_period * c_clks_per_bit;
 
-  -- Longest frame: 135 bits
-  constant c_max_frame_time : time := clk_period * c_clks_per_bit * 135;
+  -- A whole frame, plus the 11 recessive bits that come before it
+  constant c_max_frame_time : time := c_bit_time * (c_max_frame_bits + 11);
 
   signal clk   : std_logic;
   signal rst_n : std_logic;
@@ -35,7 +39,11 @@ architecture rtl of tb_can_rx_data is
   signal bus_ok   : std_logic;
   signal can_tx   : std_logic;
   signal can_rx   : std_logic;
-  signal can_busy : std_logic;begin
+  signal can_busy : std_logic;
+
+  -- The bus: the DUT, a receiver that acknowledges, and dominant stimulus
+  signal can_bus : std_logic;
+  signal ack_tx  : std_logic;begin
 
   -- Clock process: initializes clk to '0' before toggling
   p_clk : process is
@@ -57,10 +65,25 @@ architecture rtl of tb_can_rx_data is
       bus_i      => bus_i,
       bus_ok_i   => bus_ok,
       can_tx_o   => can_tx,
-      can_rx_i   => can_rx,
+      can_rx_i   => can_bus,
       can_busy_o => can_busy
 
-    );p_stim : process is
+    );
+
+  can_bus <= can_tx and ack_tx and can_rx;
+
+  i_node : entity work.can_test_node
+    generic map (
+      g_bit_time => c_bit_time
+    )
+    port map (
+      bus_i        => can_bus,
+      dut_tx_i     => can_tx,
+      ack_enable_i => '1',
+      ack_o        => ack_tx
+    );
+
+  p_stim : process is
   begin
 
     test_runner_setup(runner, runner_cfg);

@@ -23,6 +23,8 @@ GOLDEN_FRAMES = [
     ("dlc above 8", 0x123, 15, 0x1234),
     ("stuff bit after a dominant CRC tail", 0x009, 0, 0x0000),
     ("stuff bit after a recessive CRC tail", 0x017, 0, 0x0000),
+    ("rival that beats 0x123", 0x122, 2, 0xA55A),
+    ("rival that loses to 0x123", 0x124, 2, 0xA55A),
 ]
 
 
