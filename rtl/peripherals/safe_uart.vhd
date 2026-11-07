@@ -34,7 +34,10 @@ entity safe_uart is
 
     -- Diagnostic: TX status
     uart_busy_o  : out   std_logic;
-    uart_error_o : out   std_logic
+    uart_error_o : out   std_logic;
+
+    -- UART_ERROR interrupt: set by a parity error until STATUS is written
+    uart_irq_o : out   std_logic
   );
 end entity safe_uart;
 
@@ -72,6 +75,9 @@ architecture rtl of safe_uart is
   signal w_busy  : std_logic;
   signal w_error : std_logic;
   signal r_rdata : std_logic_vector(c_data_width - 1 downto 0);
+
+  -- Holds a parity error, which w_error shows for only one clock
+  signal r_error_irq : std_logic;
 
 begin
 
@@ -251,7 +257,7 @@ begin
 
       if (rst_n_i = '1' and bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '0') then
         if (bus_i.addr = c_uart_status_addr) then
-          r_rdata(1) <= w_error;
+          r_rdata(1) <= r_error_irq;
           r_rdata(0) <= w_busy;
         elsif (bus_i.addr = c_uart_parity_addr) then
           r_rdata(0) <= w_parity_ok;
@@ -262,6 +268,25 @@ begin
   end process p_read;
 
   rdata_o <= r_rdata;
+
+  -- Cleared by a write rather than a read, because software that polls STATUS
+  -- would otherwise clear the interrupt before the CPU had taken it
+  p_error_irq : process (clk_i) is
+  begin
+
+    if rising_edge(clk_i) then
+      if (rst_n_i = '0') then
+        r_error_irq <= '0';
+      elsif (w_error = '1') then
+        r_error_irq <= '1';
+      elsif (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.addr = c_uart_status_addr) then
+        r_error_irq <= '0';
+      end if;
+    end if;
+
+  end process p_error_irq;
+
+  uart_irq_o <= r_error_irq;
 
   -- ========================================================================
   -- 6. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)

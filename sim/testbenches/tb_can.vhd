@@ -83,6 +83,7 @@ architecture tb of tb_can is
   signal can_busy_o   : std_logic;
   signal can_status_o : std_logic_vector(10 downto 0);
   signal rdata_o      : std_logic_vector(31 downto 0);
+  signal can_irq_o    : std_logic;
 
   -- The bus and what else is on it
   signal can_bus         : std_logic;
@@ -133,7 +134,8 @@ begin
       can_tx_o     => can_tx_o,
       can_rx_i     => can_rx_i,
       can_busy_o   => can_busy_o,
-      can_status_o => can_status_o
+      can_status_o => can_status_o,
+      can_irq_o    => can_irq_o
     );
 
   -- A wired-AND bus. force_recessive stands for a broken RX path, so only the
@@ -327,19 +329,21 @@ begin
 
     end procedure read_bus;
 
-    -- Expected STATUS: bits 16:8 = TEC, 2 = bus-off, 1 = error passive, 0 = busy
+    -- Expected STATUS: bits 16:8 = TEC, 3 = interrupt, 2 = bus-off, 1 = error passive,
+    -- 0 = busy
 
     procedure check_status (
       constant count   : in natural;
       constant bus_off : in std_logic;
       constant passive : in std_logic;
-      constant busy    : in std_logic
+      constant busy    : in std_logic;
+      constant irq     : in std_logic := '0'
     ) is
     begin
 
       read_bus(c_can_status_addr);
       check_equal(v_rdata, std_logic_vector(to_unsigned(0, 15)) & std_logic_vector(to_unsigned(count, 9)) &
-                  "00000" & bus_off & passive & busy, "STATUS");
+                  "0000" & irq & bus_off & passive & busy, "STATUS");
 
     end procedure check_status;
 
@@ -677,7 +681,7 @@ begin
 
           wait_for_frame;
           wait until rising_edge(clk_i);
-          check_status(attempt * 8, '0', std_logic'val(std_logic'pos('0') + attempt / 16), '1');
+          check_status(attempt * 8, '0', std_logic'val(std_logic'pos('0') + attempt / 16), '1', '1');
 
         end loop;
 
@@ -685,14 +689,14 @@ begin
         ack_enable <= '1';
         wait until can_busy_o = '0' for c_max_frame_time * 2;
         wait until rising_edge(clk_i);
-        check_status(127, '0', '0', '0');
+        check_status(127, '0', '0', '0', '1');
       elsif run("status_register_reports_bus_off") then
         force_recessive <= '1';
         write_mailbox(c_id, c_dlc, c_payload);
         wait until tx_falls = 32 for c_max_frame_time * 32;
         wait for c_bit_time * 8;
         wait until rising_edge(clk_i);
-        check_status(256, '1', '1', '0');
+        check_status(256, '1', '1', '0', '1');
       elsif run("reads_answer_only_at_the_status_address") then
         wait for c_bit_time * 12;
         ack_enable <= '0';
@@ -723,12 +727,78 @@ begin
         read_bus(c_can_status_addr);
         bus_ok_i <= '1';
         check_equal(v_rdata, std_logic_vector(to_unsigned(0, 32)), "gate low reads zero");
-      elsif run("write_to_status_address_changes_nothing") then
+      elsif run("write_to_status_only_clears_the_interrupt") then
         wait for c_bit_time * 12;
         write_bus(c_can_status_addr, x"00000001");
         wait until rising_edge(clk_i);
-        check(can_busy_o = '0', "STATUS is read only");
+        check(can_busy_o = '0', "a STATUS write starts nothing");
         check_equal(tx_falls, 0, "no frame");
+      elsif run("failed_frame_raises_the_interrupt_until_status_is_written") then
+        check_equal(can_irq_o, '0', "no interrupt after reset");
+        ack_enable <= '0';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        wait for c_bit_time * c_ack_slot;
+        check_equal(can_irq_o, '0', "no interrupt before the error");
+        wait for c_bit_time * 2;
+        check_equal(can_irq_o, '1', "interrupt with the error flag");
+
+        -- Reading must not clear it: software polling STATUS would lose it
+        wait until rising_edge(clk_i);
+        read_bus(c_can_status_addr);
+        wait until rising_edge(clk_i);
+        check_equal(can_irq_o, '1', "a read does not clear the interrupt");
+
+        -- Nor does a partial store, or a write elsewhere
+        write_bus(c_can_status_addr, x"00000001", "0001");
+        write_bus(c_can_data_addr, x"00000001");
+        wait until rising_edge(clk_i);
+        check_equal(can_irq_o, '1', "only a word store to STATUS clears it");
+
+        write_bus(c_can_status_addr, x"00000000");
+        wait until rising_edge(clk_i);
+        check_equal(can_irq_o, '0', "a write to STATUS clears it");
+
+        -- Every failure raises it again
+        wait_for_frame;
+        wait_for_sof;
+        wait for c_bit_time * (c_ack_slot + 2);
+        check_equal(can_irq_o, '1', "the next failure raises it again");
+      elsif run("failure_beats_a_status_write_on_the_same_clock") then
+        ack_enable <= '0';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+
+        -- A store held across the error lands on the clock it starts
+        bus_i <=
+        (
+          addr  => c_can_status_addr,
+          data  => x"00000000",
+          we    => '1',
+          valid => '1',
+          sel   => "1111"
+        );
+        wait until can_irq_o = '1' for c_max_frame_time;
+        check_equal(can_irq_o, '1', "the failure is not lost");
+        bus_i <= c_bus_idle;
+      elsif run("lost_arbitration_raises_no_interrupt") then
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_sof;
+        start_rival(c_rival_win);
+        check_frame(16#122#, c_dlc, c_payload);
+        check_frame(c_id, c_dlc, c_payload);
+        check_equal(can_irq_o, '0', "losing arbitration is not an error");
+      elsif run("safety_gate_blocks_clearing_the_interrupt") then
+        ack_enable <= '0';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_frame;
+        check_equal(can_irq_o, '1', "interrupt raised");
+        wait until rising_edge(clk_i);
+        bus_ok_i   <= '0';
+        write_bus(c_can_status_addr, x"00000000");
+        bus_ok_i   <= '1';
+        wait until rising_edge(clk_i);
+        check_equal(can_irq_o, '1', "the gate blocks the write");
       elsif run("all_8_data_bytes_are_independent") then
         send_data(c_id, 8, x"1122334455667788");
         check_frame_data(c_id, 8, x"1122334455667788");

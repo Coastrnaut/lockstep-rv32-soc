@@ -46,7 +46,10 @@ entity automotive_can_controller is
 
     -- Diagnostic
     can_busy_o   : out   std_logic;
-    can_status_o : out   std_logic_vector(10 downto 0) -- 10: bus-off, 9: error passive, 8:0: TEC
+    can_status_o : out   std_logic_vector(10 downto 0); -- 10: bus-off, 9: error passive, 8:0: TEC
+
+    -- CAN_ERROR interrupt: set by a failed frame until STATUS is written
+    can_irq_o : out   std_logic
   );
 end entity automotive_can_controller;
 
@@ -173,6 +176,8 @@ architecture rtl of automotive_can_controller is
   signal r_ack_error     : std_logic;
   signal r_uncounted     : std_logic;
   signal r_flag_dominant : std_logic;
+  signal r_error_irq     : std_logic;
+  signal w_status_write  : std_logic;
   signal w_error_passive : std_logic;
   signal w_count_error   : std_logic;
   signal w_flag_level    : std_logic;
@@ -634,6 +639,12 @@ begin
 
   w_count_error <= not (r_uncounted or (r_ack_error and w_error_passive and not r_flag_dominant));
 
+  -- Cleared by a write rather than a read, because software that polls STATUS
+  -- would otherwise clear the interrupt before the CPU had taken it
+  w_status_write <= '1' when (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel = "1111" and
+                               bus_i.addr = c_can_status_addr) else
+                    '0';
+
   p_fault_confinement : process (clk_i) is
   begin
 
@@ -644,7 +655,14 @@ begin
         r_ack_error     <= '0';
         r_uncounted     <= '0';
         r_flag_dominant <= '0';
+        r_error_irq     <= '0';
       else
+        if (w_tx_fail = '1') then
+          r_error_irq <= '1';
+        elsif (w_status_write = '1') then
+          r_error_irq <= '0';
+        end if;
+
         if (w_tx_fail = '1') then
           r_ack_error     <= w_ack_missing;
           r_uncounted     <= r_arb_stuff_error;
@@ -683,6 +701,8 @@ begin
 
   can_busy_o <= w_busy;
 
+  can_irq_o <= r_error_irq;
+
   can_status_o(10)         <= r_bus_off;
   can_status_o(9)          <= w_error_passive;
   can_status_o(8 downto 0) <= std_logic_vector(r_tec);
@@ -711,6 +731,7 @@ begin
           r_rdata <= r_mailbox_data(31 downto 0);
         elsif (bus_i.addr = c_can_status_addr) then
           r_rdata(16 downto 8) <= std_logic_vector(r_tec);
+          r_rdata(3)           <= r_error_irq;
           r_rdata(2)           <= r_bus_off;
           r_rdata(1)           <= w_error_passive;
           r_rdata(0)           <= w_busy;

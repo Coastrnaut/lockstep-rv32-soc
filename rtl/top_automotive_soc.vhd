@@ -90,6 +90,8 @@ architecture structural of top_automotive_soc is
   -- Peripheral diagnostic signals
   signal w_can_busy            : std_logic;
   signal w_can_status          : std_logic_vector(10 downto 0);
+  signal w_can_irq             : std_logic;
+  signal w_uart_irq            : std_logic;
   signal w_can_rdata           : std_logic_vector(31 downto 0);
   signal w_uart_rdata          : std_logic_vector(31 downto 0);
   signal w_periph_rdata        : std_logic_vector(31 downto 0);
@@ -451,8 +453,8 @@ begin
       mtime_time_o => w_core_a_mtime_time,
 
       -- Interrupts
-      irq_msi_i => '0',
-      irq_mti_i => '0',
+      irq_msi_i => w_can_irq,
+      irq_mti_i => w_uart_irq,
       irq_mei_i => w_nmi
     );
 
@@ -728,8 +730,8 @@ begin
       mtime_time_o => w_core_b_mtime_time,
 
       -- Interrupts
-      irq_msi_i => '0',
-      irq_mti_i => '0',
+      irq_msi_i => w_can_irq,
+      irq_mti_i => w_uart_irq,
       irq_mei_i => w_nmi
     );
 
@@ -767,7 +769,8 @@ begin
       can_tx_o     => can_tx_o,
       can_rx_i     => can_rx_i,
       can_busy_o   => w_can_busy,
-      can_status_o => w_can_status
+      can_status_o => w_can_status,
+      can_irq_o    => w_can_irq
 
     ); -- ========================================================================
 
@@ -782,7 +785,8 @@ begin
       rdata_o      => w_uart_rdata,
       uart_tx_o    => uart_tx_o,
       uart_busy_o  => w_uart_busy,
-      uart_error_o => w_uart_error
+      uart_error_o => w_uart_error,
+      uart_irq_o   => w_uart_irq
 
     );
 

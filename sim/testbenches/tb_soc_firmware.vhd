@@ -53,8 +53,11 @@ architecture tb of tb_soc_firmware is
   signal rx_frame   : t_rx_frame;
 
   -- What the receiver on uart_tx saw
+
+  type t_byte_log is array (1 to 8) of std_logic_vector(7 downto 0);
+
   signal uart_count : natural;
-  signal uart_byte  : std_logic_vector(7 downto 0);
+  signal uart_log   : t_byte_log;
 
 begin
 
@@ -117,8 +120,8 @@ begin
     end loop;
 
     wait for c_uart_bit_time * 2;
-    uart_byte  <= v_byte;
-    uart_count <= uart_count + 1;
+    uart_log(uart_count + 1) <= v_byte;
+    uart_count               <= uart_count + 1;
 
   end process p_uart_rx;
 
@@ -140,9 +143,12 @@ begin
     ) is
     begin
 
-      wait until uart_count = count for c_timeout;
-      check_equal(uart_count, count, "UART byte arrived");
-      check_equal(uart_byte, expected, "UART byte");
+      if (uart_count < count) then
+        wait until uart_count >= count for c_timeout;
+      end if;
+
+      check(uart_count >= count, "UART byte arrived");
+      check_equal(uart_log(count), expected, "UART byte");
 
     end procedure check_uart_byte;
 
@@ -168,8 +174,10 @@ begin
 
         -- 'K' means both cores read an error counter of zero. 'D' means they
         -- saw UART STATUS busy and then clear, and 'B' would mean it never set.
-        check_uart_byte(1, x"4B");
-        check_uart_byte(2, x"44");
+        check_uart_byte(1, x"53");
+        check_uart_byte(2, x"4B");
+        check_uart_byte(3, x"44");
+        check_equal(uart_count, 3, "no other bytes, so no interrupt");
         check_equal(rx_starts, 1, "one CAN frame");
         check_equal(nmi_fault, '0', "no lockstep fault");
       elsif run("program_reads_a_nonzero_error_counter") then
@@ -179,8 +187,13 @@ begin
         check_equal(rx_done, 2, "two failed attempts");
         ack_enable <= '1';
 
-        check_uart_byte(1, x"46");
-        check_uart_byte(2, x"44");
+        -- '2' means CAN_ERROR reached the trap handler on both cores, once for
+        -- each failed attempt, and that clearing it worked each time
+        check_uart_byte(1, x"53");
+        check_uart_byte(2, x"32");
+        check_uart_byte(3, x"46");
+        check_uart_byte(4, x"44");
+        check_equal(uart_count, 4, "no other bytes");
         check_equal(rx_starts, 3, "the third attempt got through");
         check_equal(nmi_fault, '0', "no lockstep fault");
       end if;

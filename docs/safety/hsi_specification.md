@@ -111,7 +111,7 @@ The item is the **lockstep-rv32-soc** hardware platform comprising:
 | 0x00   | MAILBOX_ID    | RW  | CAN frame ID (11-bit)               |
 | 0x04   | MAILBOX_DLC   | RW  | Data length code                     |
 | 0x08   | MAILBOX_DATA  | RW  | Data bytes 0-3, byte 0 in bits 31:24 |
-| 0x0C   | STATUS        | R   | Error counter and state, busy        |
+| 0x0C   | STATUS        | RW  | Error counter and state, busy. A word write clears the interrupt |
 | 0x10   | MAILBOX_DATA_HI | RW | Data bytes 4-7, byte 4 in bits 31:24 |
 | 0x14   | TX_REQUEST    | W   | Any write sends the mailbox's frame  |
 
@@ -125,7 +125,7 @@ drop of the safety gate clears them.
 | Offset | Name          | R/W | Description                          |
 |--------|---------------|-----|--------------------------------------|
 | 0x00   | TX_DATA       | W   | TX data register (8-bit)             |
-| 0x04   | STATUS        | R   | TX busy and error status             |
+| 0x04   | STATUS        | RW  | TX busy and error status. A write clears the interrupt |
 | 0x08   | PARITY        | R   | Parity check result                  |
 
 ---
@@ -137,8 +137,14 @@ drop of the safety gate clears them.
 | 0     | NMI_LOCKSTEP  | Highest  | Lockstep comparator fault            |
 | 1     | NMI_ECC_DBE   | Highest  | ECC double-bit error (fatal)         |
 | 2     | WD_TIMEOUT    | High     | Watchdog timeout                     |
-| 3     | CAN_ERROR     | Medium   | CAN bus error                        |
+| 3     | CAN_ERROR     | Medium   | A CAN frame failed: bit or ACK error |
 | 4     | UART_ERROR    | Low      | UART parity error                    |
+
+Both cores receive these on their RISC-V interrupt lines, whose fixed priority
+gives the order above: NMI_LOCKSTEP on MEI, CAN_ERROR on MSI and UART_ERROR on
+MTI. NMI_ECC_DBE and WD_TIMEOUT are not connected yet. CAN_ERROR and UART_ERROR
+stay set until software writes the block's STATUS register, and reading it does
+not clear them, so that polling cannot lose an interrupt.
 
 ---
 
@@ -175,8 +181,8 @@ reads zero. These status registers have the following bits:
 
 | Address    | Register    | Bits                                                    |
 |------------|-------------|---------------------------------------------------------|
-| 0x4000030C | CAN STATUS  | 16:8 = TEC, 2 = bus-off, 1 = error passive, 0 = busy    |
-| 0x40000404 | UART STATUS | 1 = parity error, 0 = busy                              |
+| 0x4000030C | CAN STATUS  | 16:8 = TEC, 3 = interrupt, 2 = bus-off, 1 = error passive, 0 = busy |
+| 0x40000404 | UART STATUS | 1 = parity error interrupt, 0 = busy                    |
 | 0x40000408 | UART PARITY | 0 = the byte held for transmission has good parity      |
 
 The CAN registers take word stores only, so a byte or halfword store to one of

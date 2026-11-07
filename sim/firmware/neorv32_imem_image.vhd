@@ -9,7 +9,37 @@ package neorv32_imem_image is
 type rom_t is array (0 to 255) of std_ulogic_vector(31 downto 0);
 constant image_size_c : natural := 1024;
 constant image_data_c : rom_t := (
+x"0280006f", -- jal zero main
+x"34202e73", -- csrr t3 mcause
+x"004e7e13", -- andi t3 t3 4
+x"000e1863", -- bne t3 zero trap_uart
+x"30042623", -- sw zero 780 s0
+x"00148493", -- addi s1 s1 1
+x"30200073", -- mret
+x"40042223", -- sw zero 1028 s0
+x"00190913", -- addi s2 s2 1
+x"30200073", -- mret
 x"40000437", -- lui s0 262144
+x"00000493", -- addi s1 zero 0
+x"00000913", -- addi s2 zero 0
+x"00400293", -- addi t0 zero 4
+x"30529073", -- csrw mtvec t0
+x"08800293", -- addi t0 zero 136
+x"30429073", -- csrw mie t0
+x"00800293", -- addi t0 zero 8
+x"3002a073", -- csrs mstatus t0
+x"05300393", -- addi t2 zero 83
+x"40742023", -- sw t2 1024 s0
+x"40842303", -- lw t1 1032 s0
+x"00031c63", -- bne t1 zero parity_good
+x"00090063", -- beq s2 zero wait_irq
+x"0ee00293", -- addi t0 zero 238
+x"30542023", -- sw t0 768 s0
+x"30542a23", -- sw t0 788 s0
+x"0a40006f", -- jal zero done
+x"40442303", -- lw t1 1028 s0
+x"00137313", -- andi t1 t1 1
+x"fe031ce3", -- bne t1 zero parity_good
 x"12300293", -- addi t0 zero 291
 x"30542023", -- sw t0 768 s0
 x"00200293", -- addi t0 zero 2
@@ -20,11 +50,17 @@ x"30540a23", -- sb t0 788 s0
 x"30c42303", -- lw t1 780 s0
 x"00137313", -- andi t1 t1 1
 x"05800393", -- addi t2 zero 88
-x"02031463", -- bne t1 zero report
+x"04031063", -- bne t1 zero report
 x"30542a23", -- sw t0 788 s0
 x"30c42303", -- lw t1 780 s0
 x"00137313", -- andi t1 t1 1
 x"fe031ce3", -- bne t1 zero wait_can
+x"00048c63", -- beq s1 zero no_irq
+x"03048393", -- addi t2 s1 48
+x"40742023", -- sw t2 1024 s0
+x"40442303", -- lw t1 1028 s0
+x"00137313", -- andi t1 t1 1
+x"fe031ce3", -- bne t1 zero wait_i
 x"30c42303", -- lw t1 780 s0
 x"00835313", -- srli t1 t1 8
 x"04600393", -- addi t2 zero 70
