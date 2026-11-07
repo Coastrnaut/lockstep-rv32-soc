@@ -16,10 +16,14 @@ ROM_WORDS = 256
 PROGRAM = [
     ("lui", "s0", 0x40000),            # s0 = peripheral window
 
-    # Send ID 0x123, DLC 2, payload 0xA55A
-    ("lui", "t0", 0x2464A),
-    ("addi", "t0", "t0", 0x55A),
+    # Send ID 0x123, DLC 2, data bytes 0xA5 and 0x5A
+    ("addi", "t0", "zero", 0x123),
     ("sw", "t0", 0x300, "s0"),
+    ("addi", "t0", "zero", 2),
+    ("sw", "t0", 0x304, "s0"),
+    ("lui", "t0", 0xA55A0),
+    ("sw", "t0", 0x308, "s0"),
+    ("sw", "t0", 0x314, "s0"),         # any value requests the frame
 
     # Wait for CAN STATUS.busy to clear
     "wait_can:",

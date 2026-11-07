@@ -66,6 +66,9 @@ architecture tb of tb_can is
   constant c_retry_bits         : natural := c_ack_slot + 1 + 6 + 11;
   constant c_passive_retry_bits : natural := c_retry_bits + 8;
 
+  -- 0x123 with 8 different data bytes
+  constant c_wire_8_bytes : string := "0001001000110001000001010001001000100011001101000100010101010110011001110111100010001000010001101111111111111111";
+
   -- Wire bits of rival frames that beat 0x123 and lose to it
   constant c_rival_win  : string := "00010010001000001010101001010101101010001100010000011111111111111";
   constant c_rival_lose : string := "0001001001";
@@ -236,30 +239,65 @@ begin
 
     end procedure reset_dut;
 
-    -- One-clock mailbox write: data(31:21) = ID, (20:17) = DLC, (15:0) = payload
-
-    procedure write_mailbox (
-      constant id      : in natural;
-      constant dlc     : in natural;
-      constant payload : in natural;
-      constant addr    : in std_logic_vector(31 downto 0) := c_can_mailbox_addr
+    procedure write_bus (
+      constant addr : in std_logic_vector(31 downto 0);
+      constant data : in std_logic_vector(31 downto 0)
     ) is
-
-      constant c_id_bits      : std_logic_vector(10 downto 0) := std_logic_vector(to_unsigned(id, 11));
-      constant c_dlc_bits     : std_logic_vector(3 downto 0)  := std_logic_vector(to_unsigned(dlc, 4));
-      constant c_payload_bits : std_logic_vector(15 downto 0) := std_logic_vector(to_unsigned(payload, 16));
-
     begin
 
       bus_i <=
       (
         addr  => addr,
-        data  => c_id_bits & c_dlc_bits & '0' & c_payload_bits,
+        data  => data,
         we    => '1',
         valid => '1'
       );
       wait until rising_edge(clk_i);
       bus_i <= c_bus_idle;
+
+    end procedure write_bus;
+
+    -- Fill the mailbox and request the frame, with the first data byte in 63:56
+
+    procedure send_data (
+      constant id   : in natural;
+      constant dlc  : in natural;
+      constant data : in std_logic_vector(63 downto 0)
+    ) is
+    begin
+
+      write_bus(c_can_id_addr, std_logic_vector(to_unsigned(id, 32)));
+      write_bus(c_can_dlc_addr, std_logic_vector(to_unsigned(dlc, 32)));
+      write_bus(c_can_data_addr, data(63 downto 32));
+      write_bus(c_can_data_hi_addr, data(31 downto 0));
+      write_bus(c_can_tx_request_addr, x"00000001");
+
+    end procedure send_data;
+
+    -- The data bytes these tests send: the low 8 * n bits of the payload repeated
+
+    impure function data_for (
+      constant dlc     : in natural;
+      constant payload : in natural
+    ) return std_logic_vector is
+
+      constant c_payload_bits : std_logic_vector(15 downto 0) := std_logic_vector(to_unsigned(payload, 16));
+
+    begin
+
+      return std_logic_vector(shift_left(unsigned(c_payload_bits & c_payload_bits & c_payload_bits & c_payload_bits),
+                                          64 - minimum(dlc, 8) * 8));
+
+    end function data_for;
+
+    procedure write_mailbox (
+      constant id      : in natural;
+      constant dlc     : in natural;
+      constant payload : in natural
+    ) is
+    begin
+
+      send_data(id, dlc, data_for(dlc, payload));
 
     end procedure write_mailbox;
 
@@ -350,15 +388,11 @@ begin
 
     end procedure wait_for_frame;
 
-    procedure check_frame (
-      constant id      : in natural;
-      constant dlc     : in natural;
-      constant payload : in natural
+    procedure check_frame_data (
+      constant id   : in natural;
+      constant dlc  : in natural;
+      constant data : in std_logic_vector(63 downto 0)
     ) is
-
-      constant c_payload_bits : std_logic_vector(15 downto 0) := std_logic_vector(to_unsigned(payload, 16));
-      constant c_bytes        : natural                       := minimum(dlc, 8);
-
     begin
 
       wait_for_frame;
@@ -366,18 +400,24 @@ begin
       check_equal(rx_frame.id, std_logic_vector(to_unsigned(id, 11)), "ID");
       check_equal(rx_frame.flags, std_logic_vector'("000"), "RTR, IDE and r0 dominant");
       check_equal(rx_frame.dlc, std_logic_vector(to_unsigned(dlc, 4)), "DLC");
-      check_equal(
-                  rx_frame.data,
-                  std_logic_vector(shift_left(unsigned(c_payload_bits & c_payload_bits & c_payload_bits & c_payload_bits),
-                                               64 - c_bytes * 8)),
-                  "data bytes"
-                );
+      check_equal(rx_frame.data, data, "data bytes");
       check_equal(rx_frame.crc, rx_frame.crc_expected, "CRC sequence");
       check_equal(rx_frame.crc_delimiter, '1', "CRC delimiter recessive");
       check_equal(rx_frame.ack_slot, '0', "receiver acknowledged");
       check_equal(rx_frame.wire(rx_frame.wire_length - 12), '1', "DUT leaves the ACK slot recessive");
       check_equal(rx_frame.ack_delimiter, '1', "ACK delimiter recessive");
       check_equal(rx_frame.tail_recessive, 10, "EOF and intermission recessive");
+
+    end procedure check_frame_data;
+
+    procedure check_frame (
+      constant id      : in natural;
+      constant dlc     : in natural;
+      constant payload : in natural
+    ) is
+    begin
+
+      check_frame_data(id, dlc, data_for(dlc, payload));
 
     end procedure check_frame;
 
@@ -602,18 +642,18 @@ begin
       elsif run("write_to_any_other_address_is_ignored") then
         wait for c_bit_time * 12;
 
-        -- Every address one bit away from the mailbox
+        -- Every address one bit away from TX_REQUEST
         for addr_bit in 0 to 31 loop
 
-          v_addr           := c_can_mailbox_addr;
+          v_addr           := c_can_tx_request_addr;
           v_addr(addr_bit) := not v_addr(addr_bit);
-          write_mailbox(c_id, c_dlc, c_payload, v_addr);
+          write_bus(v_addr, x"00000001");
           wait until rising_edge(clk_i);
           check(can_busy_o = '0', "write to another address ignored");
 
         end loop;
 
-        write_mailbox(c_id, c_dlc, c_payload, c_uart_tx_data_addr);
+        write_bus(c_uart_tx_data_addr, x"00000001");
         wait until rising_edge(clk_i);
         check(can_busy_o = '0', "write to the UART ignored");
         check_equal(tx_falls, 0, "no frame from another address");
@@ -659,6 +699,8 @@ begin
         -- one bit away reads zero, and the data is only there for one cycle.
         for addr_bit in 0 to 31 loop
 
+          -- Bits 2 and 3 select the DATA and DLC registers
+          next when addr_bit = 2 or addr_bit = 3;
           v_addr           := c_can_status_addr;
           v_addr(addr_bit) := not v_addr(addr_bit);
           read_bus(v_addr);
@@ -678,10 +720,68 @@ begin
         check_equal(v_rdata, std_logic_vector(to_unsigned(0, 32)), "gate low reads zero");
       elsif run("write_to_status_address_changes_nothing") then
         wait for c_bit_time * 12;
-        write_mailbox(c_id, c_dlc, c_payload, c_can_status_addr);
+        write_bus(c_can_status_addr, x"00000001");
         wait until rising_edge(clk_i);
         check(can_busy_o = '0', "STATUS is read only");
         check_equal(tx_falls, 0, "no frame");
+      elsif run("all_8_data_bytes_are_independent") then
+        send_data(c_id, 8, x"1122334455667788");
+        check_frame_data(c_id, 8, x"1122334455667788");
+        check_equal(to_string(rx_frame.wire(0 to rx_frame.wire_length - 1)), c_wire_8_bytes, "wire bits");
+      elsif run("registers_read_back_what_was_written") then
+        write_bus(c_can_id_addr, x"FFFFFFFF");
+        write_bus(c_can_dlc_addr, x"FFFFFFFF");
+        write_bus(c_can_data_addr, x"11223344");
+        write_bus(c_can_data_hi_addr, x"55667788");
+
+        read_bus(c_can_id_addr);
+        check_equal(v_rdata, std_logic_vector'(x"000007FF"), "ID is 11 bits");
+        read_bus(c_can_dlc_addr);
+        check_equal(v_rdata, std_logic_vector'(x"0000000F"), "DLC is 4 bits");
+        read_bus(c_can_data_addr);
+        check_equal(v_rdata, std_logic_vector'(x"11223344"), "DATA");
+        read_bus(c_can_data_hi_addr);
+        check_equal(v_rdata, std_logic_vector'(x"55667788"), "DATA_HI");
+        read_bus(c_can_tx_request_addr);
+        check_equal(v_rdata, std_logic_vector'(x"00000000"), "TX_REQUEST is write only");
+      elsif run("filling_the_mailbox_does_not_start_a_frame") then
+        wait for c_bit_time * 12;
+        write_bus(c_can_id_addr, x"00000123");
+        write_bus(c_can_dlc_addr, x"00000002");
+        write_bus(c_can_data_addr, x"A55A0000");
+        write_bus(c_can_data_hi_addr, x"00000000");
+        wait until can_tx_o = '0' for c_max_frame_time;
+        check(can_tx_o = '1', "no frame before TX_REQUEST");
+        check(can_busy_o = '0', "idle before TX_REQUEST");
+
+        write_bus(c_can_tx_request_addr, x"00000000");
+        check_frame(c_id, c_dlc, c_payload);
+      elsif run("mailbox_is_locked_until_the_frame_is_sent") then
+        ack_enable <= '0';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_frame;
+
+        -- Between attempts: nothing may change what gets sent again
+        write_bus(c_can_id_addr, x"00000321");
+        write_bus(c_can_dlc_addr, x"00000008");
+        write_bus(c_can_data_addr, x"FFFFFFFF");
+        write_bus(c_can_data_hi_addr, x"FFFFFFFF");
+        read_bus(c_can_id_addr);
+        check_equal(v_rdata, std_logic_vector(to_unsigned(c_id, 32)), "ID unchanged");
+
+        ack_enable <= '1';
+        check_frame(c_id, c_dlc, c_payload);
+      elsif run("mailbox_keeps_its_contents_to_send_again") then
+        send_and_check(c_id, c_dlc, c_payload);
+        write_bus(c_can_tx_request_addr, x"00000001");
+        check_frame(c_id, c_dlc, c_payload);
+      elsif run("gate_drop_clears_the_mailbox") then
+        write_bus(c_can_id_addr, x"00000123");
+        bus_ok_i <= '0';
+        wait until rising_edge(clk_i);
+        bus_ok_i <= '1';
+        read_bus(c_can_id_addr);
+        check_equal(v_rdata, std_logic_vector'(x"00000000"), "ID cleared");
       elsif run("gate_drop_forces_recessive_and_abandons_frame") then
         start_dominant_frame;
         bus_ok_i <= '0';

@@ -163,6 +163,7 @@ begin
         check(not rx_frame.stuff_error, "CAN frame stuffing");
         check_equal(rx_frame.id, std_logic_vector(to_unsigned(16#123#, 11)), "CAN frame ID");
         check_equal(rx_frame.dlc, std_logic_vector(to_unsigned(2, 4)), "CAN frame DLC");
+        check_equal(rx_frame.data, std_logic_vector'(x"A55A000000000000"), "CAN frame data");
         check_equal(rx_frame.crc, rx_frame.crc_expected, "CAN frame CRC");
 
         -- 'K' means both cores read an error counter of zero. 'D' means they

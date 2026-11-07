@@ -44,7 +44,7 @@ def to_bits(value, width):
 
 
 def data_bytes(dlc, payload):
-    """Bytes the controller sends: the low 8 * n bits of payload repeated 4 times."""
+    """Bytes tb_can sends for most frames: the low 8 * n bits of payload repeated 4 times."""
     count = min(dlc, 8)
     repeated = int(f"{payload:04x}" * 4, 16)
     return to_bits(repeated, 64)[64 - 8 * count:]
@@ -66,12 +66,17 @@ def stuff(bits):
     return wire
 
 
-def frame(can_id, dlc, payload):
-    """Return (wire bits, crc) for one data frame."""
+def frame_bits(can_id, dlc, data):
+    """Return (wire bits, crc) for one data frame carrying the given data bits."""
     header = [0] + to_bits(can_id, 11) + [0, 0, 0] + to_bits(dlc, 4)  # SOF, ID, RTR, IDE, r0, DLC
-    covered = header + data_bytes(dlc, payload)
+    covered = header + data
     crc = crc15(covered)
     return stuff(covered + to_bits(crc, 15)) + [1] * TAIL_BITS, crc
+
+
+def frame(can_id, dlc, payload):
+    """Return (wire bits, crc) for a frame carrying a repeated 16-bit payload."""
+    return frame_bits(can_id, dlc, data_bytes(dlc, payload))
 
 
 def wire_string(bits):
@@ -87,6 +92,10 @@ def main():
         bits, crc = frame(can_id, dlc, payload)
         print(f"{label}: id={can_id:#05x} dlc={dlc} payload={payload:#06x} crc={crc:#06x} bits={len(bits)}")
         print(f"  {wire_string(bits)}")
+
+    bits, crc = frame_bits(0x123, 8, to_bits(0x1122334455667788, 64))
+    print(f"8 different bytes: id=0x123 dlc=8 data=0x1122334455667788 crc={crc:#06x} bits={len(bits)}")
+    print(f"  {wire_string(bits)}")
 
 
 if __name__ == "__main__":

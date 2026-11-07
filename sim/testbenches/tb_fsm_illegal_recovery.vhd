@@ -92,7 +92,7 @@ architecture tb of tb_fsm_illegal_recovery is
 
     -- TEST 1: Normal TX baseline (DLC=0)
     report "TEST: Normal CAN TX baseline";
-    bus_i       <= (addr => c_can_mailbox_addr, data => x"00000000", we => '1', valid => '1');
+    bus_i       <= (addr => c_can_tx_request_addr, data => x"00000000", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     wait for clk_period * 10;
@@ -102,7 +102,7 @@ architecture tb of tb_fsm_illegal_recovery is
 
     -- TEST 2: Bus conflict mid-transaction abandons the frame
     report "TEST: Bus conflict mid-transaction";
-    bus_i       <= (addr => c_can_mailbox_addr, data => x"00000000", we => '1', valid => '1');
+    bus_i       <= (addr => c_can_tx_request_addr, data => x"00000000", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     wait for clk_period * 10;
@@ -118,7 +118,7 @@ architecture tb of tb_fsm_illegal_recovery is
 
     for dummy in 0 to 4 loop
 
-      bus_i       <= (addr => c_can_mailbox_addr, data => x"00000000", we => '1', valid => '1');
+      bus_i       <= (addr => c_can_tx_request_addr, data => x"00000000", we => '1', valid => '1');
       wait until rising_edge(clk);
       bus_i.valid <= '0';
       wait for clk_period * 10;
@@ -132,7 +132,7 @@ architecture tb of tb_fsm_illegal_recovery is
 
     -- TEST 4: Bus held invalid during TX
     report "TEST: Bus invalid during TX";
-    bus_i       <= (addr => c_can_mailbox_addr, data => x"00000000", we => '1', valid => '1');
+    bus_i       <= (addr => c_can_tx_request_addr, data => x"00000000", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     wait for clk_period * 10;
@@ -145,7 +145,7 @@ architecture tb of tb_fsm_illegal_recovery is
 
     -- TEST 5: Dominant bus traffic during TX is a bit error, and the frame is sent again
     report "TEST: Bus disturbance during TX";
-    bus_i       <= (addr => c_can_mailbox_addr, data => x"00000000", we => '1', valid => '1');
+    bus_i       <= (addr => c_can_tx_request_addr, data => x"00000000", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     wait for c_bit_time * 30;
@@ -160,7 +160,7 @@ architecture tb of tb_fsm_illegal_recovery is
 
     -- TEST 6: FSM valid state after stress
     report "TEST: FSM valid state after stress";
-    bus_i       <= (addr => c_can_mailbox_addr, data => x"00000000", we => '1', valid => '1');
+    bus_i       <= (addr => c_can_tx_request_addr, data => x"00000000", we => '1', valid => '1');
     wait until rising_edge(clk);
     bus_i.valid <= '0';
     wait for c_max_frame_time;

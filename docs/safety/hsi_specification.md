@@ -110,8 +110,15 @@ The item is the **lockstep-rv32-soc** hardware platform comprising:
 |--------|---------------|-----|--------------------------------------|
 | 0x00   | MAILBOX_ID    | RW  | CAN frame ID (11-bit)               |
 | 0x04   | MAILBOX_DLC   | RW  | Data length code                     |
-| 0x08   | MAILBOX_DATA  | RW  | Frame data (up to 8 bytes)           |
-| 0x0C   | STATUS        | R   | TX/RX status and error flags         |
+| 0x08   | MAILBOX_DATA  | RW  | Data bytes 0-3, byte 0 in bits 31:24 |
+| 0x0C   | STATUS        | R   | Error counter and state, busy        |
+| 0x10   | MAILBOX_DATA_HI | RW | Data bytes 4-7, byte 4 in bits 31:24 |
+| 0x14   | TX_REQUEST    | W   | Any write sends the mailbox's frame  |
+
+The mailbox registers are locked from TX_REQUEST until the frame has been sent
+without error, so that a failed frame is sent again unchanged. They keep their
+contents afterwards, so that another TX_REQUEST sends the same frame again. A
+drop of the safety gate clears them.
 
 ### 3.5 Safe UART Registers
 
@@ -153,20 +160,18 @@ Each block has 0x100 bytes of the window at 0x40000000:
 | 0x40000000 | Lockstep comparator | Reserved             |
 | 0x40000100 | ECC controller      | Reserved             |
 | 0x40000200 | Watchdog            | Reserved             |
-| 0x40000300 | CAN controller      | Offsets 0x00, 0x0C   |
+| 0x40000300 | CAN controller      | Offsets 0x00 to 0x14 |
 | 0x40000400 | Safe UART           | Offsets 0x00 to 0x08 |
 
 Both peripherals share one bus and act only on a write to exactly their address,
 so a write to any other address, including the rest of their 0x100 bytes, does
 nothing:
 
-- **CAN, 0x40000300:** one 32-bit write loads the mailbox and sends a frame: bits
-  31:21 = ID, 20:17 = DLC, 15:0 = payload. The separate registers in section 3.4
-  are not implemented yet.
-- **UART, 0x40000400:** TX_DATA, with the byte in bits 7:0.
+- **CAN:** the registers in section 3.4, up to offset 0x14.
+- **UART:** the registers in section 3.5, with the byte for TX_DATA in bits 7:0.
 
-Reads answer at these addresses. Data is ready in the cycle after the strobe, and
-any other address reads zero:
+Data for a read is ready in the cycle after the strobe, and any other address
+reads zero. These status registers have the following bits:
 
 | Address    | Register    | Bits                                                    |
 |------------|-------------|---------------------------------------------------------|

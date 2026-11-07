@@ -229,7 +229,7 @@ architecture rtl of tb_uart is
 
       bus_i <=
       (
-        addr  => c_can_mailbox_addr,
+        addr  => c_can_tx_request_addr,
         data  => x"00000042",
         we    => '1',
         valid => '1'

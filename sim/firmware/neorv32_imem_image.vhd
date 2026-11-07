@@ -10,9 +10,13 @@ type rom_t is array (0 to 255) of std_ulogic_vector(31 downto 0);
 constant image_size_c : natural := 1024;
 constant image_data_c : rom_t := (
 x"40000437", -- lui s0 262144
-x"2464a2b7", -- lui t0 149066
-x"55a28293", -- addi t0 t0 1370
+x"12300293", -- addi t0 zero 291
 x"30542023", -- sw t0 768 s0
+x"00200293", -- addi t0 zero 2
+x"30542223", -- sw t0 772 s0
+x"a55a02b7", -- lui t0 677280
+x"30542423", -- sw t0 776 s0
+x"30542a23", -- sw t0 788 s0
 x"30c42303", -- lw t1 780 s0
 x"00137313", -- andi t1 t1 1
 x"fe031ce3", -- bne t1 zero wait_can

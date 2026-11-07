@@ -107,11 +107,12 @@ architecture rtl of automotive_can_controller is
 
   signal r_state : t_can_state;
 
-  -- Mailbox: holds one outgoing frame
-  signal r_mailbox_id   : std_logic_vector(10 downto 0);
-  signal r_mailbox_dlc  : unsigned(3 downto 0);
-  signal r_mailbox_data : std_logic_vector(63 downto 0);
-  signal r_mailbox_full : std_logic;
+  -- Mailbox: holds one outgoing frame, with the first data byte in 63:56
+  signal r_mailbox_id    : std_logic_vector(10 downto 0);
+  signal r_mailbox_dlc   : unsigned(3 downto 0);
+  signal r_mailbox_data  : std_logic_vector(63 downto 0);
+  signal r_mailbox_full  : std_logic;
+  signal w_mailbox_write : std_logic;
 
   -- RX synchroniser
   signal r_rx_meta : std_logic;
@@ -221,13 +222,16 @@ begin
                 '0';
 
   -- ========================================================================
-  -- 1. MAILBOX LOAD: Accept data from internal bus when safety gate is clear
+  -- 1. MAILBOX REGISTERS: Accept data from internal bus when safety gate is clear
   -- ========================================================================
-  -- The bus is shared with the other peripherals, so only a write to exactly
-  -- this address counts. The mailbox stays full until the frame has been sent
-  -- without error, so a failed frame can be sent again and a write cannot
-  -- overwrite it.
+  -- Software fills the mailbox and then writes TX_REQUEST. From then until the
+  -- frame has been sent without error the mailbox is locked, so a failed frame
+  -- can be sent again unchanged. Its contents stay for software to send again.
   -- ========================================================================
+  w_mailbox_write <= '1' when (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and
+                                r_mailbox_full = '0') else
+                     '0';
+
   p_mailbox : process (clk_i) is
   begin
 
@@ -239,14 +243,18 @@ begin
         r_mailbox_full <= '0';
       elsif (w_frame_done = '1') then
         r_mailbox_full <= '0';
-      elsif (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and
-             bus_i.addr = c_can_mailbox_addr and r_mailbox_full = '0') then
-        -- Load frame: upper 11 bits = ID, next 4 = DLC, rest = data
-        r_mailbox_id   <= bus_i.data(31 downto 21);
-        r_mailbox_dlc  <= unsigned(bus_i.data(20 downto 17));
-        r_mailbox_data <= bus_i.data(15 downto 0) & bus_i.data(15 downto 0) &
-                          bus_i.data(15 downto 0) & bus_i.data(15 downto 0);
-        r_mailbox_full <= '1';
+      elsif (w_mailbox_write = '1') then
+        if (bus_i.addr = c_can_id_addr) then
+          r_mailbox_id <= bus_i.data(10 downto 0);
+        elsif (bus_i.addr = c_can_dlc_addr) then
+          r_mailbox_dlc <= unsigned(bus_i.data(3 downto 0));
+        elsif (bus_i.addr = c_can_data_addr) then
+          r_mailbox_data(63 downto 32) <= bus_i.data;
+        elsif (bus_i.addr = c_can_data_hi_addr) then
+          r_mailbox_data(31 downto 0) <= bus_i.data;
+        elsif (bus_i.addr = c_can_tx_request_addr) then
+          r_mailbox_full <= '1';
+        end if;
       end if;
     end if;
 
@@ -424,8 +432,7 @@ begin
                 r_tx_bits_left <= c_crc_bits;
               else
                 r_state        <= tx_data;
-                r_tx_shift     <= std_logic_vector(shift_left(unsigned(r_mailbox_data),
-                                                              to_integer(c_max_data_bits - v_data_bits)));
+                r_tx_shift     <= r_mailbox_data;
                 r_tx_bits_left <= v_data_bits;
               end if;
 
@@ -680,7 +687,7 @@ begin
   can_status_o(8 downto 0) <= std_logic_vector(r_tec);
 
   -- ========================================================================
-  -- 11. REGISTER READS: STATUS
+  -- 11. REGISTER READS: MAILBOX AND STATUS
   -- ========================================================================
   -- The bus acknowledges every access at once, so read data has to be ready in
   -- the cycle after the strobe. It is zero at all other times, which lets the
@@ -692,12 +699,21 @@ begin
     if rising_edge(clk_i) then
       r_rdata <= (others => '0');
 
-      if (rst_n_i = '1' and bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '0' and
-          bus_i.addr = c_can_status_addr) then
-        r_rdata(16 downto 8) <= std_logic_vector(r_tec);
-        r_rdata(2)           <= r_bus_off;
-        r_rdata(1)           <= w_error_passive;
-        r_rdata(0)           <= w_busy;
+      if (rst_n_i = '1' and bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '0') then
+        if (bus_i.addr = c_can_id_addr) then
+          r_rdata(10 downto 0) <= r_mailbox_id;
+        elsif (bus_i.addr = c_can_dlc_addr) then
+          r_rdata(3 downto 0) <= std_logic_vector(r_mailbox_dlc);
+        elsif (bus_i.addr = c_can_data_addr) then
+          r_rdata <= r_mailbox_data(63 downto 32);
+        elsif (bus_i.addr = c_can_data_hi_addr) then
+          r_rdata <= r_mailbox_data(31 downto 0);
+        elsif (bus_i.addr = c_can_status_addr) then
+          r_rdata(16 downto 8) <= std_logic_vector(r_tec);
+          r_rdata(2)           <= r_bus_off;
+          r_rdata(1)           <= w_error_passive;
+          r_rdata(0)           <= w_busy;
+        end if;
       end if;
     end if;
 

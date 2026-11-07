@@ -37,14 +37,15 @@ architecture tb of tb_soc_periph_decode is
   -- A UART byte is 11 bits of 435 clocks, with a bit to spare
   constant c_uart_byte_time : time := c_clk_period * 435 * 12;
 
-  constant c_can_addr         : std_logic_vector(31 downto 0) := x"40000300";
-  constant c_can_status_addr  : std_logic_vector(31 downto 0) := x"4000030C";
-  constant c_uart_addr        : std_logic_vector(31 downto 0) := x"40000400";
-  constant c_uart_status_addr : std_logic_vector(31 downto 0) := x"40000404";
-  constant c_uart_parity_addr : std_logic_vector(31 downto 0) := x"40000408";
-
-  -- ID 0x123, DLC 2, payload 0xA55A
-  constant c_can_data : std_logic_vector(31 downto 0) := x"2464A55A";
+  constant c_can_id_addr         : std_logic_vector(31 downto 0) := x"40000300";
+  constant c_can_dlc_addr        : std_logic_vector(31 downto 0) := x"40000304";
+  constant c_can_data_addr       : std_logic_vector(31 downto 0) := x"40000308";
+  constant c_can_status_addr     : std_logic_vector(31 downto 0) := x"4000030C";
+  constant c_can_data_hi_addr    : std_logic_vector(31 downto 0) := x"40000310";
+  constant c_can_tx_request_addr : std_logic_vector(31 downto 0) := x"40000314";
+  constant c_uart_addr           : std_logic_vector(31 downto 0) := x"40000400";
+  constant c_uart_status_addr    : std_logic_vector(31 downto 0) := x"40000404";
+  constant c_uart_parity_addr    : std_logic_vector(31 downto 0) := x"40000408";
 
   signal clk       : std_logic;
   signal rst_n     : std_logic;
@@ -172,6 +173,19 @@ begin
 
     end procedure check_read;
 
+    -- ID 0x123, DLC 2, data bytes 0xA5 and 0x5A
+
+    procedure send_can_frame is
+    begin
+
+      write_bus(c_can_id_addr, x"00000123");
+      write_bus(c_can_dlc_addr, x"00000002");
+      write_bus(c_can_data_addr, x"A55A0000");
+      write_bus(c_can_data_hi_addr, x"00000000");
+      write_bus(c_can_tx_request_addr, x"00000001");
+
+    end procedure send_can_frame;
+
     procedure check_both_idle (
       constant label_text : in string
     ) is
@@ -191,6 +205,7 @@ begin
       check(not rx_frame.stuff_error, "CAN frame stuffing");
       check_equal(rx_frame.id, std_logic_vector(to_unsigned(16#123#, 11)), "CAN frame ID");
       check_equal(rx_frame.dlc, std_logic_vector(to_unsigned(2, 4)), "CAN frame DLC");
+      check_equal(rx_frame.data, std_logic_vector'(x"A55A000000000000"), "CAN frame data");
       check_equal(rx_frame.crc, rx_frame.crc_expected, "CAN frame CRC");
 
     end procedure check_can_frame;
@@ -215,7 +230,7 @@ begin
       wait until rising_edge(clk);
 
       if run("can_address_reaches_only_can") then
-        write_bus(c_can_addr, c_can_data);
+        send_can_frame;
         wait for c_clk_period * 4;
         check(can_busy = '1', "CAN accepted the write");
         wait until uart_busy = '1' or rx_done = 1 for c_max_frame_time;
@@ -232,31 +247,31 @@ begin
         check_equal(rx_starts, 0, "no CAN frame");
       elsif run("other_addresses_reach_neither") then
         -- Where every write went before there was any decoding
-        write_bus(x"00000000", c_can_data);
+        write_bus(x"00000000", x"00000001");
         check_both_idle("address 0");
 
-        -- The other blocks in the window, and the next word of each peripheral
-        write_bus(x"40000000", c_can_data);
+        -- The other blocks in the window, and the words beyond each peripheral
+        write_bus(x"40000000", x"00000001");
         check_both_idle("lockstep block");
-        write_bus(x"40000100", c_can_data);
+        write_bus(x"40000100", x"00000001");
         check_both_idle("ECC block");
-        write_bus(x"40000200", c_can_data);
+        write_bus(x"40000200", x"00000001");
         check_both_idle("watchdog block");
-        write_bus(x"40000304", c_can_data);
-        check_both_idle("CAN offset 4");
-        write_bus(x"40000404", c_can_data);
+        write_bus(x"40000318", x"00000001");
+        check_both_idle("past the CAN registers");
+        write_bus(x"40000404", x"00000001");
         check_both_idle("UART offset 4");
 
         -- The same low bits outside the peripheral window
-        write_bus(x"50000300", c_can_data);
+        write_bus(x"50000314", x"00000001");
         check_both_idle("outside the window, CAN");
-        write_bus(x"50000400", c_can_data);
+        write_bus(x"50000400", x"00000001");
         check_both_idle("outside the window, UART");
 
         wait for c_max_frame_time;
         check_equal(rx_starts, 0, "no CAN frame");
       elsif run("both_peripherals_run_at_once") then
-        write_bus(c_can_addr, c_can_data);
+        send_can_frame;
         write_bus(c_uart_addr, x"00000041");
         wait for c_clk_period * 4;
         check(can_busy = '1', "CAN busy");
@@ -265,6 +280,8 @@ begin
         wait until uart_busy = '0' for c_uart_byte_time;
         check(uart_busy = '0', "UART sent the byte");
       elsif run("reads_come_from_the_addressed_peripheral") then
+        write_bus(c_can_data_hi_addr, x"12345678");
+        check_read(c_can_data_hi_addr, 16#12345678#, "CAN DATA_HI");
         check_read(c_can_status_addr, 0, "CAN idle");
         check_read(c_uart_status_addr, 0, "UART idle");
 
@@ -275,15 +292,17 @@ begin
         check_read(c_uart_parity_addr, 1, "UART parity good");
         wait until uart_busy = '0' for c_uart_byte_time;
 
-        write_bus(c_can_addr, c_can_data);
+        send_can_frame;
         wait until rising_edge(clk);
         check_read(c_can_status_addr, 1, "CAN busy");
         check_read(c_uart_status_addr, 0, "UART idle again");
-        check_read(x"40000300", 0, "the mailbox is write only");
-        check_read(x"40000400", 0, "TX_DATA is write only");
+        check_read(c_can_id_addr, 16#123#, "CAN ID");
+        check_read(c_can_dlc_addr, 2, "CAN DLC");
+        check_read(c_can_tx_request_addr, 0, "TX_REQUEST is write only");
+        check_read(c_uart_addr, 0, "TX_DATA is write only");
       elsif run("safety_gate_blocks_both_addresses") then
         bus_ok <= '0';
-        write_bus(c_can_addr, c_can_data);
+        send_can_frame;
         write_bus(c_uart_addr, x"00000041");
         bus_ok <= '1';
         check_both_idle("gate low");
