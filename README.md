@@ -66,6 +66,14 @@ python3 sim/run.py --compile
 python3 sim/run.py
 ```
 
+### Checking Test Strength
+`sim/scripts/mutate.py` breaks one rule in the RTL at a time and checks that the regression fails. It works on a temporary copy and leaves your checkout alone. A full campaign takes hours of CPU, so CI does not run it.
+```bash
+python3 sim/scripts/mutate.py --check      # every mutant still applies to the RTL
+python3 sim/scripts/mutate.py ecc: ram:    # only the ECC and data RAM mutants
+python3 sim/scripts/mutate.py              # all of them
+```
+
 ---
 
 ## 📋 Contribution Guidelines & Pull Request Policy

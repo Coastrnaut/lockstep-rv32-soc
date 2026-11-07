@@ -14,6 +14,7 @@ from vunit import VUnit
 #   python sim/run.py --compile    # Compile only
 #   python sim/run.py             # Run all tests
 #   python sim/run.py --test <name>  # Run a single test
+#   LOCKSTEP_NO_LINT=1 python sim/run.py  # Skip the lint gates, as mutation runs do
 # ==============================================================================
 
 # ---------------------------------------------------------------------------
@@ -431,8 +432,13 @@ if _vsg_only:
         sys.exit(1)
     sys.exit(0)
 
-# Full pipeline — run both linters
-_do_lint()
+# Full pipeline — run both linters, unless LOCKSTEP_NO_LINT is set. The mutation
+# campaign (sim/scripts/mutate.py) sets it: a mutant can be legal VHDL that
+# breaks a style rule, and it still has to reach the tests.
+if os.environ.get("LOCKSTEP_NO_LINT"):
+    print("Lint gates skipped: LOCKSTEP_NO_LINT is set.")
+else:
+    _do_lint()
 
 # ---------------------------------------------------------------------------
 # 6. OSVVM libraries (scoreboard, NVC reporter, etc.)

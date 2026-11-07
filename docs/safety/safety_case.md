@@ -13,7 +13,7 @@ automotive safety-critical applications. This safety case demonstrates
 compliance with ISO 26262 ASIL-D through:
 
 1. Hardware safety mechanisms (lockstep, ECC, watchdog, safety-gated I/O)
-2. Comprehensive verification (35 testbenches, fault injection, formal assertions)
+2. Comprehensive verification (35 testbenches, fault injection, formal assertions, mutation testing)
 3. Quantitative metrics (SPFM 96.76%, LFM 98.92%, PMHF 1.53×10⁻⁹ /h)
 4. Full bi-directional traceability from safety goals to test results
 
@@ -59,6 +59,18 @@ compliance with ISO 26262 ASIL-D through:
 - CAN: TX recessive on safety gate drop
 - UART: Parity blocks TX, error flagged on mismatch
 
+### 3.4 Mutation Testing
+Coverage shows that a line ran, not that a test would notice it change.
+`sim/scripts/mutate.py` breaks one rule in the RTL at a time and runs the
+regression against each break. Its 386 mutants cover the comparator and its
+self-test, temporal diversity, the ECC code and the data RAM, the watchdog,
+the reset network, CAN transmit and receive, the UART, address decode and
+top-level wiring. A mutant counts as caught only when at least one test fails.
+
+On 2026-11-07, against the RTL and testbenches of commit `057c639`, the
+regression caught all 386. Rerun the campaign before a release and after RTL
+changes. It is not part of the push CI, because a full run takes hours of CPU.
+
 ---
 
 ## 4. HARDWARE METRICS
@@ -98,7 +110,7 @@ VHDL traceability attributes (`requirement_id`).
 The lockstep-rv32-soc satisfies ISO 26262 ASIL-D requirements through:
 - **Redundancy**: Dual-core lockstep with independent ECC
 - **Diagnostics**: Watchdog, safety-gated I/O, parity checks
-- **Verification**: 35 testbenches with fault injection coverage
+- **Verification**: 35 testbenches with fault injection coverage, which catch all 386 RTL mutants
 - **Metrics**: All quantitative thresholds exceeded by significant margins
 
 The hardware is suitable for integration into ASIL-D automotive safety systems.

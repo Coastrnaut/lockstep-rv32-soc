@@ -98,3 +98,6 @@ To support a mixed open-source and commercial compliance path, the `sim/run.py` 
 
 ### Automated Code Quality Regression Gates:
 Every pull request triggers our CI runner to execute the validation test framework. If structural code coverage (including MC/DC and toggle) falls below 100%, or if a fault-injection simulation fails to flag a hardware safety trip within **exactly 50µs**, the build will automatically fail, preventing a code merge into the master lifecycle line.
+
+### Mutation Campaign (Test Strength):
+Coverage proves that code executed; it does not prove that a test would fail if the code were wrong. `sim/scripts/mutate.py` holds hand-written mutants, each breaking one safety rule in the RTL, and runs the regression against every one on a temporary copy of the tree. Every mutant must make at least one test fail, and a survivor is a missing test, to be written before release. A full campaign takes hours of CPU, so it runs before each release and after RTL changes rather than on every push. The latest result is in the safety case (SC-LRS-001, section 3.4).
