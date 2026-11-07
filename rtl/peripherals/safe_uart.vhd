@@ -155,8 +155,9 @@ begin
             r_baud_cnt <= (others => '0');
             if (r_tx_valid = '1' and w_parity_ok = '1') then
               -- Load shift register: start(0) + data[1-8] + parity(9) + stop(10)
-              r_tx_shift(8 downto 1) <= r_tx_data;
+              r_tx_shift(10)         <= '1';                 -- stop bit
               r_tx_shift(9)          <= r_tx_parity;
+              r_tx_shift(8 downto 1) <= r_tx_data;
               r_tx_shift(0)          <= '0';                 -- start bit
               r_tx_bits              <= "1010";              -- 10 bits to shift
               r_uart_st              <= uart_start;
@@ -165,9 +166,9 @@ begin
           when uart_start =>
 
             r_baud_cnt <= r_baud_cnt + 1;
-            if (r_baud_cnt >= c_baud_div) then
+            if (r_baud_cnt >= c_baud_div - 1) then
               r_baud_cnt <= (others => '0');
-              r_tx_shift <= r_tx_shift(10 downto 1) & '1';
+              r_tx_shift <= '1' & r_tx_shift(10 downto 1);
               r_tx_bits  <= r_tx_bits - 1;
               if (r_tx_bits = 0) then
                 r_uart_st <= uart_idle;
@@ -179,9 +180,9 @@ begin
           when uart_data =>
 
             r_baud_cnt <= r_baud_cnt + 1;
-            if (r_baud_cnt >= c_baud_div) then
+            if (r_baud_cnt >= c_baud_div - 1) then
               r_baud_cnt <= (others => '0');
-              r_tx_shift <= r_tx_shift(10 downto 1) & '1';
+              r_tx_shift <= '1' & r_tx_shift(10 downto 1);
               r_tx_bits  <= r_tx_bits - 1;
               if (r_tx_bits = 0) then
                 r_uart_st <= uart_idle;
@@ -191,9 +192,9 @@ begin
           when uart_parity =>
 
             r_baud_cnt <= r_baud_cnt + 1;
-            if (r_baud_cnt >= c_baud_div) then
+            if (r_baud_cnt >= c_baud_div - 1) then
               r_baud_cnt <= (others => '0');
-              r_tx_shift <= r_tx_shift(10 downto 1) & '1';
+              r_tx_shift <= '1' & r_tx_shift(10 downto 1);
               r_tx_bits  <= r_tx_bits - 1;
               if (r_tx_bits = 0) then
                 r_uart_st <= uart_idle;
@@ -203,7 +204,7 @@ begin
           when uart_stop =>
 
             r_baud_cnt <= r_baud_cnt + 1;
-            if (r_baud_cnt >= c_baud_div) then
+            if (r_baud_cnt >= c_baud_div - 1) then
               r_uart_st <= uart_idle;
             end if;
 
