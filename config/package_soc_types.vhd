@@ -68,6 +68,9 @@ package package_soc_types is
   constant c_wd_min_count : unsigned(15 downto 0) := to_unsigned(40000, 16);
   constant c_wd_max_count : unsigned(15 downto 0) := to_unsigned(50000, 16);
 
+  -- Only this value in the KICK register counts as a kick
+  constant c_wd_kick_key : std_logic_vector(c_data_width - 1 downto 0) := x"0000DEAD";
+
   -- ------------------------------------------------------------------------
   -- Peripheral Address Map
   -- ------------------------------------------------------------------------
@@ -79,6 +82,9 @@ package package_soc_types is
   constant c_can_status_addr     : std_logic_vector(c_addr_width - 1 downto 0) := x"4000030C";
   constant c_can_data_hi_addr    : std_logic_vector(c_addr_width - 1 downto 0) := x"40000310";
   constant c_can_tx_request_addr : std_logic_vector(c_addr_width - 1 downto 0) := x"40000314";
+  constant c_wd_kick_addr        : std_logic_vector(c_addr_width - 1 downto 0) := x"40000200";
+  constant c_wd_status_addr      : std_logic_vector(c_addr_width - 1 downto 0) := x"40000204";
+  constant c_wd_reset_src_addr   : std_logic_vector(c_addr_width - 1 downto 0) := x"40000208";
   constant c_uart_tx_data_addr   : std_logic_vector(c_addr_width - 1 downto 0) := x"40000400";
   constant c_uart_status_addr    : std_logic_vector(c_addr_width - 1 downto 0) := x"40000404";
   constant c_uart_parity_addr    : std_logic_vector(c_addr_width - 1 downto 0) := x"40000408";

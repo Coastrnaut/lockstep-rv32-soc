@@ -26,7 +26,7 @@ compliance with ISO 26262 ASIL-D through:
 | SG-01: Prevent unintended motion | Lockstep comparator isolates actuators | tb_lockstep_comparator, tb_lockstep_fault_inject | ✅ |
 | SG-02: Detect computational divergence | Dual-core lockstep within 2 cycles | lockstep_comparator.vhd formal asserts | ✅ |
 | SG-03: Detect memory corruption | SECDED ECC on all memory buses | tb_ecc, tb_ecc_fault_inject | ✅ |
-| SG-04: Detect software lockup | Windowed watchdog on isolated clock | tb_watchdog | ✅ |
+| SG-04: Detect software lockup | Windowed watchdog on isolated clock | tb_watchdog, tb_watchdog_supervisor, tb_soc_watchdog | ✅ |
 | SG-05: Ensure fault-free communication | Safety-gated CAN + parity UART | tb_can, tb_uart | ✅ |
 
 ---
@@ -37,6 +37,8 @@ compliance with ISO 26262 ASIL-D through:
 - `tb_lockstep_comparator` — Mismatch detection, NMI assertion, safe state latch
 - `tb_ecc` — SBE correction, DBE detection, clean path validation
 - `tb_watchdog` — Normal kick, early violation, late timeout
+- `tb_watchdog_supervisor` — Register access and clock crossings at both clock ratios
+- `tb_soc_watchdog` — Firmware kicks, timeouts and early kicks on the running SoC
 - `tb_can` — Frame TX, safety gate drop, mailbox load
 - `tb_uart` — Parity-protected TX, error flagging
 

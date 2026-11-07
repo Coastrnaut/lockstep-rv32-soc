@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Assemble the RV32I test program for tb_soc_firmware into an IMEM image.
+"""Assemble the RV32I test program for the SoC testbenches into an IMEM image.
 
 The cores run this from reset. It uses the peripherals the way real software
-would, and reports what it reads back over the UART, so tb_soc_firmware can tell
+would, and reports what it reads back over the UART, so the testbenches can tell
 that stores and loads work on both lockstep cores. Regenerate the image with:
 
     python sim/scripts/soc_firmware.py
@@ -10,10 +10,11 @@ that stores and loads work on both lockstep cores. Regenerate the image with:
 from pathlib import Path
 
 OUTPUT = Path(__file__).parent.parent / "firmware" / "neorv32_imem_image.vhd"
-REGISTERS = {"zero": 0, "t0": 5, "t1": 6, "t2": 7, "s0": 8, "s1": 9, "s2": 18, "t3": 28}
+REGISTERS = {"zero": 0, "t0": 5, "t1": 6, "t2": 7, "s0": 8, "s1": 9, "s2": 18, "s3": 19, "s4": 20, "t3": 28}
 CSRS = {"mstatus": 0x300, "mie": 0x304, "mtvec": 0x305, "mcause": 0x342}
 ROM_WORDS = 256
 TRAP_ADDRESS = 4
+WD_WINDOW_OPEN = 20                    # Watchdog STATUS value once the counter is past 40960
 
 PROGRAM = [
     ("jal", "zero", "main"),
@@ -35,6 +36,8 @@ PROGRAM = [
     ("lui", "s0", 0x40000),            # s0 = peripheral window
     ("addi", "s1", "zero", 0),
     ("addi", "s2", "zero", 0),
+    ("lui", "s4", 0xE),                # s4 = watchdog key, 0xDEAD
+    ("addi", "s4", "s4", -339),
     ("addi", "t0", "zero", TRAP_ADDRESS),
     ("csrw", "mtvec", "t0"),
     ("addi", "t0", "zero", 0x88),      # MSI and MTI
@@ -42,9 +45,14 @@ PROGRAM = [
     ("addi", "t0", "zero", 8),
     ("csrs", "mstatus", "t0"),
 
-    # Start with a UART byte. If it fails parity, as tb_soc_uart_error arranges,
-    # wait for UART_ERROR and report that on CAN, because the UART cannot.
-    ("addi", "t2", "zero", ord("S")),
+    # A write to KICK with the wrong value must do nothing. A kick this early would
+    # reset the SoC, and the first byte below would come out twice.
+    ("sw", "zero", 0x200, "s0"),
+
+    # Start with RESET_SRC as a digit. If it fails parity, as tb_soc_uart_error
+    # arranges, wait for UART_ERROR and report that on CAN, because the UART cannot.
+    ("lw", "s3", 0x208, "s0"),
+    ("addi", "t2", "s3", ord("0")),
     ("sw", "t2", 0x400, "s0"),
     ("lw", "t1", 0x408, "s0"),
     ("bne", "t1", "zero", "parity_good"),
@@ -60,7 +68,16 @@ PROGRAM = [
     ("andi", "t1", "t1", 1),
     ("bne", "t1", "zero", "parity_good"),
 
+    # After a timeout, kick far too early. After an early kick, stop, and leave
+    # the watchdog to time out. tb_soc_watchdog follows this round.
+    ("beq", "s3", "zero", "cold_start"),
+    ("addi", "t1", "zero", 2),
+    ("bne", "s3", "t1", "done"),
+    ("sw", "s4", 0x200, "s0"),
+    ("jal", "zero", "done"),
+
     # Send ID 0x123, DLC 2, data bytes 0xA5 and 0x5A
+    "cold_start:",
     ("addi", "t0", "zero", 0x123),
     ("sw", "t0", 0x300, "s0"),
     ("addi", "t0", "zero", 2),
@@ -116,6 +133,24 @@ PROGRAM = [
     ("beq", "t0", "t1", "finish"),
     ("addi", "t2", "zero", ord("D")),
     "finish:",
+    ("sw", "t2", 0x400, "s0"),
+
+    # Kick twice, as soon as STATUS shows that the window is open, then say so and
+    # stop. A kick takes a few watchdog clocks to reach STATUS, so wait for that.
+    ("addi", "t0", "zero", 2),
+    ("addi", "t2", "zero", WD_WINDOW_OPEN),
+    "wait_window:",
+    ("lw", "t1", 0x204, "s0"),
+    ("andi", "t1", "t1", 0x1F),
+    ("bne", "t1", "t2", "wait_window"),
+    ("sw", "s4", 0x200, "s0"),
+    "wait_kick:",
+    ("lw", "t1", 0x204, "s0"),
+    ("andi", "t1", "t1", 0x1F),
+    ("beq", "t1", "t2", "wait_kick"),
+    ("addi", "t0", "t0", -1),
+    ("bne", "t0", "zero", "wait_window"),
+    ("addi", "t2", "zero", ord("W")),
     ("sw", "t2", 0x400, "s0"),
 
     "done:",

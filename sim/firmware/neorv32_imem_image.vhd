@@ -22,13 +22,17 @@ x"30200073", -- mret
 x"40000437", -- lui s0 262144
 x"00000493", -- addi s1 zero 0
 x"00000913", -- addi s2 zero 0
+x"0000ea37", -- lui s4 14
+x"eada0a13", -- addi s4 s4 -339
 x"00400293", -- addi t0 zero 4
 x"30529073", -- csrw mtvec t0
 x"08800293", -- addi t0 zero 136
 x"30429073", -- csrw mie t0
 x"00800293", -- addi t0 zero 8
 x"3002a073", -- csrs mstatus t0
-x"05300393", -- addi t2 zero 83
+x"20042023", -- sw zero 512 s0
+x"20842983", -- lw s3 520 s0
+x"03098393", -- addi t2 s3 48
 x"40742023", -- sw t2 1024 s0
 x"40842303", -- lw t1 1032 s0
 x"00031c63", -- bne t1 zero parity_good
@@ -36,10 +40,15 @@ x"00090063", -- beq s2 zero wait_irq
 x"0ee00293", -- addi t0 zero 238
 x"30542023", -- sw t0 768 s0
 x"30542a23", -- sw t0 788 s0
-x"0a40006f", -- jal zero done
+x"0ec0006f", -- jal zero done
 x"40442303", -- lw t1 1028 s0
 x"00137313", -- andi t1 t1 1
 x"fe031ce3", -- bne t1 zero parity_good
+x"00098a63", -- beq s3 zero cold_start
+x"00200313", -- addi t1 zero 2
+x"0c699a63", -- bne s3 t1 done
+x"21442023", -- sw s4 512 s0
+x"0cc0006f", -- jal zero done
 x"12300293", -- addi t0 zero 291
 x"30542023", -- sw t0 768 s0
 x"00200293", -- addi t0 zero 2
@@ -76,6 +85,19 @@ x"00100313", -- addi t1 zero 1
 x"04200393", -- addi t2 zero 66
 x"00628463", -- beq t0 t1 finish
 x"04400393", -- addi t2 zero 68
+x"40742023", -- sw t2 1024 s0
+x"00200293", -- addi t0 zero 2
+x"01400393", -- addi t2 zero 20
+x"20442303", -- lw t1 516 s0
+x"01f37313", -- andi t1 t1 31
+x"fe731ce3", -- bne t1 t2 wait_window
+x"21442023", -- sw s4 512 s0
+x"20442303", -- lw t1 516 s0
+x"01f37313", -- andi t1 t1 31
+x"fe730ce3", -- beq t1 t2 wait_kick
+x"fff28293", -- addi t0 t0 -1
+x"fe0290e3", -- bne t0 zero wait_window
+x"05700393", -- addi t2 zero 87
 x"40742023", -- sw t2 1024 s0
 x"0000006f", -- jal zero done
 others => x"00000000"

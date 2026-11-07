@@ -25,7 +25,7 @@
 - **ASIL Allocation:** ASIL-D
 - **Mitigation:** Hardware reset to critical actuators via `sys_reset_o`.
 - **Verification Method:** Timeout Simulation + Fault Injection
-- **Implemented In:** `rtl/safety_blocks/hardware_watchdog.vhd`
+- **Implemented In:** `rtl/safety_blocks/hardware_watchdog.vhd`, `rtl/safety_blocks/watchdog_supervisor.vhd`
 
 ## TSR_RESET_001
 - **Description:** A reset must take effect at once, with or without a clock, and be released on a clock edge, with both cores released on the same edge. Actuators must be held safe during a reset.

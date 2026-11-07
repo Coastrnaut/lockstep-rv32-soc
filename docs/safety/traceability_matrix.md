@@ -33,6 +33,8 @@
 | SG-03 | FSR_MEM_001      | TSR_ECC_001        | hamming_ecc_wrapper          | tb_ecc_fault_inject            | ✅     |
 | SG-03 | FSR_MEM_002      | TSR_SAFETY_GATE_002| hamming_ecc_wrapper          | tb_ecc                         | ✅     |
 | SG-04 | FSR_LOCK_001     | TSR_WD_001         | hardware_watchdog            | tb_watchdog                    | ✅     |
+| SG-04 | FSR_LOCK_001     | TSR_WD_001         | watchdog_supervisor          | tb_watchdog_supervisor         | ✅     |
+| SG-04 | FSR_LOCK_001     | TSR_WD_001         | top_automotive_soc           | tb_soc_watchdog                | ✅     |
 | SG-04 | FSR_LOCK_001     | TSR_SAFETY_GATE_003| hardware_watchdog            | tb_watchdog                    | ✅     |
 | SG-05 | FSR_COMM_001     | TSR_CAN_001        | automotive_can_controller    | tb_can                         | ✅     |
 | SG-05 | FSR_COMM_001     | TSR_CAN_001        | automotive_can_controller    | tb_can                         | ✅     |

@@ -35,6 +35,9 @@ entity top_automotive_soc is
     clk_i   : in    std_logic; -- Main system clock string
     rst_n_i : in    std_logic; -- External master hardware reset
 
+    -- Independent on-chip RC oscillator for the watchdog (Rule CD-03)
+    wd_clk_i : in    std_logic;
+
     -- --------------------------------------------------------------------
     -- Functional Automotive Interfaces
     -- --------------------------------------------------------------------
@@ -90,10 +93,15 @@ architecture structural of top_automotive_soc is
   -- Peripheral diagnostic signals
   signal w_can_busy            : std_logic;
   signal w_can_status          : std_logic_vector(10 downto 0);
+  signal w_cold_rst_n          : std_logic;
+  signal w_wd_rst_n            : std_logic;
+  signal w_wd_reset            : std_logic;
+  signal w_rst_n_request       : std_logic;
   signal w_rst_n               : std_logic;
   signal w_lockstep_safe       : std_logic;
   signal w_can_irq             : std_logic;
   signal w_uart_irq            : std_logic;
+  signal w_wd_rdata            : std_logic_vector(31 downto 0);
   signal w_can_rdata           : std_logic_vector(31 downto 0);
   signal w_uart_rdata          : std_logic_vector(31 downto 0);
   signal w_periph_rdata        : std_logic_vector(31 downto 0);
@@ -167,16 +175,37 @@ architecture structural of top_automotive_soc is
 begin
 
   -- ========================================================================
-  -- 1. RESET SYNCHRONISER (Rule 1.4)
+  -- 1. RESET NETWORK (Rule 1.4, Rule CD-04)
   -- ========================================================================
-  -- Every block takes its reset from here. The two cores cannot leave reset on
-  -- different clocks, and a pulse too short for a clock edge to catch still
-  -- resets the blocks that only look at reset on a clock edge.
+  -- The cold reset comes from the rst_n_i pin alone. It clears the comparator,
+  -- whose fault latch must survive anything less, and the watchdog supervisor,
+  -- which has to remember why it reset the SoC.
+  --
+  -- w_rst_n adds the watchdog's reset, and every other block takes that one. The
+  -- two cores cannot leave reset on different clocks, and a pulse too short for
+  -- a clock edge to catch still resets the blocks that only look at reset on a
+  -- clock edge.
   -- ========================================================================
-  i_reset_sync : entity lockstep.reset_synchronizer
+  i_cold_reset_sync : entity lockstep.reset_synchronizer
     port map (
       clk_i       => clk_i,
       rst_n_i     => rst_n_i,
+      rst_n_syn_o => w_cold_rst_n
+    );
+
+  i_wd_reset_sync : entity lockstep.reset_synchronizer
+    port map (
+      clk_i       => wd_clk_i,
+      rst_n_i     => rst_n_i,
+      rst_n_syn_o => w_wd_rst_n
+    );
+
+  w_rst_n_request <= w_cold_rst_n and not w_wd_reset;
+
+  i_reset_sync : entity lockstep.reset_synchronizer
+    port map (
+      clk_i       => clk_i,
+      rst_n_i     => w_rst_n_request,
       rst_n_syn_o => w_rst_n
     );
 
@@ -757,7 +786,7 @@ begin
   i_lockstep_gate : entity lockstep.lockstep_comparator
     port map (
       clk_i       => clk_i,
-      rst_n_syn_i => w_rst_n,
+      rst_n_syn_i => w_cold_rst_n,
 
       -- Core Feeders
       core_a_bus_i => w_core_a_bus,
@@ -806,6 +835,21 @@ begin
 
     );
 
+  -- ========================================================================
+  -- 8. WATCHDOG SUPERVISOR
+  -- ========================================================================
+  i_watchdog_supervisor : entity lockstep.watchdog_supervisor
+    port map (
+      clk_i       => clk_i,
+      rst_n_i     => w_cold_rst_n,
+      bus_i       => w_safe_sys_bus,
+      bus_ok_i    => w_bus_valid,
+      rdata_o     => w_wd_rdata,
+      wd_clk_i    => wd_clk_i,
+      wd_rst_n_i  => w_wd_rst_n,
+      sys_reset_o => w_wd_reset
+    );
+
   nmi_fault_o <= w_nmi;
 
   -- Nothing supervises the actuators during a reset, so it holds them safe too
@@ -813,10 +857,10 @@ begin
 
   -- Both cores read the same data, or they would leave lockstep. Each peripheral
   -- drives zero unless it is being read.
-  w_periph_rdata <= w_can_rdata or w_uart_rdata;
+  w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata;
 
   -- ========================================================================
-  -- 8. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals
+  -- 9. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals
   --     to satisfy -Wall (unused signal) and prevent synthesis optimization.
   --     In production, these conditions trigger BSM actions or fault logging.
   -- ========================================================================

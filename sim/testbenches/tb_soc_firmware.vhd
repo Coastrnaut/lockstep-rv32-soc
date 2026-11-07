@@ -38,6 +38,7 @@ architecture tb of tb_soc_firmware is
   constant c_timeout : time := 4 ms;
 
   signal clk           : std_logic;
+  signal wd_clk        : std_logic;
   signal rst_n         : std_logic;
   signal can_tx        : std_logic;
   signal uart_tx       : std_logic;
@@ -70,6 +71,15 @@ begin
 
   end process p_clk;
 
+  -- The watchdog does not time out for 50 ms, and no test runs that long
+  p_wd_clk : process is
+  begin
+
+    wd_clk <= '0', '1' after 500 ns;
+    wait for 1 us;
+
+  end process p_wd_clk;
+
   test_runner_watchdog(runner, 20 ms);
 
   i_soc : entity lockstep.top_automotive_soc
@@ -79,6 +89,7 @@ begin
     port map (
       clk_i           => clk,
       rst_n_i         => rst_n,
+      wd_clk_i        => wd_clk,
       can_tx_o        => can_tx,
       can_rx_i        => can_bus,
       uart_tx_o       => uart_tx,
@@ -137,6 +148,10 @@ begin
 
   p_stim : process is
 
+    alias wd_counter is << signal i_soc.i_watchdog_supervisor.i_watchdog.r_counter : unsigned(15 downto 0) >>;
+    alias wd_status  is << signal i_soc.i_watchdog_supervisor.r_status_sys : std_logic_vector(9 downto 0) >>;
+    alias soc_rst_n  is << signal i_soc.w_rst_n : std_logic >>;
+
     procedure check_uart_byte (
       constant count    : in natural;
       constant expected : in std_logic_vector(7 downto 0)
@@ -172,9 +187,10 @@ begin
         check_equal(rx_frame.data, std_logic_vector'(x"A55A000000000000"), "CAN frame data");
         check_equal(rx_frame.crc, rx_frame.crc_expected, "CAN frame CRC");
 
-        -- 'K' means both cores read an error counter of zero. 'D' means they
-        -- saw UART STATUS busy and then clear, and 'B' would mean it never set.
-        check_uart_byte(1, x"53");
+        -- '0' is the reset source of a cold start. 'K' means both cores read an
+        -- error counter of zero. 'D' means they saw UART STATUS busy and then
+        -- clear, and 'B' would mean it never set.
+        check_uart_byte(1, x"30");
         check_uart_byte(2, x"4B");
         check_uart_byte(3, x"44");
         check_equal(uart_count, 3, "no other bytes, so no interrupt");
@@ -189,13 +205,30 @@ begin
 
         -- '2' means CAN_ERROR reached the trap handler on both cores, once for
         -- each failed attempt, and that clearing it worked each time
-        check_uart_byte(1, x"53");
+        check_uart_byte(1, x"30");
         check_uart_byte(2, x"32");
         check_uart_byte(3, x"46");
         check_uart_byte(4, x"44");
         check_equal(uart_count, 4, "no other bytes");
         check_equal(rx_starts, 3, "the third attempt got through");
         check_equal(actuator_safe, '0', "actuators free");
+      elsif run("reset_source_is_ready_when_the_program_restarts") then
+        check_uart_byte(1, x"30");
+
+        -- Move the watchdog to just short of its timeout, rather than spend 50 ms
+        -- getting there
+        wd_counter <= force to_unsigned(49990, 16);
+        wait until rising_edge(wd_clk);
+        wd_counter <= release;
+
+        -- With an oscillator this slow, the program reads RESET_SRC long before a
+        -- new copy could cross the clocks, so it has to be across as the reset ends
+        wait until soc_rst_n = '0' for c_timeout;
+        check_equal(soc_rst_n, '0', "the watchdog reset the SoC");
+        wait until soc_rst_n = '1' for c_timeout;
+        check_equal(soc_rst_n, '1', "and let it restart");
+        check_equal(wd_status(9 downto 8), std_logic_vector'("10"), "RESET_SRC already across");
+        check_uart_byte(2, x"32");
       end if;
 
     end loop;

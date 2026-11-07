@@ -33,6 +33,7 @@ architecture tb of tb_soc_uart_error is
   constant c_timeout      : time := 2 ms;
 
   signal clk           : std_logic;
+  signal wd_clk        : std_logic;
   signal rst_n         : std_logic;
   signal can_tx        : std_logic;
   signal uart_tx       : std_logic;
@@ -57,6 +58,15 @@ begin
 
   end process p_clk;
 
+  -- The watchdog does not time out for 50 ms, and no test runs that long
+  p_wd_clk : process is
+  begin
+
+    wd_clk <= '0', '1' after 500 ns;
+    wait for 1 us;
+
+  end process p_wd_clk;
+
   test_runner_watchdog(runner, 10 ms);
 
   i_soc : entity lockstep.top_automotive_soc
@@ -66,6 +76,7 @@ begin
     port map (
       clk_i           => clk,
       rst_n_i         => rst_n,
+      wd_clk_i        => wd_clk,
       can_tx_o        => can_tx,
       can_rx_i        => can_bus,
       uart_tx_o       => uart_tx,

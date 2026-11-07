@@ -25,6 +25,7 @@ architecture rtl of tb_soc_integration is
 
   constant clk_period : time := 20 ns;
   signal   clk        : std_logic;
+  signal   wd_clk     : std_logic;
   signal   rst_n      : std_logic;
 
   signal can_tx        : std_logic;
@@ -42,10 +43,20 @@ architecture rtl of tb_soc_integration is
 
   end process p_clk;
 
+  -- The watchdog does not time out for 50 ms, and no test runs that long
+  p_wd_clk : process is
+  begin
+
+    wd_clk <= '0', '1' after 500 ns;
+    wait for 1 us;
+
+  end process p_wd_clk;
+
   i_soc : entity lockstep.top_automotive_soc
     port map (
       clk_i           => clk,
       rst_n_i         => rst_n,
+      wd_clk_i        => wd_clk,
       can_tx_o        => can_tx,
       can_rx_i        => can_rx,
       uart_tx_o       => uart_tx,
@@ -66,7 +77,7 @@ architecture rtl of tb_soc_integration is
 
     -- --- Test 2: Reset de-assertion ---
     rst_n <= '1';
-    wait for clk_period * 3;
+    wait for clk_period * 6;
 
     -- Safety signals: actuator_safe falls once the reset has been released
     check(actuator_safe = '0', "post-reset: actuators not latched");
@@ -87,7 +98,7 @@ architecture rtl of tb_soc_integration is
     rst_n  <= '0';
     wait for clk_period * 3;
     rst_n  <= '1';
-    wait for clk_period * 3;
+    wait for clk_period * 6;
     can_rx <= '1';
 
     -- Safety signals recover after reset

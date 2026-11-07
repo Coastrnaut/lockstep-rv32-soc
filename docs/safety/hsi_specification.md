@@ -100,9 +100,19 @@ The item is the **lockstep-rv32-soc** hardware platform comprising:
 
 | Offset | Name          | R/W | Description                          |
 |--------|---------------|-----|--------------------------------------|
-| 0x00   | KICK          | W   | Write 0xDEAD to kick watchdog        |
+| 0x00   | KICK          | W   | Write 0x0000DEAD to kick watchdog    |
 | 0x04   | STATUS        | R   | Watchdog status and counter          |
-| 0x08   | RESET_SRC     | R   | Reset source (early/late/normal)     |
+| 0x08   | RESET_SRC     | R   | Why the watchdog last reset the SoC  |
+
+Only a word store of exactly that value to KICK counts, and any other write does
+nothing. A kick has to land between 40,000 and 50,000 watchdog clocks after the
+one before it, or after the reset for the first one. Too early or too late and
+the watchdog resets the SoC. Kicks take a few watchdog clocks to arrive, and one
+made while another is still on its way counts as the same kick.
+
+STATUS and RESET_SRC are copies a few watchdog clocks old. If STATUS stops
+changing, the oscillator has stopped: the watchdog cannot act, and software has
+to treat that as a fault.
 
 ### 3.4 CAN Controller Registers
 
@@ -142,7 +152,9 @@ drop of the safety gate clears them.
 
 Both cores receive these on their RISC-V interrupt lines, whose fixed priority
 gives the order above: NMI_LOCKSTEP on MEI, CAN_ERROR on MSI and UART_ERROR on
-MTI. NMI_ECC_DBE and WD_TIMEOUT are not connected yet. CAN_ERROR and UART_ERROR
+MTI. NMI_ECC_DBE is not connected, because the ECC wrapper is not in the SoC yet.
+WD_TIMEOUT is not an interrupt either: a watchdog violation resets the SoC, as
+section 6 describes, and RESET_SRC reports it afterwards. CAN_ERROR and UART_ERROR
 stay set until software writes the block's STATUS register, and reading it does
 not clear them, so that polling cannot lose an interrupt.
 
@@ -165,7 +177,7 @@ Each block has 0x100 bytes of the window at 0x40000000:
 |------------|---------------------|----------------------|
 | 0x40000000 | Lockstep comparator | Reserved             |
 | 0x40000100 | ECC controller      | Reserved             |
-| 0x40000200 | Watchdog            | Reserved             |
+| 0x40000200 | Watchdog            | Offsets 0x00 to 0x08 |
 | 0x40000300 | CAN controller      | Offsets 0x00 to 0x14 |
 | 0x40000400 | Safe UART           | Offsets 0x00 to 0x08 |
 
@@ -181,6 +193,8 @@ reads zero. These status registers have the following bits:
 
 | Address    | Register    | Bits                                                    |
 |------------|-------------|---------------------------------------------------------|
+| 0x40000204 | WD STATUS   | 7 = violation held, 6 = early, 5 = late, 4:0 = counter 15:11 |
+| 0x40000208 | RESET_SRC   | 1:0 = 0 for no watchdog reset, 1 for early, 2 for late  |
 | 0x4000030C | CAN STATUS  | 16:8 = TEC, 3 = interrupt, 2 = bus-off, 1 = error passive, 0 = busy |
 | 0x40000404 | UART STATUS | 1 = parity error interrupt, 0 = busy                    |
 | 0x40000408 | UART PARITY | 0 = the byte held for transmission has good parity      |
@@ -195,15 +209,25 @@ them does nothing. TX_DATA takes any store that includes byte 0.
 | Phase          | Duration     | Description                          |
 |----------------|--------------|--------------------------------------|
 | Power-on reset | 1024 clk     | Global reset deassertion             |
-| Reset release  | 2 clk        | Rising edges before w_rst_n rises    |
+| Reset release  | 4 clk        | Rising edges before w_rst_n rises    |
 | Lockstep init  | 2 clk        | Comparator self-test                 |
 | ECC init       | 1 clk        | Parity generator self-test           |
 | Watchdog start | Immediate    | WD counter begins on first clock     |
-| Total boot     | 1029 clk     | System ready at ~20.6 µs @ 50 MHz    |
+| Total boot     | 1031 clk     | System ready at ~20.6 µs @ 50 MHz    |
 
 A reset takes effect at once, even with the clock stopped: `can_tx_o` goes
 recessive and `actuator_safe_o` goes high. A pulse of any length restarts the
 whole SoC, and `actuator_safe_o` stays high until the reset has been released.
+
+There are two kinds of reset. A cold reset comes from the `rst_n_i` pin and clears
+everything. A watchdog reset lasts 16 watchdog clocks and restarts both cores, the
+CAN controller, the UART and the watchdog's counter, but it leaves two things
+alone: RESET_SRC, which cold starts clear, and the lockstep comparator, so a
+tripped comparator stays tripped until a cold reset.
+
+The watchdog runs from `wd_clk_i` alone. If `clk_i` stops, it still times out and
+makes the SoC safe, and it stays that way, because a reset needs clock edges to be
+released. Nothing can turn the watchdog off, so software has to start kicking it.
 
 ---
 
