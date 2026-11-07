@@ -47,7 +47,7 @@ jobs:
         # Fails the step, not the job, so the logs below still get uploaded.
         timeout-minutes: 5
         run: |
-          cd sim && mkdir -p reports && python run.py
+          cd sim && mkdir -p reports && python run.py -p 4
 
       - name: Upload simulation logs on failure
         if: failure()
