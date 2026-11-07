@@ -752,6 +752,7 @@ begin
         -- Nor does a partial store, or a write elsewhere
         write_bus(c_can_status_addr, x"00000001", "0001");
         write_bus(c_can_data_addr, x"00000001");
+        write_bus(x"C000030C", x"00000001");
         wait until rising_edge(clk_i);
         check_equal(can_irq_o, '1', "only a word store to STATUS clears it");
 

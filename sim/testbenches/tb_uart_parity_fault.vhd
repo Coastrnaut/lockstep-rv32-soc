@@ -185,6 +185,7 @@ begin
         check_equal(uart_irq, '1', "reads leave the interrupt set");
 
         write_bus(c_uart_parity_addr, x"00000000");
+        write_bus(x"C0000404", x"00000000");
         settle;
         check_equal(uart_irq, '1', "a write elsewhere leaves it set");
 
