@@ -73,6 +73,9 @@ package package_soc_types is
   -- Inside the 4K peripheral window: docs/safety/hsi_specification.md section 5.1
   -- ------------------------------------------------------------------------
   constant c_can_mailbox_addr  : std_logic_vector(c_addr_width - 1 downto 0) := x"40000300";
+  constant c_can_status_addr   : std_logic_vector(c_addr_width - 1 downto 0) := x"4000030C";
   constant c_uart_tx_data_addr : std_logic_vector(c_addr_width - 1 downto 0) := x"40000400";
+  constant c_uart_status_addr  : std_logic_vector(c_addr_width - 1 downto 0) := x"40000404";
+  constant c_uart_parity_addr  : std_logic_vector(c_addr_width - 1 downto 0) := x"40000408";
 
 end package package_soc_types;

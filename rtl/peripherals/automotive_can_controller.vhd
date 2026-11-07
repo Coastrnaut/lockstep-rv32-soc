@@ -37,6 +37,9 @@ entity automotive_can_controller is
     bus_i    : in    t_rv_bus;
     bus_ok_i : in    std_logic; -- Hardware transaction validation gate
 
+    -- Register read data: valid the cycle after the strobe, otherwise zero
+    rdata_o : out   std_logic_vector(c_data_width - 1 downto 0);
+
     -- External CAN transceiver interface
     can_tx_o : out   std_logic;
     can_rx_i : in    std_logic;
@@ -175,6 +178,10 @@ architecture rtl of automotive_can_controller is
 
   -- Reset, a dropped safety gate or bus-off clears the whole TX path at once
   signal w_tx_clear : std_logic;
+
+  -- Register reads
+  signal w_busy  : std_logic;
+  signal r_rdata : std_logic_vector(c_data_width - 1 downto 0);
 
   -- Place a field at the top of the shift register
 
@@ -663,15 +670,43 @@ begin
               '1';
 
   -- Busy flag for diagnostics: a frame is in the mailbox or on the bus
-  can_busy_o <= '1' when (r_state /= idle or r_mailbox_full = '1') else
-                '0';
+  w_busy <= '1' when (r_state /= idle or r_mailbox_full = '1') else
+            '0';
+
+  can_busy_o <= w_busy;
 
   can_status_o(10)         <= r_bus_off;
   can_status_o(9)          <= w_error_passive;
   can_status_o(8 downto 0) <= std_logic_vector(r_tec);
 
   -- ========================================================================
-  -- 11. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
+  -- 11. REGISTER READS: STATUS
+  -- ========================================================================
+  -- The bus acknowledges every access at once, so read data has to be ready in
+  -- the cycle after the strobe. It is zero at all other times, which lets the
+  -- top level OR the peripherals together.
+  -- ========================================================================
+  p_read : process (clk_i) is
+  begin
+
+    if rising_edge(clk_i) then
+      r_rdata <= (others => '0');
+
+      if (rst_n_i = '1' and bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '0' and
+          bus_i.addr = c_can_status_addr) then
+        r_rdata(16 downto 8) <= std_logic_vector(r_tec);
+        r_rdata(2)           <= r_bus_off;
+        r_rdata(1)           <= w_error_passive;
+        r_rdata(0)           <= w_busy;
+      end if;
+    end if;
+
+  end process p_read;
+
+  rdata_o <= r_rdata;
+
+  -- ========================================================================
+  -- 12. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
   -- ========================================================================
   -- Property: CAN TX forced recessive when safety gate drops
   -- Property: CAN TX recessive while no frame is in progress

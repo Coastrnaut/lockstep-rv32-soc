@@ -26,6 +26,9 @@ entity safe_uart is
     bus_i    : in    t_rv_bus;
     bus_ok_i : in    std_logic;
 
+    -- Register read data: valid the cycle after the strobe, otherwise zero
+    rdata_o : out   std_logic_vector(c_data_width - 1 downto 0);
+
     -- UART output
     uart_tx_o : out   std_logic;
 
@@ -65,6 +68,11 @@ architecture rtl of safe_uart is
   -- Parity checker for incoming data
   signal w_parity_ok : std_logic;
 
+  -- Register reads
+  signal w_busy  : std_logic;
+  signal w_error : std_logic;
+  signal r_rdata : std_logic_vector(c_data_width - 1 downto 0);
+
 begin
 
   -- ========================================================================
@@ -78,7 +86,9 @@ begin
 
     if rising_edge(clk_i) then
       if (rst_n_i = '0') then
-        r_tx_valid <= '0';
+        r_tx_valid  <= '0';
+        r_tx_data   <= (others => '0');
+        r_tx_parity <= '0';
       elsif (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.addr = c_uart_tx_data_addr) then
         -- Write 8-bit payload to TX buffer
         r_tx_data <= bus_i.data(7 downto 0);
@@ -215,13 +225,44 @@ begin
                '1';
 
   -- Busy flag for diagnostics
-  uart_busy_o  <= '1' when r_uart_st /= uart_idle else
-                  '0';
-  uart_error_o <= '1' when (r_tx_valid = '1' and w_parity_ok = '0') else
-                  '0';
+  w_busy <= '1' when r_uart_st /= uart_idle else
+            '0';
+
+  w_error <= '1' when (r_tx_valid = '1' and w_parity_ok = '0') else
+             '0';
+
+  uart_busy_o  <= w_busy;
+  uart_error_o <= w_error;
 
   -- ========================================================================
-  -- 5. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
+  -- 5. REGISTER READS: STATUS AND PARITY
+  -- ========================================================================
+  -- The bus acknowledges every access at once, so read data has to be ready in
+  -- the cycle after the strobe. It is zero at all other times, which lets the
+  -- top level OR the peripherals together.
+  -- ========================================================================
+  p_read : process (clk_i) is
+  begin
+
+    if rising_edge(clk_i) then
+      r_rdata <= (others => '0');
+
+      if (rst_n_i = '1' and bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '0') then
+        if (bus_i.addr = c_uart_status_addr) then
+          r_rdata(1) <= w_error;
+          r_rdata(0) <= w_busy;
+        elsif (bus_i.addr = c_uart_parity_addr) then
+          r_rdata(0) <= w_parity_ok;
+        end if;
+      end if;
+    end if;
+
+  end process p_read;
+
+  rdata_o <= r_rdata;
+
+  -- ========================================================================
+  -- 6. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)
   -- ========================================================================
   -- Property: Parity mismatch blocks TX
   -- Property: UART error flagged when parity fails

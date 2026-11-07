@@ -86,6 +86,9 @@ architecture structural of top_automotive_soc is
   -- Peripheral diagnostic signals
   signal w_can_busy            : std_logic;
   signal w_can_status          : std_logic_vector(10 downto 0);
+  signal w_can_rdata           : std_logic_vector(31 downto 0);
+  signal w_uart_rdata          : std_logic_vector(31 downto 0);
+  signal w_periph_rdata        : std_logic_vector(31 downto 0);
   signal w_uart_busy           : std_logic;
   signal w_uart_error          : std_logic;
   signal w_core_a_jtag_tdo     : std_ulogic;
@@ -370,7 +373,7 @@ begin
       xbus_sel_o => w_core_a_xbus_sel,
       xbus_stb_o => w_core_a_xbus_stb,
       xbus_cyc_o => w_core_a_xbus_cyc,
-      xbus_dat_i => (others => '0'),
+      xbus_dat_i => w_periph_rdata,
       xbus_ack_i => w_bus_valid,
       xbus_err_i => '0',
 
@@ -647,7 +650,7 @@ begin
       xbus_sel_o => w_core_b_xbus_sel,
       xbus_stb_o => w_core_b_xbus_stb,
       xbus_cyc_o => w_core_b_xbus_cyc,
-      xbus_dat_i => (others => '0'),
+      xbus_dat_i => w_periph_rdata,
       xbus_ack_i => w_bus_valid,
       xbus_err_i => '0',
 
@@ -754,6 +757,7 @@ begin
       rst_n_i      => rst_n_i,
       bus_i        => w_safe_sys_bus,
       bus_ok_i     => w_bus_valid,
+      rdata_o      => w_can_rdata,
       can_tx_o     => can_tx_o,
       can_rx_i     => can_rx_i,
       can_busy_o   => w_can_busy,
@@ -769,11 +773,16 @@ begin
       rst_n_i      => rst_n_i,
       bus_i        => w_safe_sys_bus,
       bus_ok_i     => w_bus_valid,
+      rdata_o      => w_uart_rdata,
       uart_tx_o    => uart_tx_o,
       uart_busy_o  => w_uart_busy,
       uart_error_o => w_uart_error
 
     );
+
+  -- Both cores read the same data, or they would leave lockstep. Each peripheral
+  -- drives zero unless it is being read.
+  w_periph_rdata <= w_can_rdata or w_uart_rdata;
 
   -- ========================================================================
   -- 7. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals

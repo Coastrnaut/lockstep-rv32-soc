@@ -78,6 +78,7 @@ architecture tb of tb_can is
   signal can_tx_o     : std_logic;
   signal can_busy_o   : std_logic;
   signal can_status_o : std_logic_vector(10 downto 0);
+  signal rdata_o      : std_logic_vector(31 downto 0);
 
   -- The bus and what else is on it
   signal can_bus         : std_logic;
@@ -124,6 +125,7 @@ begin
       rst_n_i      => rst_n_i,
       bus_i        => bus_i,
       bus_ok_i     => bus_ok_i,
+      rdata_o      => rdata_o,
       can_tx_o     => can_tx_o,
       can_rx_i     => can_rx_i,
       can_busy_o   => can_busy_o,
@@ -200,6 +202,7 @@ begin
     variable v_end   : time;
     variable v_falls : natural;
     variable v_addr  : std_logic_vector(31 downto 0);
+    variable v_rdata : std_logic_vector(31 downto 0);
 
     impure function tec return natural is
     begin
@@ -259,6 +262,43 @@ begin
       bus_i <= c_bus_idle;
 
     end procedure write_mailbox;
+
+    -- One-clock read: the CPU takes the data in the cycle after the strobe
+
+    procedure read_bus (
+      constant addr : in std_logic_vector(31 downto 0)
+    ) is
+    begin
+
+      bus_i   <=
+      (
+        addr  => addr,
+        data  => (others => '0'),
+        we    => '0',
+        valid => '1'
+      );
+      wait until rising_edge(clk_i);
+      bus_i   <= c_bus_idle;
+      wait until rising_edge(clk_i);
+      v_rdata := rdata_o;
+
+    end procedure read_bus;
+
+    -- Expected STATUS: bits 16:8 = TEC, 2 = bus-off, 1 = error passive, 0 = busy
+
+    procedure check_status (
+      constant count   : in natural;
+      constant bus_off : in std_logic;
+      constant passive : in std_logic;
+      constant busy    : in std_logic
+    ) is
+    begin
+
+      read_bus(c_can_status_addr);
+      check_equal(v_rdata, std_logic_vector(to_unsigned(0, 15)) & std_logic_vector(to_unsigned(count, 9)) &
+                  "00000" & bus_off & passive & busy, "STATUS");
+
+    end procedure check_status;
 
     procedure start_rival (
       constant wire : in string
@@ -580,6 +620,68 @@ begin
 
         -- The mailbox stayed empty, so the next write goes through intact
         send_and_check(16#321#, 2, 16#5AA5#);
+      elsif run("status_register_follows_the_frame_and_the_error_counter") then
+        check_status(0, '0', '0', '0');
+
+        ack_enable <= '0';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait until rising_edge(clk_i);
+        check_status(0, '0', '0', '1');
+
+        for attempt in 1 to 16 loop
+
+          wait_for_frame;
+          wait until rising_edge(clk_i);
+          check_status(attempt * 8, '0', std_logic'val(std_logic'pos('0') + attempt / 16), '1');
+
+        end loop;
+
+        -- The frame gets through, which also takes 1 off the counter
+        ack_enable <= '1';
+        wait until can_busy_o = '0' for c_max_frame_time * 2;
+        wait until rising_edge(clk_i);
+        check_status(127, '0', '0', '0');
+      elsif run("status_register_reports_bus_off") then
+        force_recessive <= '1';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait until tx_falls = 32 for c_max_frame_time * 32;
+        wait for c_bit_time * 8;
+        wait until rising_edge(clk_i);
+        check_status(256, '1', '1', '0');
+      elsif run("reads_answer_only_at_the_status_address") then
+        wait for c_bit_time * 12;
+        ack_enable <= '0';
+        write_mailbox(c_id, c_dlc, c_payload);
+        wait_for_frame;
+        wait until rising_edge(clk_i);
+
+        -- STATUS is not zero now, so a stray decode would show. Every address
+        -- one bit away reads zero, and the data is only there for one cycle.
+        for addr_bit in 0 to 31 loop
+
+          v_addr           := c_can_status_addr;
+          v_addr(addr_bit) := not v_addr(addr_bit);
+          read_bus(v_addr);
+          check_equal(v_rdata, std_logic_vector(to_unsigned(0, 32)), "another address reads zero");
+
+        end loop;
+
+        read_bus(c_can_status_addr);
+        check(v_rdata /= x"00000000", "STATUS has something to report");
+        wait until rising_edge(clk_i);
+        check_equal(rdata_o, std_logic_vector(to_unsigned(0, 32)), "read data lasts one cycle");
+
+        -- The safety gate blocks reads as well as writes
+        bus_ok_i <= '0';
+        read_bus(c_can_status_addr);
+        bus_ok_i <= '1';
+        check_equal(v_rdata, std_logic_vector(to_unsigned(0, 32)), "gate low reads zero");
+      elsif run("write_to_status_address_changes_nothing") then
+        wait for c_bit_time * 12;
+        write_mailbox(c_id, c_dlc, c_payload, c_can_status_addr);
+        wait until rising_edge(clk_i);
+        check(can_busy_o = '0', "STATUS is read only");
+        check_equal(tx_falls, 0, "no frame");
       elsif run("gate_drop_forces_recessive_and_abandons_frame") then
         start_dominant_frame;
         bus_ok_i <= '0';

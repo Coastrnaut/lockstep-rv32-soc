@@ -37,8 +37,11 @@ architecture tb of tb_soc_periph_decode is
   -- A UART byte is 11 bits of 435 clocks, with a bit to spare
   constant c_uart_byte_time : time := c_clk_period * 435 * 12;
 
-  constant c_can_addr  : std_logic_vector(31 downto 0) := x"40000300";
-  constant c_uart_addr : std_logic_vector(31 downto 0) := x"40000400";
+  constant c_can_addr         : std_logic_vector(31 downto 0) := x"40000300";
+  constant c_can_status_addr  : std_logic_vector(31 downto 0) := x"4000030C";
+  constant c_uart_addr        : std_logic_vector(31 downto 0) := x"40000400";
+  constant c_uart_status_addr : std_logic_vector(31 downto 0) := x"40000404";
+  constant c_uart_parity_addr : std_logic_vector(31 downto 0) := x"40000408";
 
   -- ID 0x123, DLC 2, payload 0xA55A
   constant c_can_data : std_logic_vector(31 downto 0) := x"2464A55A";
@@ -52,6 +55,11 @@ architecture tb of tb_soc_periph_decode is
   signal uart_tx   : std_logic;
   signal uart_busy : std_logic;
   signal uart_err  : std_logic;
+
+  -- Read data, combined as in top_automotive_soc
+  signal can_rdata  : std_logic_vector(31 downto 0);
+  signal uart_rdata : std_logic_vector(31 downto 0);
+  signal rdata      : std_logic_vector(31 downto 0);
 
   -- The CAN bus: the DUT and a receiver that acknowledges
   signal can_bus   : std_logic;
@@ -82,6 +90,7 @@ begin
       rst_n_i    => rst_n,
       bus_i      => bus_i,
       bus_ok_i   => bus_ok,
+      rdata_o    => can_rdata,
       can_tx_o   => can_tx,
       can_rx_i   => can_bus,
       can_busy_o => can_busy
@@ -93,10 +102,13 @@ begin
       rst_n_i      => rst_n,
       bus_i        => bus_i,
       bus_ok_i     => bus_ok,
+      rdata_o      => uart_rdata,
       uart_tx_o    => uart_tx,
       uart_busy_o  => uart_busy,
       uart_error_o => uart_err
     );
+
+  rdata <= can_rdata or uart_rdata;
 
   can_bus <= can_tx and ack_tx;
 
@@ -136,6 +148,29 @@ begin
       bus_i.we    <= '0';
 
     end procedure write_bus;
+
+    -- One-clock read: the CPU takes the data in the cycle after the strobe
+
+    procedure check_read (
+      constant addr     : in std_logic_vector(31 downto 0);
+      constant expected : in natural;
+      constant label_s  : in string
+    ) is
+    begin
+
+      bus_i       <=
+      (
+        addr  => addr,
+        data  => (others => '0'),
+        we    => '0',
+        valid => '1'
+      );
+      wait until rising_edge(clk);
+      bus_i.valid <= '0';
+      wait until rising_edge(clk);
+      check_equal(rdata, std_logic_vector(to_unsigned(expected, 32)), label_s);
+
+    end procedure check_read;
 
     procedure check_both_idle (
       constant label_text : in string
@@ -229,6 +264,23 @@ begin
         check_can_frame;
         wait until uart_busy = '0' for c_uart_byte_time;
         check(uart_busy = '0', "UART sent the byte");
+      elsif run("reads_come_from_the_addressed_peripheral") then
+        check_read(c_can_status_addr, 0, "CAN idle");
+        check_read(c_uart_status_addr, 0, "UART idle");
+
+        write_bus(c_uart_addr, x"00000041");
+        wait for c_clk_period * 4;
+        check_read(c_uart_status_addr, 1, "UART busy");
+        check_read(c_can_status_addr, 0, "CAN still idle");
+        check_read(c_uart_parity_addr, 1, "UART parity good");
+        wait until uart_busy = '0' for c_uart_byte_time;
+
+        write_bus(c_can_addr, c_can_data);
+        wait until rising_edge(clk);
+        check_read(c_can_status_addr, 1, "CAN busy");
+        check_read(c_uart_status_addr, 0, "UART idle again");
+        check_read(x"40000300", 0, "the mailbox is write only");
+        check_read(x"40000400", 0, "TX_DATA is write only");
       elsif run("safety_gate_blocks_both_addresses") then
         bus_ok <= '0';
         write_bus(c_can_addr, c_can_data);
