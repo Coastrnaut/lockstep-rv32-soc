@@ -6,7 +6,7 @@
 --               Flashes an immediate, latching NMI on any output bus mismatch.
 --               Uses high-Hamming-distance safe state encoding.
 --
--- Traces to:    TSR_LOCKSTEP_042, TSR_SAFETY_GATE_001
+-- Traces to:    TSR_LOCKSTEP_001, TSR_SAFETY_GATE_001
 -- Cores:        Compatible with NEORV32 / Generic 32-bit RISC-V cores
 -- ============================================================================
 
@@ -58,7 +58,7 @@ architecture rtl of lockstep_comparator is
 
   -- ISO 26262 Automated Traceability Attributes
   attribute requirement_id : string;
-  attribute requirement_id of rtl : architecture is "TSR_LOCKSTEP_042, TSR_SAFETY_GATE_001";
+  attribute requirement_id of rtl : architecture is "TSR_LOCKSTEP_001, TSR_SAFETY_GATE_001";
 
   -- Safe State Encoding (Rule 3.1)
   signal r_current_state : t_safe_state;

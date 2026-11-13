@@ -6,7 +6,7 @@
 -- Loop runs until the 2x3 cross-matrix (bus operation x fault vector)
 -- reaches 100% bin coverage.
 --
--- Traces to:   TSR_LOCKSTEP_042, TSR_SAFETY_GATE_001
+-- Traces to:   TSR_LOCKSTEP_001, TSR_SAFETY_GATE_001
 -- ============================================================================
 
 library ieee;

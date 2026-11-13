@@ -30,7 +30,7 @@
 - [ ] **4.3 Array Bound Protection:** Are all array index pointers dynamically checked or statically constrained to guarantee that index-out-of-bounds execution is mathematically impossible?
 
 ### 5. Traceability, Readability, & Maintainability
-- [ ] **5.1 Requirements Mapping:** Does the entity header contain a commented tag explicitly linking the file to a Technical Safety Requirement ID (e.g., `-- Traces to: TSR_LOCKSTEP_042`)?
+- [ ] **5.1 Requirements Mapping:** Does the entity header contain a commented tag explicitly linking the file to a Technical Safety Requirement ID (e.g., `-- Traces to: TSR_LOCKSTEP_001`)?
 - [ ] **5.2 No Don't Care Assignments:** Is the use of `'X'`, `'-'`, or `'Z'` assignments avoided in internal synthesis code unless explicitly required for tri-state I/O buffers?
 - [ ] **5.3 Generics Constraints:** Are all structural design configurations passed via strictly bounded VHDL `generics` to ensure synthesis predictability across different FPGA/ASIC targets?
 

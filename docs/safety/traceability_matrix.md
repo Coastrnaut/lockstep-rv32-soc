@@ -3,62 +3,79 @@
 # ============================================================================
 # ISO 26262 Part 4: Traceability from Safety Goals to Verification
 # Document ID: TRC-LRS-001
-# Revision: 1.0
+# Revision: 1.1
 # ============================================================================
 
 ## LEGEND
 - **SG** = Safety Goal
 - **FSR** = Functional Safety Requirement
-- **TSR** = Technical Safety Requirement
+- **TSR** = Technical Safety Requirement, defined in `docs/requirements/tsr_safety_core.md`
 - **RTL** = RTL Block
-- **TEST** = Verification Testbench
-- **STATUS** = Implementation status
+- **TEST** = Named VUnit bench, or bench.test
+- **STATUS** = **Sim** for implemented and checked in RTL simulation by the named
+  test, **Planned** for not implemented or not yet verified. No row claims formal,
+  gate-level, FPGA or bench evidence. Those are milestones 2 and 3 of
+  `docs/ROADMAP.md`.
+
+Revision 1.1 retires `TSR_LOCKSTEP_042`, which was an alias of
+`TSR_LOCKSTEP_001`, and adds `TSR_BUS_001`, `TSR_TYPES_001`, `TSR_UART_001`,
+`TSR_SAFETY_GATE_002` and `TSR_SAFETY_GATE_003`, which the RTL already cited
+but no document defined.
 
 ---
 
 ## TRACEABILITY TABLE
 
-| SG    | FSR              | TSR                | RTL Block                    | Testbench                      | Status |
-|-------|------------------|--------------------|------------------------------|--------------------------------|--------|
-| SG-01 | FSR_MOTION_001   | TSR_LOCKSTEP_042   | lockstep_comparator          | tb_lockstep_comparator         | ✅     |
-| SG-01 | FSR_MOTION_001   | TSR_SAFETY_GATE_001| lockstep_comparator          | tb_lockstep_fault_inject       | ✅     |
-| SG-01 | FSR_MOTION_001   | TSR_RESET_001      | reset_synchronizer           | tb_reset_synchronizer          | ✅     |
-| SG-01 | FSR_MOTION_001   | TSR_RESET_001      | top_automotive_soc           | tb_soc_reset_network           | ✅     |
-| SG-01 | FSR_MOTION_002   | TSR_WD_001         | hardware_watchdog            | tb_watchdog                    | ✅     |
-| SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_042   | lockstep_comparator          | tb_lockstep_comparator         | ✅     |
-| SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_042   | lockstep_comparator          | tb_lockstep_fault_inject       | ✅     |
-| SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_044   | comparator_self_test         | tb_comparator_self_test        | ✅     |
-| SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_043   | temporal_diversity           | tb_temporal_diversity          | ✅     |
-| SG-02 | FSR_DIV_001      | TSR_LOCKSTEP_043   | top_automotive_soc           | tb_soc_lockstep                | ✅     |
-| SG-02 | FSR_DIV_002      | TSR_ECC_001        | hamming_ecc_wrapper          | tb_ecc                         | ✅     |
-| SG-02 | FSR_DIV_002      | TSR_ECC_001        | hamming_ecc_wrapper          | tb_ecc_fault_inject            | ✅     |
-| SG-03 | FSR_MEM_001      | TSR_ECC_001        | hamming_ecc_wrapper          | tb_ecc                         | ✅     |
-| SG-03 | FSR_MEM_001      | TSR_ECC_001        | hamming_ecc_wrapper          | tb_ecc_fault_inject            | ✅     |
-| SG-03 | FSR_MEM_002      | TSR_SAFETY_GATE_002| hamming_ecc_wrapper          | tb_ecc                         | ✅     |
-| SG-03 | FSR_MEM_001      | TSR_ECC_001        | hamming_ecc_wrapper          | tb_ecc_exhaustive              | ✅     |
-| SG-03 | FSR_MEM_001      | TSR_ECC_001        | ecc_data_ram                 | tb_ecc_data_ram                | ✅     |
-| SG-03 | FSR_MEM_002      | TSR_SAFETY_GATE_002| top_automotive_soc           | tb_soc_ecc                     | ✅     |
-| SG-04 | FSR_LOCK_001     | TSR_WD_001         | hardware_watchdog            | tb_watchdog                    | ✅     |
-| SG-04 | FSR_LOCK_001     | TSR_WD_001         | watchdog_supervisor          | tb_watchdog_supervisor         | ✅     |
-| SG-04 | FSR_LOCK_001     | TSR_WD_001         | top_automotive_soc           | tb_soc_watchdog                | ✅     |
-| SG-04 | FSR_LOCK_001     | TSR_SAFETY_GATE_003| hardware_watchdog            | tb_watchdog                    | ✅     |
-| SG-05 | FSR_COMM_001     | TSR_CAN_001        | automotive_can_controller    | tb_can                         | ✅     |
-| SG-05 | FSR_COMM_001     | TSR_CAN_002        | can_receiver                 | tb_can_receive                 | ✅     |
-| SG-05 | FSR_COMM_001     | TSR_CAN_001        | automotive_can_controller    | tb_can                         | ✅     |
-| SG-05 | FSR_COMM_002     | TSR_UART_001       | safe_uart                    | tb_uart                        | ✅     |
-| SG-05 | FSR_COMM_002     | TSR_UART_001       | safe_uart                    | tb_uart                        | ✅     |
+| SG    | FSR            | TSR                 | RTL Block                 | Test | Status |
+|-------|----------------|---------------------|---------------------------|------|--------|
+| SG-01 | FSR_MOTION_001 | TSR_LOCKSTEP_001    | lockstep_comparator       | tb_lockstep_comparator, tb_lockstep_fault_inject, tb_lockstep_fault_inject_permanent | Sim |
+| SG-01 | FSR_MOTION_001 | TSR_LOCKSTEP_001    | top_automotive_soc        | tb_soc_lockstep.store_the_cores_disagree_on_never_reaches_a_peripheral, tb_soc_lockstep.lockstep_trip_with_mie_and_meie_masked_is_contained_without_an_interrupt | Sim |
+| SG-01 | FSR_MOTION_001 | TSR_SAFETY_GATE_001 | lockstep_comparator       | tb_lockstep_illegal_state, tb_soc_lockstep.illegal_comparator_state_is_reported_kept_by_a_watchdog_reset_and_cleared_cold | Sim |
+| SG-01 | FSR_MOTION_001 | TSR_RESET_001       | reset_synchronizer        | tb_reset_synchronizer | Sim |
+| SG-01 | FSR_MOTION_001 | TSR_RESET_001       | top_automotive_soc        | tb_soc_reset_network, tb_soc_reset_timing | Sim |
+| SG-01 | FSR_MOTION_001 | TSR_UART_001        | safe_uart                 | tb_uart_abort, tb_soc_lockstep.lockstep_trip_in_a_uart_byte_goes_to_mark_and_drops_the_byte, tb_soc_reset_network.reset_puts_the_uart_at_mark_without_a_clock | Sim |
+| SG-01 | FSR_MOTION_002 | TSR_WD_001          | hardware_watchdog         | tb_watchdog, tb_watchdog_window, tb_watchdog_timeout, tb_watchdog_osvvm | Sim |
+| SG-01 | FSR_MOTION_002 | TSR_WD_001          | watchdog_supervisor       | Watchdog clock loss with an independent board supervisor (HSI WD-04) | Planned |
+| SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_001    | lockstep_comparator       | tb_lockstep_comparator, tb_lockstep_fault_inject | Sim |
+| SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_044    | comparator_self_test      | tb_comparator_self_test | Sim |
+| SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_043    | temporal_diversity        | tb_temporal_diversity | Sim |
+| SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_043    | top_automotive_soc        | tb_soc_lockstep | Sim |
+| SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_001    | top_automotive_soc        | Divergence that stays inside a core (registers, PC) until a later access: trace comparison (roadmap R2.2) | Planned |
+| SG-02 | FSR_DIV_002    | TSR_ECC_001         | hamming_ecc_wrapper       | tb_ecc, tb_ecc_fault_inject, tb_ecc_exhaustive | Sim |
+| SG-03 | FSR_MEM_001    | TSR_ECC_001         | hamming_ecc_wrapper       | tb_ecc, tb_ecc_exhaustive, tb_ecc_seu_inject, tb_ecc_write_read | Sim |
+| SG-03 | FSR_MEM_001    | TSR_ECC_001         | ecc_data_ram              | tb_ecc_data_ram | Sim |
+| SG-03 | FSR_MEM_001    | TSR_ECC_001         | NEORV32 IMEM              | Instruction memory ECC, Flash and patrol scrub | Planned |
+| SG-03 | FSR_MEM_002    | TSR_SAFETY_GATE_002 | ecc_data_ram              | tb_ecc_data_ram, tb_soc_bus_fabric | Sim |
+| SG-03 | FSR_MEM_002    | TSR_BUS_001         | soc_bus_fabric            | tb_soc_bus_fabric, tb_soc_ecc.double_bit_error_on_a_load_answers_err_and_traps_without_writeback, tb_soc_ecc.double_bit_error_on_a_byte_store_answers_err_and_leaves_the_word | Sim |
+| SG-03 | FSR_MEM_002    | TSR_SAFETY_GATE_002 | top_automotive_soc        | tb_soc_ecc.two_stuck_bits_lock_the_soc_within_the_ftti | Sim |
+| SG-02 | FSR_DIV_001    | TSR_BUS_001         | soc_bus_fabric            | tb_soc_fabric, tb_soc_bus_fabric | Sim |
+| SG-04 | FSR_LOCK_001   | TSR_WD_001          | hardware_watchdog         | tb_watchdog, tb_watchdog_window | Sim |
+| SG-04 | FSR_LOCK_001   | TSR_WD_001          | watchdog_supervisor       | tb_watchdog_supervisor | Sim |
+| SG-04 | FSR_LOCK_001   | TSR_WD_001          | top_automotive_soc        | tb_soc_watchdog | Sim |
+| SG-04 | FSR_LOCK_001   | TSR_SAFETY_GATE_003 | watchdog_supervisor       | tb_watchdog_supervisor, tb_soc_watchdog | Sim |
+| SG-05 | FSR_COMM_001   | TSR_CAN_001         | automotive_can_controller | tb_can, tb_fsm_illegal_recovery, tb_soc_periph_decode | Sim |
+| SG-05 | FSR_COMM_001   | TSR_CAN_001         | top_automotive_soc        | tb_soc_lockstep.lockstep_trip_in_a_can_frame_goes_recessive_and_drops_the_frame | Sim |
+| SG-05 | FSR_COMM_001   | TSR_CAN_002         | can_receiver              | tb_can_receive, tb_can_rx_data | Sim |
+| SG-05 | FSR_COMM_001   | TSR_CAN_002         | automotive_can_controller | Interoperability with an independent controller on a bench (roadmap R4.2) | Planned |
+| SG-05 | FSR_COMM_002   | TSR_UART_001        | safe_uart                 | tb_uart, tb_uart_parity_fault, tb_uart_tx_error, tb_soc_uart_error | Sim |
+| all   | all            | TSR_TYPES_001       | package_soc_types         | tb_soc_periph_decode, tb_soc_fabric | Sim |
 
 ---
 
 ## COVERAGE SUMMARY
 
-| Coverage Type       | Target | Achieved | Notes                              |
-|---------------------|--------|----------|------------------------------------|
-| RTL Implementation  | 100%   | 100%     | All 11 blocks written, and all in the SoC |
-| Testbench Coverage  | 100%   | 100%     | 35 testbenches, with fault injection on lockstep, ECC, CAN and UART |
-| Fault Injection     | 100%   | 100%     | Stuck-at + bit-flip on lockstep + ECC |
-| Formal Assertions   | 100%   | 100%     | Clocked assertions in all but the temporal_diversity delay line |
-| Traceability Tags   | 100%   | 100%     | VHDL attributes in all RTL files   |
+Revision 1.0 listed 100% here for every kind of coverage. These are the measured
+or countable facts instead.
+
+| Evidence | Status | Notes |
+|----------|--------|-------|
+| RTL implementation | 13 first-party blocks in the SoC | Boot ROM ECC, Flash and the comparator register block are not built (HSI section 5) |
+| Testbenches | 40 benches, 226 tests, all passing | VUnit with GHDL mcode. Counts and tools per run: `docs/verification/milestone_0_1.md` |
+| Fault injection | Simulation forces on named signals | Lockstep buses and state, ECC words, UART parity, watchdog counter, CAN gate. No netlist or campaign-level injection yet (roadmap R2.3) |
+| Structural coverage | Not measured | GHDL in this flow does not report statement, branch or toggle coverage |
+| Mutation | 412 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
+| Assertions | Clocked simulation assertions in the RTL | These are checked in simulation only. No formal proof has been run (roadmap R2.1) |
+| Traceability tags | Every first-party RTL file carries a `requirement_id` that this matrix resolves | |
 
 ---
 
@@ -74,7 +91,7 @@
 ### Functional Safety Requirements
 - **FSR_MOTION_001**: System shall isolate actuators on fault
 - **FSR_MOTION_002**: System shall reset on watchdog timeout
-- **FSR_DIV_001**: System shall detect core divergence within 2 cycles
+- **FSR_DIV_001**: System shall detect core divergence within 2 cycles of it reaching the comparator
 - **FSR_DIV_002**: System shall detect and correct memory bit errors
 - **FSR_MEM_001**: Memory buses shall use SECDED ECC
 - **FSR_MEM_002**: Double-bit errors shall be flagged as fatal
@@ -83,15 +100,9 @@
 - **FSR_COMM_002**: UART TX shall verify parity
 
 ### Technical Safety Requirements
-- **TSR_LOCKSTEP_042**: Lockstep comparator implementation
-- **TSR_SAFETY_GATE_001**: Safety gate on system bus
-- **TSR_SAFETY_GATE_002**: Safety gate on ECC bus
-- **TSR_SAFETY_GATE_003**: Safety gate on watchdog
-- **TSR_ECC_001**: SECDED Hamming ECC wrapper
-- **TSR_WD_001**: Windowed hardware watchdog
-- **TSR_CAN_001**: Fault-hardened CAN controller
-- **TSR_CAN_002**: CAN reception and error signalling
-- **TSR_UART_001**: Parity-protected UART
-- **TSR_RESET_001**: Reset asserted at once and released on a clock edge
-- **TSR_LOCKSTEP_043**: Core B 2 clocks behind core A, with nothing leaving uncompared
-- **TSR_LOCKSTEP_044**: Comparator self-test before the cores may start
+Defined in `docs/requirements/tsr_safety_core.md`:
+`TSR_LOCKSTEP_001` (alias `TSR_LOCKSTEP_042`, retired), `TSR_LOCKSTEP_043`,
+`TSR_LOCKSTEP_044`, `TSR_BUS_001`, `TSR_ECC_001`, `TSR_WD_001`,
+`TSR_RESET_001`, `TSR_SAFETY_GATE_001`, `TSR_SAFETY_GATE_002`,
+`TSR_SAFETY_GATE_003`, `TSR_TYPES_001`, `TSR_UART_001`, `TSR_CAN_001`,
+`TSR_CAN_002`.

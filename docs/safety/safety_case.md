@@ -3,31 +3,41 @@
 # ============================================================================
 # ISO 26262 Part 4: Evidence of Compliance
 # Document ID: SC-LRS-001
-# Revision: 1.0
+# Revision: 1.1
 # ============================================================================
 
 ## 1. EXECUTIVE SUMMARY
 
-The lockstep-rv32-soc dual-core lockstep SoC is a dual-core RISC-V platform designed for
-automotive safety-critical applications. This safety case demonstrates
-compliance with ISO 26262 ASIL-D through:
+The lockstep-rv32-soc dual-core lockstep SoC is a dual-core RISC-V research
+platform built towards automotive safety-critical use. Revision 1.0 of this
+document concluded that the hardware was suitable for integration into ASIL-D
+systems. That claim is withdrawn. What exists today is:
 
-1. Hardware safety mechanisms (lockstep, ECC, watchdog, safety-gated I/O)
-2. Comprehensive verification (35 testbenches, fault injection, formal assertions, mutation testing)
-3. Quantitative metrics (SPFM 96.76%, LFM 98.92%, PMHF 1.53×10⁻⁹ /h)
-4. Full bi-directional traceability from safety goals to test results
+1. Hardware safety mechanisms in RTL: lockstep with a startup self-test,
+   temporal diversity, ECC on the shared data RAM, a windowed watchdog, an
+   explicit bus response contract and safety-gated CAN and UART pins
+2. Simulation evidence: 40 VUnit benches with 226 tests, directed fault
+   injection by forcing named signals, clocked simulation assertions and a
+   mutation harness
+3. Illustrative hardware metrics, not derived from a target (section 4)
+4. Traceability from safety goals through TSRs to named tests
+
+An ASIL claim needs a defined item, a selected target, an FMEDA and
+dependent-failure analysis built from that target, formal and post-route
+evidence, bench measurements and independent assessment. Section 7 lists what
+is missing.
 
 ---
 
-## 2. SAFETY GOALS & COMPLIANCE
+## 2. SAFETY GOALS & EVIDENCE
 
-| Safety Goal | Requirement | Evidence | Status |
-|-------------|-------------|----------|--------|
-| SG-01: Prevent unintended motion | Lockstep comparator isolates actuators | tb_lockstep_comparator, tb_lockstep_fault_inject | ✅ |
-| SG-02: Detect computational divergence | Dual-core lockstep within 2 cycles | lockstep_comparator.vhd formal asserts | ✅ |
-| SG-03: Detect memory corruption | SECDED ECC on the data RAM. The instruction memory has none: each core has its own copy, so the comparator catches an upset there | tb_ecc, tb_ecc_exhaustive, tb_ecc_fault_inject, tb_ecc_data_ram, tb_soc_ecc | ✅ |
-| SG-04: Detect software lockup | Windowed watchdog on isolated clock | tb_watchdog, tb_watchdog_supervisor, tb_soc_watchdog | ✅ |
-| SG-05: Ensure fault-free communication | Safety-gated CAN + parity UART | tb_can, tb_uart | ✅ |
+| Safety Goal | Requirement | Evidence (simulation) | Status |
+|-------------|-------------|------------------------|--------|
+| SG-01: Prevent unintended motion | The comparator closes the bus and makes the actuators safe, independent of interrupts; CAN goes recessive and UART to mark | tb_lockstep_comparator, tb_lockstep_fault_inject, tb_lockstep_illegal_state, tb_soc_lockstep, tb_uart_abort, tb_soc_reset_network | Sim |
+| SG-02: Detect computational divergence | Dual-core lockstep, compared within 2 cycles of the comparator seeing it | tb_lockstep_comparator, tb_temporal_diversity, tb_soc_lockstep | Sim. Divergence that stays inside a core until a later access is not bounded (roadmap R2.2) |
+| SG-03: Detect memory corruption | SECDED ECC on the data RAM; an uncorrectable word ends the access with ERR and trips the comparator. The instruction memory has none: each core has its own copy, so the comparator catches an upset there once it reaches the bus | tb_ecc, tb_ecc_exhaustive, tb_ecc_fault_inject, tb_ecc_data_ram, tb_soc_bus_fabric, tb_soc_ecc | Sim |
+| SG-04: Detect software lockup | Windowed watchdog on its own clock, inclusive window | tb_watchdog, tb_watchdog_window, tb_watchdog_supervisor, tb_soc_watchdog | Sim. Watchdog clock loss is an open board requirement (HSI WD-04) |
+| SG-05: Ensure fault-free communication | Safety-gated CAN and parity UART | tb_can, tb_can_receive, tb_uart, tb_uart_abort | Sim. No bench interoperability yet (roadmap R4.2) |
 
 ---
 
@@ -38,79 +48,105 @@ compliance with ISO 26262 ASIL-D through:
 - `tb_ecc` — SBE correction, DBE detection, clean path validation
 - `tb_ecc_exhaustive` — Every single and double bit flip in the 72-bit word
 - `tb_ecc_data_ram` — RAM access, read-modify-write, error registers, flips on loads and stores
-- `tb_soc_ecc` — Correction and lock-up on the running SoC, against the 50 µs FTTI
-- `tb_watchdog` — Normal kick, early violation, late timeout
-- `tb_watchdog_supervisor` — Register access and clock crossings at both clock ratios
+- `tb_soc_bus_fabric` — One response per accepted request, ACK or ERR, against a model with seeded random traffic
+- `tb_soc_fabric` — The same through firmware loads and stores, and a warm reset between acceptance and commit
+- `tb_soc_ecc` — Correction and lock-up on the running SoC, and ERR with an access fault on an uncorrectable load or store
+- `tb_watchdog`, `tb_watchdog_window` — Kicks at MIN-1, MIN, MAX-1, MAX and the timeout
+- `tb_watchdog_supervisor` — Register access, clock crossings and the window boundaries at four clock ratios
 - `tb_soc_watchdog` — Firmware kicks, timeouts and early kicks on the running SoC
 - `tb_can` — Frame TX, safety gate drop, mailbox load
 - `tb_can_receive` — Reception from reference model frames, error flags, resynchronisation
-- `tb_uart` — Parity-protected TX, error flagging
+- `tb_uart`, `tb_uart_abort` — Parity-protected TX, error flagging, abort to mark
 
 ### 3.2 Fault Injection Testbenches
 - `tb_lockstep_fault_inject` — Stuck-at and bit-flip on core bus
-- `tb_soc_lockstep` — The same glitch on both cores at once, and a store the cores disagree on
+- `tb_lockstep_illegal_state` — Every one-bit corruption of both comparator encodings
+- `tb_soc_lockstep` — The same glitch on both cores at once, a store the cores disagree on, a trip in a UART byte and a CAN frame, a trip with MIE and MEIE masked, and every one-bit corruption of the comparator state through a watchdog and a cold reset
 - `tb_comparator_self_test` — A comparator broken each way the startup test has to catch
 - `tb_ecc_fault_inject` — Single/double bit injection on data path
 
-### 3.3 Formal Verification Assertions
-- Lockstep comparator: NMI within 2 cycles, bus isolation, safe state latch
+All injection is by VHDL-2008 `force` on named RTL signals in simulation.
+
+### 3.3 Simulation Assertions
+The RTL carries clocked assertions, named "FORMAL" in their messages, which
+the simulator checks on every run. They have not been run through a formal
+tool. A first proof job is roadmap R2.1.
+- Lockstep comparator: NMI within 2 cycles, bus isolation, safe state latch, illegal state handled as a fault
+- Bus fabric: ACK and ERR exclusive, no response without a request, no data with ERR, one-hot target
 - ECC wrapper: SBE/DBE mutual exclusion, zero syndrome = no error
 - Watchdog: Reset on timeout, early kick detection
 - CAN: TX recessive on safety gate drop
-- UART: Parity blocks TX, error flagged on mismatch
+- UART: Parity blocks TX, error flagged on mismatch, mark with the gate closed
 
 ### 3.4 Mutation Testing
 Coverage shows that a line ran, not that a test would notice it change.
 `sim/scripts/mutate.py` breaks one rule in the RTL at a time and runs the
-regression against each break. Its 386 mutants cover the comparator and its
-self-test, temporal diversity, the ECC code and the data RAM, the watchdog,
-the reset network, CAN transmit and receive, the UART, address decode and
-top-level wiring. A mutant counts as caught only when at least one test fails.
+regression against each break. A mutant counts as caught only when at least
+one test fails.
 
-On 2026-11-07, against the RTL and testbenches of commit `057c639`, the
-regression caught all 386. Rerun the campaign before a release and after RTL
-changes. It is not part of the push CI, because a full run takes hours of CPU.
+Historical result, kept for provenance: on 2026-11-07, against the RTL and
+testbenches of commit `057c639`, the regression caught all 386 mutants then
+defined. Milestone 1 changed the comparator, UART, watchdog, RAM and top level,
+re-pointed the affected patterns so each keeps its original meaning, and added
+mutants for the new rules, for 412 in all. The targeted sample run on those
+changes is recorded in `docs/verification/milestone_0_1.md`. A full campaign is
+not in CI, because it takes hours of CPU. Rerun it before a release.
 
 ---
 
-## 4. HARDWARE METRICS
+## 4. HARDWARE METRICS (ILLUSTRATIVE)
 
-| Metric | Value | ASIL-D Threshold | Compliance |
-|--------|-------|------------------|------------|
-| SPFM   | 96.76% | >= 90%           | ✅ PASS    |
-| LFM    | 98.92% | >= 60%           | ✅ PASS    |
-| PMHF   | 1.53×10⁻⁹ /h | < 10⁻⁸ /h | ✅ PASS    |
-| DC     | 95.6%  | >= 60%           | ✅ PASS    |
+These values are not evidence of compliance. They came from revision 1.0 of
+this document and of `docs/safety/fmeda_analysis.md`, which disagree with each
+other, and neither derives from a selected target, a mission profile or a
+classified failure-mode list.
 
-See `docs/safety/fmeda_analysis.md` for detailed calculation.
+| Metric | This document, rev 1.0 | FMEDA summary table, rev 1.0 | Reference ASIL-D target |
+|--------|------------------------|------------------------------|-------------------------|
+| SPFM   | 96.76%                 | 99.2%                        | ≥ 99%                   |
+| LFM    | 98.92%                 | 97.8%                        | ≥ 90%                   |
+| PMHF   | 1.53×10⁻⁹ /h          | 3.2×10⁻⁹ /h                 | < 10⁻⁸ /h (10 FIT)      |
+| DC     | 95.6%                  | 92%                          | —                       |
+
+Revision 1.0 printed 90% and 60% as the ASIL-D SPFM and LFM targets, which are
+the ASIL-B values. The FMEDA's own formulas do not reproduce its inputs either,
+as `docs/ROADMAP.md` records: its LFM ratio evaluates to 99.86%, and its PMHF
+expression to 1.525×10⁻¹¹/h. Section 7 lists what a real calculation needs.
 
 ---
 
 ## 5. TRACEABILITY
 
-Full bi-directional traceability from safety goals → FSR → TSR → RTL → test
-is maintained in `docs/safety/traceability_matrix.md`. All RTL files carry
-VHDL traceability attributes (`requirement_id`).
+Bi-directional traceability from safety goals → FSR → TSR → RTL → test is
+maintained in `docs/safety/traceability_matrix.md`. All RTL files carry VHDL
+traceability attributes (`requirement_id`), and every ID they name is defined
+in `docs/requirements/tsr_safety_core.md`.
 
 ---
 
 ## 6. RESIDUAL RISK ASSESSMENT
 
-| Residual Risk | Mitigation                     | Remaining Severity |
-|---------------|--------------------------------|--------------------|
-| Common cause failure in lockstep | Core B 2 clocks behind core A, independent ECC on memory path | Low |
-| Watchdog oscillator failure      | Lockstep comparator as backup  | Low |
-| Instruction fetch corruption     | Lockstep detects via divergence | Low |
-| Power supply transient           | Watchdog on isolated RC clock  | Low |
+| Residual Risk | Mitigation in RTL | Remaining work |
+|---------------|-------------------|----------------|
+| Common cause failure in lockstep | Core B 2 clocks behind core A; ECC on the shared RAM | Shared read data from peripherals, decode, clock, power and reset have no independent check (roadmap R2.3, milestone 5) |
+| Watchdog oscillator failure | None in the SoC | Independent board supervisor (HSI WD-04) |
+| Instruction fetch corruption | Lockstep detects it once it changes a bus access | No IMEM ECC; private CPU state needs trace comparison (roadmap R2.2) |
+| Latent comparator fault after startup | Startup self-test only | Periodic proof test or redundant permit path (roadmap R2.4) |
+| Power supply transient | Watchdog on its own clock | Target-specific analysis |
 
 ---
 
 ## 7. CONCLUSION
 
-The lockstep-rv32-soc satisfies ISO 26262 ASIL-D requirements through:
-- **Redundancy**: Dual-core lockstep with independent ECC
-- **Diagnostics**: Watchdog, safety-gated I/O, parity checks
-- **Verification**: 35 testbenches with fault injection coverage, which catch all 386 RTL mutants
-- **Metrics**: All quantitative thresholds exceeded by significant margins
+The lockstep-rv32-soc is a research prototype. Its RTL implements the
+fault-containment contract of HSI section 8, and simulation checks each part of
+that contract with named tests. It is not shown to satisfy ISO 26262 at any
+ASIL. That needs, at least:
 
-The hardware is suitable for integration into ASIL-D automotive safety systems.
+- a defined item, assumptions of use and hazard-derived FTTI and diagnostic intervals
+- a selected target, with post-route timing, preserved redundancy and bench measurements of fault-to-pin times
+- an FMEDA built from that target's failure rates, with classified failure modes and diagnostic coverage traced to analysis or campaigns
+- dependent-failure analysis of clocks, power, reset, configuration memory and synthesis
+- formal results for the comparator, bus response and safety gate
+- tool-confidence evidence for the simulator, synthesis and the scripts relied on
+- independent review

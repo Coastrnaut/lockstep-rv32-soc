@@ -13,16 +13,18 @@ intent.
 ## 1. SCOPE & APPLICABILITY
 
 ### 1.1 System Overview
-The lockstep-rv32-soc dual-core lockstep SoC is designed for automotive safety-critical
-control units targeting **ASIL-D** per ISO 26262-6. It provides a hardware-
+The lockstep-rv32-soc dual-core lockstep SoC is designed towards automotive
+safety-critical control units, with **ASIL-D** as the design intent. No ASIL has
+been assessed. The evidence that exists is simulation evidence, listed in
+`docs/verification/milestone_0_1.md`. It provides a hardware-
 hardened computational core for steer-by-wire, brake-by-wire, and autonomous
 safety-gate monitors.
 
 ### 1.2 Item Definition
 The item is the **lockstep-rv32-soc** hardware platform comprising:
 - Dual NEORV32 RISC-V cores (cycle-accurate lockstep)
-- Lockstep comparator with NMI within 2 clock cycles
-- SECDED Hamming ECC on all memory buses
+- Lockstep comparator with a hardware fault pin (`nmi_fault_o`) within 2 clock cycles
+- SECDED Hamming ECC on the shared data RAM (the instruction memories have none, section 5)
 - Windowed hardware watchdog on isolated RC oscillator
 - Fault-hardened CAN 2.0B controller
 - Parity-protected diagnostic UART
@@ -112,6 +114,9 @@ hidden until the next cold reset, so that is the latent fault interval.
 ## 3. REGISTER MAP
 
 ### 3.1 Lockstep Comparator Registers
+
+**Planned, not implemented.** The block at 0x40000000 is reserved, and an access
+to it ends in ERR (section 8.1, BUS-08).
 
 | Offset | Name          | R/W | Description                          |
 |--------|---------------|-----|--------------------------------------|
@@ -214,6 +219,9 @@ bus, and neither ACKs nor flags go out.
 | 3     | CAN_ERROR     | Medium   | A CAN frame failed: bit or ACK error |
 | 4     | UART_ERROR    | Low      | UART parity error                    |
 
+The names are historical: none of these is a RISC-V NMI. MEI is a maskable
+notification, and containment never depends on it (section 8.2, FLT-02).
+
 Both cores receive these on their RISC-V interrupt lines, whose fixed priority
 gives the order above: NMI_LOCKSTEP on MEI, CAN_ERROR on MSI and UART_ERROR on
 MTI. A received frame has no line of its own, because all three RISC-V lines are
@@ -231,12 +239,12 @@ reading it does not clear them, so that polling cannot lose an interrupt.
 
 ## 5. MEMORY MAP
 
-| Base     | Size     | Region               | Protection     |
-|----------|----------|----------------------|----------------|
-| 0x00000000 | 64K   | Boot ROM             | ECC protected  |
-| 0x20000000 | 256K  | SRAM (data)          | ECC protected  |
-| 0x40000000 | 4K    | Peripheral registers | No ECC         |
-| 0x60000000 | 1M    | Flash (program)      | ECC protected  |
+| Base     | Size     | Region               | Protection     | Implemented |
+|----------|----------|----------------------|----------------|-------------|
+| 0x00000000 | 64K   | Boot ROM             | ECC protected  | No: each core's NEORV32 IMEM, 16 KB, no ECC, outside the compared bus |
+| 0x20000000 | 256K  | SRAM (data)          | ECC protected  | Yes |
+| 0x40000000 | 4K    | Peripheral registers | No ECC         | Yes, the registers of section 5.1; the rest answers ERR |
+| 0x60000000 | 1M    | Flash (program)      | ECC protected  | No; an access answers ERR |
 
 The SoC implements the SRAM, on the system bus behind the comparator, so both
 cores share it and every load and store is compared. Each word is 64 data bits
@@ -269,8 +277,9 @@ nothing:
 - **CAN:** the registers in section 3.4, up to offset 0x2C.
 - **UART:** the registers in section 3.5, with the byte for TX_DATA in bits 7:0.
 
-Data for a read is ready in the cycle after the strobe, and any other address
-reads zero. These status registers have the following bits:
+Data for a read is ready in the cycle after the strobe. An address in the
+window that is not a register answers ERR (section 8.1, BUS-08; revision 1.0 read
+it as zero). These status registers have the following bits:
 
 | Address    | Register    | Bits                                                    |
 |------------|-------------|---------------------------------------------------------|
@@ -289,12 +298,12 @@ them does nothing. TX_DATA takes any store that includes byte 0.
 
 | Phase          | Duration     | Description                          |
 |----------------|--------------|--------------------------------------|
-| Power-on reset | 1024 clk     | Global reset deassertion             |
+| Power-on reset | 1024 clk     | Global reset deassertion. **Not in RTL**: the reset is as long as the `rst_n_i` pulse |
 | Reset release  | 4 clk        | Rising edges before w_rst_n rises    |
 | Lockstep init  | 288 clk      | Comparator self-test                 |
-| ECC init       | 1 clk        | Parity generator self-test           |
+| ECC init       | 1 clk        | Parity generator self-test. **Not in RTL** |
 | Watchdog start | Immediate    | WD counter begins on first clock     |
-| Total boot     | 1317 clk     | System ready at ~26.3 µs @ 50 MHz    |
+| Total boot     | 1317 clk     | System ready at ~26.3 µs @ 50 MHz. **Planned**: without the power-on stretch, the cores start about 300 clocks after the pin |
 
 A reset takes effect at once, even with the clock stopped: `can_tx_o` goes
 recessive and `actuator_safe_o` goes high. A pulse of any length restarts the
@@ -367,12 +376,12 @@ safe output levels.
 
 | Condition | `actuator_safe_o` | `nmi_fault_o` | `can_tx_o` | `uart_tx_o` | Cores and system bus | Ends with |
 |-----------|-------------------|---------------|------------|-------------|----------------------|-----------|
-| Cold reset pin low, with or without `clk_i` | 1 at once | 0 | Recessive at once | Mark at once | Cores in reset | Pin release, then the self-test |
+| Cold reset pin low, with or without `clk_i` | 1 at once | 0 from the first clock edge. The comparator resets synchronously, so with `clk_i` stopped the pin keeps its last value | Recessive at once | Mark at once | Cores in reset | Pin release, then the self-test |
 | Startup self-test running | 1 | 0 | Recessive | Mark | Cores in reset | Self-test pass |
 | Self-test failed | 1 | 1 | Recessive | Mark | Cores never start | Cold reset |
 | Normal operation | 0 | 0 | Traffic | Traffic | Open | |
 | Lockstep mismatch or double-bit error | 1 from the edge after detection | 1 from the same edge | Recessive from that edge. The mailbox clears and the frame cannot resume. | **Changed:** mark from that edge. The byte in progress and any pending byte are discarded. | Closed from the detection cycle. Later requests are denied. | Cold reset only |
-| Illegal comparator state | 1 at once | 1 from the next edge | Recessive at once | Mark at once, byte discarded | Closed at once | Cold reset only |
+| Illegal comparator state | 1 at once | 1 at once, from the state register | Recessive at once | Mark at once, byte discarded | Closed at once | Cold reset only |
 | Watchdog reset | 1 during the 16-clock pulse and until the reset is released | Keeps a latched fault | Recessive | Mark, byte discarded | Cores reset, comparator kept | Pulse end. A latched fault stays. |
 
 A reset asserts asynchronously and holds the CAN and UART pins safe without a

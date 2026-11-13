@@ -3,8 +3,26 @@
 # ============================================================================
 # ISO 26262-9: Quantitative Hardware Metrics
 # Document ID: FMEDA-LRS-001
-# Revision: 1.0
+# Revision: 1.0, with a status note for 1.1
 # ============================================================================
+
+> **Status (revision 1.1): illustrative, not evidence.** The tables below are
+> kept unchanged from revision 1.0 for provenance. They are not derived from a
+> selected target, mission profile or classified failure-mode list, and they
+> disagree with each other: section 1 gives SPFM 99.2%, LFM 97.8% and PMHF
+> 3.2×10⁻⁹/h, while sections 3 and 7 give 96.76%, 98.92% and 1.53×10⁻⁹/h.
+> Section 3's formulas do not compute the metrics ISO 26262-5 defines, and do
+> not reproduce their own inputs (its PMHF expression evaluates to
+> 1.525×10⁻¹¹/h). The "ASIL-D" targets of 90% SPFM and 60% LFM are the ASIL-B
+> values. ASIL-D needs SPFM ≥ 99%, LFM ≥ 90% and PMHF < 10 FIT.
+>
+> The blocks added in November 2026, among them the self-test, temporal
+> diversity, reset synchronisers, data RAM, watchdog supervisor, CAN receiver
+> and bus fabric, have no rows. A usable FMEDA needs, for one target: a part and
+> build identifier, a mission profile, a cited failure-rate source per element,
+> failure modes classified as safe, single-point, residual or multiple-point
+> per safety goal, the detecting mechanism and its diagnostic interval, and
+> coverage traced to an analysis or a fault campaign. That is roadmap milestone 5.
 
 ## 1. METRICS SUMMARY
 
