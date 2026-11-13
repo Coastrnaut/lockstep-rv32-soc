@@ -53,7 +53,12 @@ entity arty_a7_top is
     probe_fault   : out   std_logic;                -- JA3
     probe_safe    : out   std_logic;                -- JA4
     probe_uart_tx : out   std_logic;                -- JA7
-    probe_wd_clk  : out   std_logic                 -- JA8
+    probe_wd_clk  : out   std_logic;                -- JA8
+
+    -- Read-only diagnostic SPI port, the ECC first-fault record (HSI ECC-08)
+    diag_cs_n : in    std_logic;                    -- JB1
+    diag_sck  : in    std_logic;                    -- JB2
+    diag_sdo  : out   std_logic                     -- JB3
   );
 end entity arty_a7_top;
 
@@ -187,7 +192,10 @@ begin
       can_rx_i        => can_rx_i,
       uart_tx_o       => w_uart_tx,
       nmi_fault_o     => w_nmi_fault,
-      actuator_safe_o => w_actuator_safe
+      actuator_safe_o => w_actuator_safe,
+      diag_cs_n_i     => diag_cs_n,
+      diag_sck_i      => diag_sck,
+      diag_sdo_o      => diag_sdo
     );
 
   uart_rxd_out  <= w_uart_tx;

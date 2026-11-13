@@ -38,7 +38,7 @@ module fv_soc_bus_fabric (
   // 3 CAN, 4 UART
   function automatic [2:0] target (input [31:0] a);
     if (a[31:18] == 14'h0800)                           target = 3'd1; // SRAM 0x20000000-0x2003FFFF
-    else if (a[31:4] == 28'h4000010)                    target = 3'd1; // ECC 0x40000100-0x4000010C
+    else if (a[31:5] == 27'h2000008)                    target = 3'd1; // ECC 0x40000100-0x4000011C
     else if (a[31:2] >= 30'h10000080 && a[31:2] <= 30'h10000082) target = 3'd2; // 0x40000200-208
     else if (a[31:2] >= 30'h100000C0 && a[31:2] <= 30'h100000CB) target = 3'd3; // 0x40000300-32C
     else if (a[31:2] >= 30'h10000100 && a[31:2] <= 30'h10000102) target = 3'd4; // 0x40000400-408

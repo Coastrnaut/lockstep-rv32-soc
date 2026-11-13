@@ -16,7 +16,9 @@ library ieee;
 
 entity hamming_ecc_wrapper is
   generic (
-    g_data_width : positive := 64
+    -- The code is (72,64) with 8 check bits, and only 64 data bits are tested
+    -- or used, so it takes no other width (roadmap R4.1)
+    g_data_width : positive range 64 to 64 := 64
   );
   port (
     clk_i   : in    std_logic;

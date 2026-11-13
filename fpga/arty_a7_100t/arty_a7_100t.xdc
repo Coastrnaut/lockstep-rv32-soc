@@ -25,6 +25,11 @@ set_property -dict {PACKAGE_PIN D12 IOSTANDARD LVCMOS33} [get_ports probe_safe]
 set_property -dict {PACKAGE_PIN D13 IOSTANDARD LVCMOS33} [get_ports probe_uart_tx]
 set_property -dict {PACKAGE_PIN B18 IOSTANDARD LVCMOS33} [get_ports probe_wd_clk]
 
+## Pmod JB: the read-only diagnostic SPI port (HSI ECC-08). CS idles high.
+set_property -dict {PACKAGE_PIN E15 IOSTANDARD LVCMOS33 PULLUP TRUE} [get_ports diag_cs_n]
+set_property -dict {PACKAGE_PIN E16 IOSTANDARD LVCMOS33 PULLDOWN TRUE} [get_ports diag_sck]
+set_property -dict {PACKAGE_PIN D15 IOSTANDARD LVCMOS33} [get_ports diag_sdo]
+
 ## ----------------------------------------------------------------------------
 ## Watchdog clock: the configuration oscillator. UG470 gives CFGMCLK as about
 ## 65 MHz with a wide tolerance; timing is closed for 100 MHz, its upper end.
@@ -51,17 +56,20 @@ set_property ASYNC_REG TRUE [get_cells -hier -filter {NAME =~ *i_watchdog_superv
 set_property ASYNC_REG TRUE [get_cells -hier -filter {NAME =~ *i_watchdog_supervisor/r_kick_ack_reg*}]
 set_property ASYNC_REG TRUE [get_cells -hier -filter {NAME =~ *i_watchdog_supervisor/r_status_sync_reg*}]
 set_property ASYNC_REG TRUE [get_cells -hier -filter {NAME =~ *i_watchdog_supervisor/r_status_ack_reg*}]
+set_property ASYNC_REG TRUE [get_cells -hier -filter {NAME =~ *i_telemetry_port/r_cs_sync_reg[0]* || NAME =~ *i_telemetry_port/r_cs_sync_reg[1]*}]
+set_property ASYNC_REG TRUE [get_cells -hier -filter {NAME =~ *i_telemetry_port/r_sck_sync_reg[0]* || NAME =~ *i_telemetry_port/r_sck_sync_reg[1]*}]
 
 ## The reset button and the MMCM lock reach the SoC only through its reset
 ## synchronisers, which assert at once and release on a clock edge
 set_false_path -from [get_ports ck_rst]
 set_false_path -from [get_pins i_mmcm/LOCKED]
 
-## The CAN receive input is synchronised inside the controller
-set_false_path -from [get_ports can_rx_i]
+## The CAN receive input and the diagnostic port's inputs are synchronised
+## inside their blocks
+set_false_path -from [get_ports {can_rx_i diag_cs_n diag_sck}]
 
 ## Outputs: slow, and timed by the bench, not by the FPGA
-set_false_path -to [get_ports {uart_rxd_out led[*] can_tx_o probe_*}]
+set_false_path -to [get_ports {uart_rxd_out led[*] can_tx_o probe_* diag_sdo}]
 
 ## Configuration
 set_property CONFIG_VOLTAGE 3.3 [current_design]

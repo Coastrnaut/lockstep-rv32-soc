@@ -65,7 +65,10 @@ architecture rtl of tb_soc_integration is
       can_rx_i        => can_rx,
       uart_tx_o       => uart_tx,
       nmi_fault_o     => nmi_fault,
-      actuator_safe_o => actuator_safe
+      actuator_safe_o => actuator_safe,
+      diag_cs_n_i     => '1',
+      diag_sck_i      => '0',
+      diag_sdo_o      => open
 
     );p_stim : process is
   begin

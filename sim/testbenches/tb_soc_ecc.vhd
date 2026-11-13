@@ -46,6 +46,11 @@ architecture tb of tb_soc_ecc is
   signal nmi_fault     : std_logic;
   signal actuator_safe : std_logic;
 
+  -- The diagnostic SPI port, as an external supervisor drives it
+  signal diag_cs_n : std_logic;
+  signal diag_sck  : std_logic;
+  signal diag_sdo  : std_logic;
+
   -- The CAN bus: the SoC and a receiver that acknowledges
   signal can_bus  : std_logic;
   signal ack_tx   : std_logic;
@@ -93,7 +98,10 @@ begin
       can_rx_i        => can_bus,
       uart_tx_o       => uart_tx,
       nmi_fault_o     => nmi_fault,
-      actuator_safe_o => actuator_safe
+      actuator_safe_o => actuator_safe,
+      diag_cs_n_i     => diag_cs_n,
+      diag_sck_i      => diag_sck,
+      diag_sdo_o      => diag_sdo
     );
 
   can_bus <= can_tx and ack_tx;
@@ -142,6 +150,36 @@ begin
     alias wd_counter is << signal i_soc.i_watchdog_supervisor.i_watchdog.r_counter : unsigned(15 downto 0) >>;
     alias soc_rst_n  is << signal i_soc.w_rst_n : std_logic >>;
     alias sys_bus    is << signal i_soc.w_safe_sys_bus : t_rv_bus >>;
+    alias ram_ecc    is << signal i_soc.i_ecc_ram.w_merged_ecc : std_logic_vector(7 downto 0) >>;
+    alias telemetry  is << signal i_soc.w_ecc_telemetry : t_telemetry >>;
+    alias bus_valid  is << signal i_soc.w_bus_valid : std_logic >>;
+
+    variable v_ecc    : std_logic_vector(7 downto 0);
+    variable v_record : t_telemetry;
+
+    -- Read the 160 bits as an external supervisor would: SPI mode 0 at 1 MHz,
+    -- sampling on the rising edge of the clock
+
+    procedure read_diag_port is
+    begin
+
+      diag_cs_n <= '0';
+      wait for 1 us;
+
+      for i in t_telemetry'range loop
+
+        v_record(i) := diag_sdo;
+        diag_sck    <= '1';
+        wait for 500 ns;
+        diag_sck    <= '0';
+        wait for 500 ns;
+
+      end loop;
+
+      diag_cs_n <= '1';
+      wait for 1 us;
+
+    end procedure read_diag_port;
 
     -- Each core's XBus response pins, and its trap entry and register writes
     alias a_ack     is << signal i_soc.i_cpu_master.xbus_ack_i : std_ulogic >>;
@@ -243,6 +281,8 @@ begin
 
     end procedure check_access_fault;
 
+    variable v_sbe : unsigned(15 downto 0);
+
     procedure check_uart_byte (
       constant count    : in natural;
       constant expected : in std_logic_vector(7 downto 0)
@@ -264,19 +304,28 @@ begin
 
     while test_suite loop
 
-      rst_n <= '0';
+      diag_cs_n <= '1';
+      diag_sck  <= '0';
+      rst_n     <= '0';
       wait for c_clk_period * 5;
-      rst_n <= '1';
+      rst_n     <= '1';
 
       if run("one_stuck_bit_is_corrected_and_the_program_carries_on") then
         -- Data bit 0, which is 0 all through the program's RAM test
         ram_word(0) <= force '1';
         check_uart_byte(1, x"30");
 
-        -- 'M' means the program read back what it stored. '3' means SBE_COUNT saw
-        -- the bit on the two stores and the load.
+        -- 'M' means the program read back what it stored. The bit is stuck in
+        -- the RAM's read register, so the patrol, which reads a word in every
+        -- clock without an access, finds it too, not only the program's two
+        -- stores and its load: SBE_COUNT, printed as a digit, is past '3'.
         check_uart_byte(2, x"4D");
-        check_uart_byte(3, x"33");
+
+        if (uart_count < 3) then
+          wait until uart_count >= 3 for c_timeout;
+        end if;
+
+        check(unsigned(uart_log(3)) > x"33", "SBE_COUNT counts the patrol's finds as well");
         ram_word(0) <= release;
 
         check_uart_byte(4, x"4B");
@@ -285,6 +334,38 @@ begin
         check_equal(rx_frame.crc, rx_frame.crc_expected, "CAN frame CRC");
         check_equal(nmi_fault, '0', "no fault");
         check_equal(actuator_safe, '0', "actuators free");
+      elsif run("the_first_fault_reads_out_over_the_diagnostic_port_with_the_bus_shut") then
+        -- An uncorrectable word stored by the program's first store to the RAM,
+        -- which it reads back at its next store to the same word
+        wait until rising_edge(clk) and sys_bus.valid = '1' and sys_bus.we = '1' and
+                   sys_bus.addr = x"20000008" for c_timeout;
+        wait for 1 ns;
+        v_ecc   := ram_ecc;
+        ram_ecc <= force v_ecc xor x"03";
+        wait until rising_edge(clk);
+        ram_ecc <= release;
+
+        wait until ecc_fatal = '1' for c_timeout;
+        check_equal(ecc_fatal, '1', "the program read the word");
+        wait for 2 us;
+        check_equal(actuator_safe, '1', "actuators safe");
+        check_equal(bus_valid, '0', "the bus is shut");
+
+        -- The port reads the record with the bus shut, and opens nothing
+        read_diag_port;
+        -- PATROL can move on while the port shifts; the record and counts cannot
+        check_equal(v_record(159 downto 64), telemetry(159 downto 64), "the record as the RAM holds it");
+        check_equal(v_record(31 downto 0), telemetry(31 downto 0), "the counts as the RAM holds them");
+        check_equal(v_record(159), '1', "a first error is held");
+        check_equal(v_record(137 downto 136), std_logic_vector'("10"), "an uncorrectable word, found by an access");
+        check_equal(v_record(127 downto 96), std_logic_vector'(x"20000008"), "its word");
+        check_equal(v_record(15 downto 0), std_logic_vector'(x"0001"), "DBE_COUNT");
+        check_equal(bus_valid, '0', "still shut");
+        check_equal(actuator_safe, '1', "still safe");
+
+        -- And once more, for the same record
+        read_diag_port;
+        check_equal(v_record(127 downto 96), std_logic_vector'(x"20000008"), "the same word again");
       elsif run("two_stuck_bits_lock_the_soc_within_the_ftti") then
         ram_word(0) <= force '1';
         ram_word(1) <= force '1';
@@ -339,9 +420,16 @@ begin
         check_equal(ram_word(31 downto 0), std_logic_vector'(x"12345678"), "the byte never landed");
       elsif run("error_counts_outlast_a_watchdog_reset") then
         ram_word(0) <= force '1';
-        check_uart_byte(3, x"33");
+
+        if (uart_count < 3) then
+          wait until uart_count >= 3 for c_timeout;
+        end if;
+
         ram_word(0) <= release;
-        check_equal(sbe_count, to_unsigned(3, 16), "three errors counted");
+        wait until rising_edge(clk);
+        wait until rising_edge(clk);
+        v_sbe       := sbe_count;
+        check(v_sbe > 3, "the accesses' errors and the patrol's counted");
 
         -- Move the watchdog to just short of its timeout
         wd_counter <= force to_unsigned(49990, 16);
@@ -351,7 +439,7 @@ begin
         check_equal(soc_rst_n, '0', "the watchdog reset the SoC");
         wait until soc_rst_n = '1' for c_timeout;
         check_equal(soc_rst_n, '1', "and let it restart");
-        check_equal(sbe_count, to_unsigned(3, 16), "still three");
+        check_equal(sbe_count, v_sbe, "still the same count");
       end if;
 
     end loop;

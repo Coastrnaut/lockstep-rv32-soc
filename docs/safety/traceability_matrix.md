@@ -41,11 +41,13 @@ but no document defined.
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_044    | comparator_self_test      | tb_comparator_self_test | Sim |
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_043    | temporal_diversity        | tb_temporal_diversity | Sim |
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_043    | top_automotive_soc        | tb_soc_lockstep | Sim |
-| SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_001    | top_automotive_soc        | Divergence that stays inside a core (registers, PC) until a later access: trace comparison (roadmap R2.2) | Planned |
+| SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_001    | top_automotive_soc        | tb_soc_trace.a_register_only_divergence_is_caught_by_the_trace_and_not_by_the_bus (diagnostic, verification build only) | Sim |
 | SG-02 | FSR_DIV_002    | TSR_ECC_001         | hamming_ecc_wrapper       | tb_ecc, tb_ecc_fault_inject, tb_ecc_exhaustive | Sim |
 | SG-03 | FSR_MEM_001    | TSR_ECC_001         | hamming_ecc_wrapper       | tb_ecc, tb_ecc_exhaustive, tb_ecc_seu_inject, tb_ecc_write_read | Sim |
 | SG-03 | FSR_MEM_001    | TSR_ECC_001         | ecc_data_ram              | tb_ecc_data_ram | Sim |
-| SG-03 | FSR_MEM_001    | TSR_ECC_001         | NEORV32 IMEM              | Instruction memory ECC, Flash and patrol scrub | Planned |
+| SG-03 | FSR_MEM_001    | TSR_ECC_001         | ecc_data_ram              | HSI ECC-05 to ECC-07, writeback and patrol: tb_ecc_data_ram.a_load_writes_back_a_stored_single_bit_error, tb_ecc_data_ram.the_patrol_repairs_a_stored_error_that_nothing_reads, tb_ecc_data_ram.the_patrol_reports_an_uncorrectable_word_without_tripping, tb_ecc_data_ram.the_patrol_covers_the_ram_under_back_to_back_accesses_and_delays_none | Sim |
+| SG-03 | FSR_MEM_001    | TSR_ECC_001         | telemetry_port            | HSI ECC-08, first-fault telemetry: tb_telemetry_port, tb_ecc_data_ram.the_first_error_is_kept_through_a_warm_reset_and_cleared_cold, tb_soc_ecc.the_first_fault_reads_out_over_the_diagnostic_port_with_the_bus_shut | Sim |
+| SG-03 | FSR_MEM_001    | TSR_ECC_001         | NEORV32 IMEM              | Instruction memory ECC and Flash | Planned |
 | SG-03 | FSR_MEM_002    | TSR_SAFETY_GATE_002 | ecc_data_ram              | tb_ecc_data_ram, tb_soc_bus_fabric | Sim |
 | SG-03 | FSR_MEM_002    | TSR_BUS_001         | soc_bus_fabric            | tb_soc_bus_fabric, tb_soc_ecc.double_bit_error_on_a_load_answers_err_and_traps_without_writeback, tb_soc_ecc.double_bit_error_on_a_byte_store_answers_err_and_leaves_the_word | Sim |
 | SG-03 | FSR_MEM_002    | TSR_SAFETY_GATE_002 | top_automotive_soc        | tb_soc_ecc.two_stuck_bits_lock_the_soc_within_the_ftti | Sim |
@@ -74,11 +76,11 @@ or countable facts instead.
 
 | Evidence | Status | Notes |
 |----------|--------|-------|
-| RTL implementation | 13 first-party blocks in the SoC | Boot ROM ECC, Flash and the comparator register block are not built (HSI section 5) |
-| Testbenches | 40 benches, 226 tests, all passing | VUnit with GHDL mcode. Counts and tools per run: `docs/verification/milestone_0_1.md` |
-| Fault injection | Simulation forces on named signals | Lockstep buses and state, ECC words, UART parity, watchdog counter, CAN gate. No netlist or campaign-level injection yet (roadmap R2.3) |
+| RTL implementation | 15 first-party RTL files: 13 blocks, the core wrapper and the top level | Boot ROM ECC, Flash and the comparator register block are not built (HSI section 5) |
+| Testbenches | 43 benches, 249 tests, all passing | VUnit with GHDL mcode. Counts and tools per run: `docs/verification/milestone_0_1.md` |
+| Fault injection | Directed forces in the benches, and a seeded campaign at 15 RTL sites | `docs/verification/fault_campaign.md`. No netlist-level injection |
 | Structural coverage | Not measured | GHDL in this flow does not report statement, branch or toggle coverage |
-| Mutation | 412 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
+| Mutation | 430 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
 | Assertions | Clocked simulation assertions in the RTL | Checked in simulation |
 | Formal | 3 SymbiYosys jobs, 21 properties, all proved by k-induction, every cover reached, each job rejects a deliberately broken RTL | Comparator, bus fabric, and compare before the RAM commit. CDC, self-test and CPUs are not covered (`docs/verification/formal.md`) |
 | Traceability tags | Every first-party RTL file carries a `requirement_id` that this matrix resolves | |

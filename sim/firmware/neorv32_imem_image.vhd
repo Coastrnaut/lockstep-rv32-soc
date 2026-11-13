@@ -158,8 +158,8 @@ x"ffc3ae03", -- lw t3 -4 t2
 x"006e0463", -- beq t3 t1 probe_last
 x"04600513", -- addi a0 zero 70
 x"00042e03", -- lw t3 0 s0
-x"11042e03", -- lw t3 272 s0
-x"10c42e03", -- lw t3 268 s0
+x"12042e03", -- lw t3 288 s0
+x"11c42e03", -- lw t3 284 s0
 x"33042e03", -- lw t3 816 s0
 x"40c42e03", -- lw t3 1036 s0
 x"50042e03", -- lw t3 1280 s0

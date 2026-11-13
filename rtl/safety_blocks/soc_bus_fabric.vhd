@@ -75,7 +75,11 @@ architecture rtl of soc_bus_fabric is
     c_ecc_sbe_count_addr,
     c_ecc_dbe_count_addr,
     c_ecc_syndrome_addr,
-    c_ecc_status_addr
+    c_ecc_status_addr,
+    c_ecc_first_info_addr,
+    c_ecc_first_addr_addr,
+    c_ecc_first_time_addr,
+    c_ecc_patrol_addr
   );
 
   constant c_wd_regs : t_addresses :=

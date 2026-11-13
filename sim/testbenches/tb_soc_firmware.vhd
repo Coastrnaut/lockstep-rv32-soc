@@ -96,7 +96,10 @@ begin
       can_rx_i        => can_bus,
       uart_tx_o       => uart_tx,
       nmi_fault_o     => nmi_fault,
-      actuator_safe_o => actuator_safe
+      actuator_safe_o => actuator_safe,
+      diag_cs_n_i     => '1',
+      diag_sck_i      => '0',
+      diag_sdo_o      => open
     );
 
   can_bus <= can_tx and ack_tx and sender_tx;

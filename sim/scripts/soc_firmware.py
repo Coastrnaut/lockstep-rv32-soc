@@ -235,8 +235,8 @@ PROGRAM = [
     ("addi", "a0", "zero", ord("F")),
     "probe_last:",
     ("lw", "t3", 0, "s0"),             # ERR 4: the reserved comparator block
-    ("lw", "t3", 0x110, "s0"),         # ERR 5: just past the ECC registers
-    ("lw", "t3", 0x10C, "s0"),         # ACK: the last ECC register
+    ("lw", "t3", 0x120, "s0"),         # ERR 5: just past the ECC registers
+    ("lw", "t3", 0x11C, "s0"),         # ACK: the last ECC register
     ("lw", "t3", 0x330, "s0"),         # ERR 6: just past the CAN registers
     ("lw", "t3", 0x40C, "s0"),         # ERR 7: just past the UART registers
     ("lw", "t3", 0x500, "s0"),         # ERR 8: past the last block

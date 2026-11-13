@@ -3,7 +3,8 @@
 # ============================================================================
 # ISO 26262 Part 4: Hardware Safety Requirements Specification
 # Document ID: HSI-LRS-001
-# Revision: 1.1 (adds section 8, the bus and safe-output contract)
+# Revision: 1.2 (1.1 added section 8, the bus and safe-output contract;
+#           1.2 adds section 8.5, ECC repair and telemetry)
 # ============================================================================
 
 Sections 1 to 7 keep the revision 1.0 requirements. Where they disagree with
@@ -133,12 +134,25 @@ to it ends in ERR (section 8.1, BUS-08).
 | 0x04   | DBE_COUNT     | R   | Double-bit error count               |
 | 0x08   | SYNDROME      | R   | Last syndrome value                  |
 | 0x0C   | STATUS        | R   | ECC status (0=no err, 1=SBE, 2=DBE)  |
+| 0x10   | FIRST_INFO    | R   | First error: 31 valid, 9:8 cause, 7:0 syndrome |
+| 0x14   | FIRST_ADDR    | R   | First error: address of its 64-bit word |
+| 0x18   | FIRST_TIME    | R   | First error: clocks since cold reset |
+| 0x1C   | PATROL        | R   | 31:16 completed patrol passes, 0 the patrol found an uncorrectable word |
 
 SBE_COUNT and DBE_COUNT count in bits 15:0 and stop at 0xFFFF. SYNDROME holds bit
 7 set if parity failed, and in bits 6:0 the position of the flipped bit. STATUS
 keeps the worst error seen. Only a cold reset clears them, so they outlast a
 watchdog reset. A double-bit error shuts the bus, as section 4 describes, so
-software cannot read these registers afterwards.
+software cannot read these registers afterwards; the diagnostic port of section
+8.5 can.
+
+Offsets 0x10 to 0x1C are revision 1.2 (section 8.5). SBE_COUNT counts single-bit
+errors found by an access or by the patrol. DBE_COUNT and STATUS count only
+accesses; an uncorrectable word the patrol finds sets PATROL bit 0 instead. The
+FIRST_INFO causes are 0 a single-bit error found by an access, 1 one found by the
+patrol, 2 an uncorrectable word found by an access, 3 one found by the patrol.
+FIRST_TIME counts from the cold reset in 32 bits and wraps after about 86 s at
+50 MHz.
 
 ### 3.3 Watchdog Registers
 
@@ -265,7 +279,7 @@ Each block has 0x100 bytes of the window at 0x40000000:
 | Base       | Block               | Decoded in hardware  |
 |------------|---------------------|----------------------|
 | 0x40000000 | Lockstep comparator | Reserved             |
-| 0x40000100 | ECC controller      | Offsets 0x00 to 0x0C |
+| 0x40000100 | ECC controller      | Offsets 0x00 to 0x1C |
 | 0x40000200 | Watchdog            | Offsets 0x00 to 0x08 |
 | 0x40000300 | CAN controller      | Offsets 0x00 to 0x2C |
 | 0x40000400 | Safe UART           | Offsets 0x00 to 0x08 |
@@ -348,7 +362,7 @@ after the two-clock delay that aligns it with core B's at the comparator.
 | ID | Decision |
 |----|----------|
 | BUS-01 | **Acceptance edge.** A request is accepted at the edge where the gated system bus carries `valid = 1`. That needs core A's delayed request to equal core B's in address, data, byte enables, write enable and strobe, the comparator state to be `SYSTEM_OK`, no trip in that cycle (mismatch, fatal input or illegal state), and the warm reset `w_rst_n` released. |
-| BUS-02 | **Selected slave.** The fabric decodes the accepted address at the acceptance edge and registers it with the request. Targets are the RAM block (SRAM `0x20000000`–`0x2003FFFF` and the ECC register words `0x40000100`–`0x4000010C`), the watchdog (`0x40000200`–`0x40000208`), CAN (`0x40000300`–`0x4000032C`), the UART (`0x40000400`–`0x40000408`), or none. Register targets compare address bits 31:2 with a register's word address. |
+| BUS-02 | **Selected slave.** The fabric decodes the accepted address at the acceptance edge and registers it with the request. Targets are the RAM block (SRAM `0x20000000`–`0x2003FFFF` and the ECC register words `0x40000100`–`0x4000011C`), the watchdog (`0x40000200`–`0x40000208`), CAN (`0x40000300`–`0x4000032C`), the UART (`0x40000400`–`0x40000408`), or none. Register targets compare address bits 31:2 with a register's word address. |
 | BUS-03 | **Response edge.** The response is driven in the cycle after acceptance and sampled by core A at the next edge. It is one record of read data, ACK and ERR, taken from the selected target only, and replaces the OR of every slave's read data. Core B receives the same record two clocks later through the temporal-diversity delay line. |
 | BUS-04 | **ACK/ERR exclusivity.** Every accepted request gets exactly one response cycle, with exactly one of ACK or ERR. Read data is zero with ERR and for any store. |
 | BUS-05 | **Write commit.** CAN, UART and watchdog registers commit a store at the acceptance edge. The RAM reads the word at the acceptance edge and commits the merged word at the response edge, only if that word has no uncorrectable error, the comparator gate is still open and the warm reset is still released. |
@@ -398,3 +412,14 @@ stopped.
 | WD-02 | **Duplicate kicks.** A kick made while an earlier one is still crossing to the watchdog clock counts as the same kick. |
 | WD-03 | **Reset cause.** RESET_SRC is 1 after an early kick and 2 after a timeout. Its copy on the system side is valid before the 16-clock reset pulse ends, and only a cold reset clears it. |
 | WD-04 | **Absent watchdog clock. Open assumption.** If `wd_clk_i` never runs, the SoC still starts and runs, but has no watchdog. If it stops later, the watchdog stops and STATUS stops changing. Containment of a lost watchdog clock needs an independent supervisor on the board, which is a target requirement that is not met here. |
+
+### 8.5 ECC repair and telemetry (revision 1.2)
+
+Roadmap R4.1. Evidence: `docs/verification/memory_protection.md`.
+
+| ID | Decision |
+|----|----------|
+| ECC-05 | **Writeback.** A load that finds a single-bit error returns the corrected data and writes the corrected word back in its response cycle, so the error does not stay in the RAM. A store already writes back the corrected word it merges into. |
+| ECC-06 | **Patrol.** In every clock without a RAM strobe, out of cold reset, the RAM reads the next word in turn and, if it holds a single-bit error, writes it back corrected in the next clock. It counts the error in SBE_COUNT. An uncorrectable word it finds sets PATROL bit 0 and the first-fault record, and is not reported on `dbe_fatal_o`: nothing has used it, and an access that does trips as in section 8.2. A pass over the 256 KB RAM takes 32,768 idle clocks, 0.66 ms at 50 MHz, and at most 65,536 clocks, 1.31 ms, under back-to-back core accesses, which leave every other clock idle. |
+| ECC-07 | **Arbitration.** A bus access always has the RAM's read port, so the patrol never delays an access or changes its response cycle. A patrol write can meet a bus read of the same word in one clock; both see a correctable word with the same corrected data. |
+| ECC-08 | **First-fault telemetry and diagnostic port.** The first error since cold reset is kept with its cause, word address, syndrome and time, and later errors do not replace it. A warm reset keeps it. A read-only SPI port on its own pins (`diag_cs_n_i`, `diag_sck_i`, `diag_sdo_o`; mode 0, at most a tenth of `clk_i`) shifts out FIRST_INFO, FIRST_ADDR, FIRST_TIME, PATROL and the two counts, 160 bits, most significant first, from a snapshot taken when chip select falls. It does not use the system bus and can write nothing, so it works with the bus shut by a fault without reopening it. |

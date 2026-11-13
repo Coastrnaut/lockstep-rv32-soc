@@ -58,7 +58,7 @@ architecture tb of tb_soc_bus_fabric is
     x"A0000000",
     x"40000000",
     x"400000FC",
-    x"40000110",
+    x"40000120",
     x"400001FC",
     x"4000020C",
     x"400002FC",
@@ -298,6 +298,7 @@ begin
         check_ack(x"2003FFFC", x"0BADBEEF");
         check_ack(c_ecc_status_addr, x"00000000");
         check_ack(c_ecc_sbe_count_addr, x"00000000");
+        check_ack(c_ecc_patrol_addr, x"00000000");
         check_ack(c_wd_kick_addr, c_wd_data);
         check_ack(c_wd_reset_src_addr, c_wd_data);
         check_ack(c_can_id_addr, c_can_data);

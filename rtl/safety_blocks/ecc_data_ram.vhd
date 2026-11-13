@@ -25,6 +25,19 @@
 --               warm reset clears as well, so a store whose write would land in a
 --               reset is dropped (HSI BUS-11).
 --
+--               Repair (roadmap R4.1, HSI ECC-05 to ECC-08). A load that finds a
+--               single-bit error writes the corrected word back. In every clock
+--               with no strobe, a patrol reads the next word in turn, and writes
+--               it back corrected if it holds a single-bit error. A bus access
+--               always has the read port, so the patrol never delays one. The
+--               patrol reports an uncorrectable word but does not trip on it:
+--               nothing has used the word yet, and an access that does trips as
+--               before.
+--
+--               The first error since cold reset is kept with its cause, word
+--               address, syndrome and time, for the registers and for
+--               telemetry_o, which reaches the outside without the system bus.
+--
 -- Traces to:    TSR_ECC_001, TSR_SAFETY_GATE_002
 -- ============================================================================
 
@@ -38,7 +51,9 @@ library lockstep;
 entity ecc_data_ram is
   generic (
     -- Size in 64-bit words: 15 address bits are the 256 KB of HSI section 5
-    g_addr_bits : positive range 4 to 15 := 15
+    g_addr_bits : positive range 4 to 15 := 15;
+    -- The idle-cycle patrol (HSI ECC-06)
+    g_patrol : boolean := true
   );
   port (
     clk_i       : in    std_logic;
@@ -53,7 +68,10 @@ entity ecc_data_ram is
     rdata_o : out   std_logic_vector(c_data_width - 1 downto 0);
 
     -- A word could not be corrected. High in the cycle after the strobe.
-    dbe_fatal_o : out   std_logic
+    dbe_fatal_o : out   std_logic;
+
+    -- First-fault record, patrol state and error counts (HSI section 3.2)
+    telemetry_o : out   t_telemetry
   );
 end entity ecc_data_ram;
 
@@ -75,9 +93,16 @@ architecture rtl of ecc_data_ram is
   constant c_status_sbe : std_logic_vector(1 downto 0) := "01";
   constant c_status_dbe : std_logic_vector(1 downto 0) := "10";
 
+  -- FIRST_INFO causes
+  constant c_cause_sbe_access : std_logic_vector(1 downto 0) := "00";
+  constant c_cause_sbe_patrol : std_logic_vector(1 downto 0) := "01";
+  constant c_cause_dbe_access : std_logic_vector(1 downto 0) := "10";
+  constant c_cause_dbe_patrol : std_logic_vector(1 downto 0) := "11";
+
   -- Bus address decode, and the access held for the clock after the strobe
   signal w_selected : std_logic;
   signal w_index    : t_index;
+  signal w_rd_index : t_index;
   signal r_index    : t_index;
   signal r_upper    : std_logic;
   signal r_read     : std_logic;
@@ -95,6 +120,29 @@ architecture rtl of ecc_data_ram is
   signal w_sbe       : std_logic;
   signal w_dbe       : std_logic;
   signal w_ram_rdata : std_logic_vector(c_data_width - 1 downto 0);
+
+  -- The patrol: the next word, a word read last clock, and what it found
+  signal w_patrol_rd   : std_logic;
+  signal r_patrol      : t_index;
+  signal r_scrub       : std_logic;
+  signal w_scrub_sbe   : std_logic;
+  signal w_scrub_dbe   : std_logic;
+  signal w_repair      : std_logic;
+  signal r_passes      : unsigned(15 downto 0);
+  signal r_latent_dbe  : std_logic;
+  signal w_error       : std_logic;
+  signal w_error_cause : std_logic_vector(1 downto 0);
+
+  -- First-fault record, and the clock count since cold reset
+  signal r_time       : unsigned(31 downto 0);
+  signal r_ff_valid   : std_logic;
+  signal r_ff_cause   : std_logic_vector(1 downto 0);
+  signal r_ff_index   : t_index;
+  signal r_ff_syn     : std_logic_vector(7 downto 0);
+  signal r_ff_time    : unsigned(31 downto 0);
+  signal w_first_info : std_logic_vector(31 downto 0);
+  signal w_first_addr : std_logic_vector(31 downto 0);
+  signal w_patrol_reg : std_logic_vector(31 downto 0);
 
   -- The word to write back
   signal w_merged     : std_logic_vector(63 downto 0);
@@ -119,6 +167,13 @@ begin
 
   w_index <= unsigned(bus_i.addr(g_addr_bits + 2 downto 3));
 
+  -- A bus access always has the read port. The patrol has it in any other clock
+  -- out of cold reset, so it never delays an access (HSI ECC-07).
+  w_patrol_rd <= '1' when (g_patrol and rst_n_i = '1' and w_selected = '0') else
+                 '0';
+  w_rd_index  <= w_index when (w_selected = '1') else
+                 r_patrol;
+
   p_capture : process (clk_i) is
   begin
 
@@ -131,7 +186,7 @@ begin
         r_write <= w_selected and bus_i.we;
       end if;
 
-      r_index <= w_index;
+      r_index <= w_rd_index;
       r_upper <= bus_i.addr(2);
       r_data  <= bus_i.data;
       r_sel   <= bus_i.sel;
@@ -157,11 +212,11 @@ begin
   begin
 
     if rising_edge(clk_i) then
-      if (w_commit = '1') then
+      if (w_commit = '1' or w_repair = '1') then
         v_memory(to_integer(r_index)) := w_merged_ecc & w_merged;
       end if;
 
-      r_word <= v_memory(to_integer(w_index));
+      r_word <= v_memory(to_integer(w_rd_index));
     end if;
 
   end process p_ram;
@@ -202,9 +257,39 @@ begin
   w_commit <= '1' when (r_write = '1' and bus_ok_i = '1' and w_dbe = '0' and bus_rst_n_i = '1') else
               '0';
 
-  -- r_word is only a word from the RAM the clock after an access
-  w_sbe <= w_sbe_found and (r_read or r_write);
-  w_dbe <= w_dbe_found and (r_read or r_write);
+  -- r_word is only a word from the RAM the clock after an access or a patrol read
+  w_sbe       <= w_sbe_found and (r_read or r_write);
+  w_dbe       <= w_dbe_found and (r_read or r_write);
+  w_scrub_sbe <= w_sbe_found and r_scrub;
+  w_scrub_dbe <= w_dbe_found and r_scrub;
+
+  -- Write a corrected word back after a load or a patrol read that found a
+  -- single-bit error (HSI ECC-05, ECC-06). A store repairs its word anyway. A
+  -- patrol read is never in the clock after a strobe, so the two never meet.
+  w_repair <= (r_read and w_sbe_found) or w_scrub_sbe;
+
+  p_patrol : process (clk_i) is
+  begin
+
+    if rising_edge(clk_i) then
+      if (rst_n_i = '0') then
+        r_patrol <= (others => '0');
+        r_scrub  <= '0';
+        r_passes <= (others => '0');
+      else
+        r_scrub <= w_patrol_rd;
+
+        if (w_patrol_rd = '1') then
+          r_patrol <= r_patrol + 1;
+
+          if (r_patrol = 2 ** g_addr_bits - 1 and r_passes /= x"FFFF") then
+            r_passes <= r_passes + 1;
+          end if;
+        end if;
+      end if;
+    end if;
+
+  end process p_patrol;
 
   p_merge : process (all) is
 
@@ -223,7 +308,7 @@ begin
         v_low := v_low + 32;
       end if;
 
-      if (r_sel(i) = '1') then
+      if (r_write = '1' and r_sel(i) = '1') then
         v_word(v_low + 7 downto v_low) := r_data(i * 8 + 7 downto i * 8);
       end if;
 
@@ -237,12 +322,45 @@ begin
   -- 4. ERROR REGISTERS (HSI section 3.2)
   -- ========================================================================
   -- A double-bit error shuts the bus, and with it the RAM, so DBE_COUNT cannot go
-  -- past one, and only SBE_COUNT has to stop at its limit.
+  -- past one, and only SBE_COUNT has to stop at its limit. DBE_COUNT and STATUS
+  -- are about accesses; an uncorrectable word the patrol finds sets the latent
+  -- flag in PATROL instead. A single-bit error counts wherever it is found.
   -- ========================================================================
+  w_error       <= w_sbe or w_dbe or w_scrub_sbe or w_scrub_dbe;
+  w_error_cause <= c_cause_dbe_access when (w_dbe = '1') else
+                   c_cause_sbe_access when (w_sbe = '1') else
+                   c_cause_dbe_patrol when (w_scrub_dbe = '1') else
+                   c_cause_sbe_patrol;
+
   p_errors : process (clk_i) is
   begin
 
     if rising_edge(clk_i) then
+      if (rst_n_i = '0') then
+        r_time       <= (others => '0');
+        r_ff_valid   <= '0';
+        r_ff_cause   <= (others => '0');
+        r_ff_index   <= (others => '0');
+        r_ff_syn     <= (others => '0');
+        r_ff_time    <= (others => '0');
+        r_latent_dbe <= '0';
+      else
+        r_time <= r_time + 1;
+
+        -- The first error is kept; later ones do not overwrite it
+        if (w_error = '1' and r_ff_valid = '0') then
+          r_ff_valid <= '1';
+          r_ff_cause <= w_error_cause;
+          r_ff_index <= r_index;
+          r_ff_syn   <= w_syndrome;
+          r_ff_time  <= r_time;
+        end if;
+
+        if (w_scrub_dbe = '1') then
+          r_latent_dbe <= '1';
+        end if;
+      end if;
+
       if (rst_n_i = '0') then
         r_sbe_count  <= (others => '0');
         r_dbe_count  <= (others => '0');
@@ -252,7 +370,7 @@ begin
         r_last_error <= w_syndrome;
         r_status     <= c_status_dbe;
         r_dbe_count  <= r_dbe_count + 1;
-      elsif (w_sbe = '1') then
+      elsif (w_sbe = '1' or w_scrub_sbe = '1') then
         r_last_error <= w_syndrome;
 
         if (r_status /= c_status_dbe) then
@@ -282,6 +400,14 @@ begin
           r_reg_rdata(7 downto 0) <= r_last_error;
         elsif (bus_i.addr = c_ecc_status_addr) then
           r_reg_rdata(1 downto 0) <= r_status;
+        elsif (bus_i.addr = c_ecc_first_info_addr) then
+          r_reg_rdata <= w_first_info;
+        elsif (bus_i.addr = c_ecc_first_addr_addr) then
+          r_reg_rdata <= w_first_addr;
+        elsif (bus_i.addr = c_ecc_first_time_addr) then
+          r_reg_rdata <= std_logic_vector(r_ff_time);
+        elsif (bus_i.addr = c_ecc_patrol_addr) then
+          r_reg_rdata <= w_patrol_reg;
         end if;
       end if;
     end if;
@@ -297,6 +423,17 @@ begin
 
   rdata_o     <= w_ram_rdata or r_reg_rdata;
   dbe_fatal_o <= w_dbe;
+
+  -- FIRST_INFO: 31 valid, 9:8 cause, 7:0 syndrome. FIRST_ADDR: the word's first
+  -- byte. PATROL: 31:16 completed passes, 0 the patrol found an uncorrectable word.
+  w_first_info <= r_ff_valid & 21x"0" & r_ff_cause & r_ff_syn;
+  w_first_addr <= std_logic_vector(unsigned(c_ram_base_addr) + shift_left(resize(r_ff_index, 32), 3))
+                  when (r_ff_valid = '1') else
+                  (others => '0');
+  w_patrol_reg <= std_logic_vector(r_passes) & 15x"0" & r_latent_dbe;
+
+  telemetry_o <= w_first_info & w_first_addr & std_logic_vector(r_ff_time) & w_patrol_reg &
+                 std_logic_vector(r_sbe_count) & std_logic_vector(r_dbe_count);
 
   -- ========================================================================
   -- 6. FORMAL VERIFICATION ASSERTIONS (ISO 26262 §5.3)

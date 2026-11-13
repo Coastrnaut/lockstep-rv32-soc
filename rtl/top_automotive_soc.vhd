@@ -54,7 +54,16 @@ entity top_automotive_soc is
     -- Safety Supervisor & Actuator Isolation Pins
     -- --------------------------------------------------------------------
     nmi_fault_o     : out   std_logic; -- Diagnostic non-maskable interrupt flag
-    actuator_safe_o : out   std_logic  -- Hardwired actuator lockdown control
+    actuator_safe_o : out   std_logic; -- Hardwired actuator lockdown control
+
+    -- --------------------------------------------------------------------
+    -- Read-only diagnostic port: the ECC first-fault record over SPI, for an
+    -- external supervisor, without the system bus (HSI ECC-08). Unused, tie
+    -- chip select high.
+    -- --------------------------------------------------------------------
+    diag_cs_n_i : in    std_logic;
+    diag_sck_i  : in    std_logic;
+    diag_sdo_o  : out   std_logic
   );
 end entity top_automotive_soc;
 
@@ -122,6 +131,7 @@ architecture structural of top_automotive_soc is
   signal w_wd_rdata      : std_logic_vector(31 downto 0);
   signal w_can_rdata     : std_logic_vector(31 downto 0);
   signal w_uart_rdata    : std_logic_vector(31 downto 0);
+  signal w_ecc_telemetry : t_telemetry;
 
 begin
 
@@ -393,7 +403,20 @@ begin
       bus_i       => w_safe_sys_bus,
       bus_ok_i    => w_bus_valid,
       rdata_o     => w_ram_rdata,
-      dbe_fatal_o => w_ecc_fatal
+      dbe_fatal_o => w_ecc_fatal,
+      telemetry_o => w_ecc_telemetry
+    );
+
+  -- The record goes out on its own pins, on the cold reset only, so a warm reset
+  -- or a shut bus leaves it readable
+  i_telemetry_port : entity lockstep.telemetry_port
+    port map (
+      clk_i       => clk_i,
+      rst_n_i     => w_cold_rst_n,
+      telemetry_i => w_ecc_telemetry,
+      cs_n_i      => diag_cs_n_i,
+      sck_i       => diag_sck_i,
+      sdo_o       => diag_sdo_o
     );
 
   -- The self-test trips the comparator on purpose, which is nobody else's business.

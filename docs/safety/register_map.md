@@ -11,7 +11,11 @@ that is not listed answers ERR.
 | `0x40000100` | ECC | `c_ecc_sbe_count_addr` | `LOCKSTEP_ECC_SBE_COUNT` | R | Corrected single-bit errors, 15:0, saturating |
 | `0x40000104` | ECC | `c_ecc_dbe_count_addr` | `LOCKSTEP_ECC_DBE_COUNT` | R | Uncorrectable errors, 15:0 |
 | `0x40000108` | ECC | `c_ecc_syndrome_addr` | `LOCKSTEP_ECC_SYNDROME` | R | Syndrome of the last error |
-| `0x4000010C` | ECC | `c_ecc_status_addr` | `LOCKSTEP_ECC_STATUS` | R | Worst error seen: 0 none, 1 SBE, 2 DBE |
+| `0x4000010C` | ECC | `c_ecc_status_addr` | `LOCKSTEP_ECC_STATUS` | R | Worst error seen by an access: 0 none, 1 SBE, 2 DBE |
+| `0x40000110` | ECC | `c_ecc_first_info_addr` | `LOCKSTEP_ECC_FIRST_INFO` | R | First error: 31 valid, 9:8 cause (0 SBE access, 1 SBE patrol, 2 DBE access, 3 DBE patrol), 7:0 syndrome |
+| `0x40000114` | ECC | `c_ecc_first_addr_addr` | `LOCKSTEP_ECC_FIRST_ADDR` | R | First error: address of its 64-bit word |
+| `0x40000118` | ECC | `c_ecc_first_time_addr` | `LOCKSTEP_ECC_FIRST_TIME` | R | First error: clocks since cold reset |
+| `0x4000011C` | ECC | `c_ecc_patrol_addr` | `LOCKSTEP_ECC_PATROL` | R | 31:16 completed patrol passes, saturating; 0 the patrol found an uncorrectable word |
 | `0x40000200` | Watchdog | `c_wd_kick_addr` | `LOCKSTEP_WD_KICK` | W | A word write of 0x0000DEAD kicks the watchdog |
 | `0x40000204` | Watchdog | `c_wd_status_addr` | `LOCKSTEP_WD_STATUS` | R | 7 violation held, 6 early, 5 late, 4:0 counter 15:11 |
 | `0x40000208` | Watchdog | `c_wd_reset_src_addr` | `LOCKSTEP_WD_RESET_SRC` | R | Last watchdog reset: 0 none, 1 early, 2 late |

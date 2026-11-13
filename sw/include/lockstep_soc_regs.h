@@ -22,7 +22,11 @@
 #define LOCKSTEP_ECC_SBE_COUNT  0x40000100u  /* R  Corrected single-bit errors, 15:0, saturating */
 #define LOCKSTEP_ECC_DBE_COUNT  0x40000104u  /* R  Uncorrectable errors, 15:0 */
 #define LOCKSTEP_ECC_SYNDROME   0x40000108u  /* R  Syndrome of the last error */
-#define LOCKSTEP_ECC_STATUS     0x4000010Cu  /* R  Worst error seen: 0 none, 1 SBE, 2 DBE */
+#define LOCKSTEP_ECC_STATUS     0x4000010Cu  /* R  Worst error seen by an access: 0 none, 1 SBE, 2 DBE */
+#define LOCKSTEP_ECC_FIRST_INFO 0x40000110u  /* R  First error: 31 valid, 9:8 cause (0 SBE access, 1 SBE patrol, 2 DBE access, 3 DBE patrol), 7:0 syndrome */
+#define LOCKSTEP_ECC_FIRST_ADDR 0x40000114u  /* R  First error: address of its 64-bit word */
+#define LOCKSTEP_ECC_FIRST_TIME 0x40000118u  /* R  First error: clocks since cold reset */
+#define LOCKSTEP_ECC_PATROL     0x4000011Cu  /* R  31:16 completed patrol passes, saturating; 0 the patrol found an uncorrectable word */
 #define LOCKSTEP_WD_KICK        0x40000200u  /* W  A word write of 0x0000DEAD kicks the watchdog */
 #define LOCKSTEP_WD_STATUS      0x40000204u  /* R  7 violation held, 6 early, 5 late, 4:0 counter 15:11 */
 #define LOCKSTEP_WD_RESET_SRC   0x40000208u  /* R  Last watchdog reset: 0 none, 1 early, 2 late */

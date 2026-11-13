@@ -67,6 +67,7 @@ TEST = "rtl/safety_blocks/comparator_self_test.vhd"
 RX = "rtl/peripherals/can_receiver.vhd"
 SUP = "rtl/safety_blocks/watchdog_supervisor.vhd"
 FAB = "rtl/safety_blocks/soc_bus_fabric.vhd"
+TEL = "rtl/safety_blocks/telemetry_port.vhd"
 
 CLEAR = r"w_tx_clear <= '1' when \(rst_n_i = '0' or bus_ok_i = '0' or r_bus_off = '1'\) else"
 
@@ -301,7 +302,7 @@ MUTANTS = [
     ("ram: access ignores the gate", RAM, [(r"w_selected <= '1' when \(bus_ok_i = '1' and ", "w_selected <= '1' when (")]),
     ("ram: store lands when the gate closes", RAM, [(r"w_commit <= '1' when \(r_write = '1' and bus_ok_i = '1' and w_dbe = '0'", "w_commit <= '1' when (r_write = '1' and w_dbe = '0'")]),
     ("ram: store writes over an uncorrectable word", RAM, [(r"w_commit <= '1' when \(r_write = '1' and bus_ok_i = '1' and w_dbe = '0'", "w_commit <= '1' when (r_write = '1' and bus_ok_i = '1'")]),
-    ("ram: byte enables ignored", RAM, [(r"if \(r_sel\(i\) = '1'\) then", "if (true) then")]),
+    ("ram: byte enables ignored", RAM, [(r"if \(r_write = '1' and r_sel\(i\) = '1'\) then", "if (r_write = '1') then")]),
     ("ram: stores go to the wrong half", RAM, [(r"if \(r_upper = '1'\) then\s+v_low := v_low \+ 32;", "if (r_upper = '0') then\n        v_low := v_low + 32;")]),
     ("ram: loads come from the wrong half", RAM, [(r"w_corrected\(63 downto 32\) when \(r_upper = '1'\) else", "w_corrected(63 downto 32) when (r_upper = '0') else")]),
     ("ram: loads are not corrected", RAM, [(r"w_corrected\(63 downto 32\) when \(r_upper = '1'\) else\s+w_corrected\(31 downto 0\);", "r_word(63 downto 32) when (r_upper = '1') else r_word(31 downto 0);")]),
@@ -309,14 +310,14 @@ MUTANTS = [
     ("ram: uncorrectable word returned", RAM, [(r"when \(r_read = '0' or w_dbe = '1'\) else", "when (r_read = '0') else")]),
     ("ram: read data when not reading", RAM, [(r"\(others => '0'\) when \(r_read = '0' or w_dbe = '1'\) else", "(others => '0') when (w_dbe = '1') else")]),
     ("ram: store keeps the old check bits", RAM, [(r":= w_merged_ecc & w_merged;", ":= r_word(71 downto 64) & w_merged;")]),
-    ("ram: errors counted outside an access", RAM, [(r"w_sbe <= w_sbe_found and \(r_read or r_write\);", "w_sbe <= w_sbe_found;")]),
-    ("ram: fatal outside an access", RAM, [(r"w_dbe <= w_dbe_found and \(r_read or r_write\);", "w_dbe <= w_dbe_found;")]),
-    ("ram: stores not checked", RAM, [(r"w_dbe <= w_dbe_found and \(r_read or r_write\);", "w_dbe <= w_dbe_found and r_read;")]),
+    ("ram: errors counted outside an access", RAM, [(r"w_sbe\s+<= w_sbe_found and \(r_read or r_write\);", "w_sbe <= w_sbe_found;")]),
+    ("ram: fatal outside an access", RAM, [(r"w_dbe\s+<= w_dbe_found and \(r_read or r_write\);", "w_dbe <= w_dbe_found;")]),
+    ("ram: stores not checked", RAM, [(r"w_dbe\s+<= w_dbe_found and \(r_read or r_write\);", "w_dbe <= w_dbe_found and r_read;")]),
     ("ram: single-bit errors not counted", RAM, [(r"r_sbe_count <= r_sbe_count \+ 1;", "null;")]),
     ("ram: error count wraps", RAM, [(r"if \(r_sbe_count /= x\"FFFF\"\) then", "if (true) then")]),
     ("ram: double-bit errors not counted", RAM, [(r"r_dbe_count  <= r_dbe_count \+ 1;", "null;")]),
     ("ram: status forgets a double-bit error", RAM, [(r"if \(r_status /= c_status_dbe\) then", "if (true) then")]),
-    ("ram: syndrome not kept on a single-bit error", RAM, [(r"(elsif \(w_sbe = '1'\) then\s+)r_last_error <= w_syndrome;", r"\1null;")]),
+    ("ram: syndrome not kept on a single-bit error", RAM, [(r"(elsif \(w_sbe = '1' or w_scrub_sbe = '1'\) then\s+)r_last_error <= w_syndrome;", r"\1null;")]),
     ("ram: syndrome not kept on a double-bit error", RAM, [(r"(elsif \(w_dbe = '1'\) then\s+)r_last_error <= w_syndrome;", r"\1null;")]),
     ("ram: fatal not raised", RAM, [(r"dbe_fatal_o <= w_dbe;", "dbe_fatal_o <= '0';")]),
     ("ram: registers ignore the gate", RAM, [(r"rst_n_i = '1' and bus_ok_i = '1' and bus_i\.valid = '1' and bus_i\.we = '0'", "rst_n_i = '1' and bus_i.valid = '1' and bus_i.we = '0'")]),
@@ -365,6 +366,19 @@ MUTANTS = [
     ("bus: RAM decoded half size", FAB, [(r"addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\) =\s+c_ram_base_addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\)", "addr(c_addr_width - 1 downto g_ram_addr_bits + 2) = c_ram_base_addr(c_addr_width - 1 downto g_ram_addr_bits + 2)")]),
     ("bus: RAM decoded double size", FAB, [(r"addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\) =\s+c_ram_base_addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\)", "addr(c_addr_width - 1 downto g_ram_addr_bits + 4) = c_ram_base_addr(c_addr_width - 1 downto g_ram_addr_bits + 4)")]),
     ("bus: target not captured with the request", FAB, [(r"r_target  <= decode\(bus_i\.addr\);", "null;")]),
+    # --- Repair, patrol and first-fault telemetry (roadmap R4.1)
+    ("repair: a load does not write back its corrected word", RAM, [(r"w_repair <= \(r_read and w_sbe_found\) or w_scrub_sbe;", "w_repair <= w_scrub_sbe;")]),
+    ("repair: the patrol does not write back", RAM, [(r"w_repair <= \(r_read and w_sbe_found\) or w_scrub_sbe;", "w_repair <= r_read and w_sbe_found;")]),
+    ("patrol: never reads", RAM, [(r"w_patrol_rd <= '1' when \(g_patrol and", "w_patrol_rd <= '0' when (g_patrol and")]),
+    ("patrol: moves on in a strobe clock too", RAM, [(r"g_patrol and rst_n_i = '1' and w_selected = '0'\) else", "g_patrol and rst_n_i = '1') else")]),
+    ("patrol: an uncorrectable word trips the SoC", RAM, [(r"dbe_fatal_o <= w_dbe;", "dbe_fatal_o <= w_dbe or w_scrub_dbe;")]),
+    ("patrol: its uncorrectable word is not flagged", RAM, [(r"if \(w_scrub_dbe = '1'\) then\s+r_latent_dbe <= '1';", "if (w_scrub_dbe = '1') then\n          null;")]),
+    ("first fault: a later error replaces it", RAM, [(r"if \(w_error = '1' and r_ff_valid = '0'\) then", "if (w_error = '1') then")]),
+    ("first fault: lost in a warm reset", RAM, [(r"if \(rst_n_i = '0'\) then\s+r_time       <= \(others => '0'\);", "if (rst_n_i = '0' or bus_rst_n_i = '0') then\n        r_time       <= (others => '0');")]),
+    ("first fault: wrong word recorded", RAM, [(r"r_ff_index <= r_index;", "r_ff_index <= r_patrol;")]),
+    ("telemetry: shifts on the rising edge", TEL, [(r"r_sck_sync\(2\) = '1' and r_sck_sync\(1\) = '0'", "r_sck_sync(2) = '0' and r_sck_sync(1) = '1'")]),
+    ("telemetry: drives sdo while not selected", TEL, [(r"when \(r_cs_sync\(2\) = '0'\) else\s+'0';", "when (r_cs_sync(2) = '0') else\n           r_shift(r_shift'high);")]),
+    ("telemetry: no snapshot, the live record shifts", TEL, [(r"r_shift <= r_shift\(r_shift'high - 1 downto 0\) & '0';", "r_shift <= telemetry_i;")]),
     ("ram: warm reset does not drop the store", RAM, [(r" and bus_rst_n_i = '1'\) else", ") else")]),
     ("ram: RAM transaction kept through a warm reset", TOP, [(r"bus_rst_n_i => w_rst_n,", "bus_rst_n_i => '1',")]),
     ("profile: fabric keeps the full RAM decode", TOP, [(r"(i_bus_fabric : entity lockstep\.soc_bus_fabric\s+generic map \(\s+g_ram_addr_bits => )g_ram_addr_bits", r"\g<1>15")]),
