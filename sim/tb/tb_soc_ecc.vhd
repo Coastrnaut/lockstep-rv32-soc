@@ -194,28 +194,28 @@ begin
     alias b_err         is x_w_core_b_in.err;
     alias b_dat         is x_w_core_b_in.rdata;
     alias a_enter       is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.env_enter
       : std_ulogic >>;
     alias a_cause       is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.ecause
       : std_ulogic_vector(6 downto 0) >>;
     alias b_enter       is
-      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.env_enter
       : std_ulogic >>;
     alias b_cause       is
-      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.ecause
       : std_ulogic_vector(6 downto 0) >>;
     alias a_rd_we       is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rf_we
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_regfile_inst.rf_we
       : std_ulogic >>;
     alias a_rd_addr     is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.addr
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_regfile_inst.addr
       : std_ulogic_vector(4 downto 0) >>;
     alias b_rd_we       is
-      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rf_we
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_regfile_inst.rf_we
       : std_ulogic >>;
     alias b_rd_addr     is
-      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.addr
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_regfile_inst.addr
       : std_ulogic_vector(4 downto 0) >>;
 
     -- The load and the byte store in the program's RAM test, to the word at

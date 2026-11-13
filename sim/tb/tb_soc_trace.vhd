@@ -159,13 +159,13 @@ begin
   p_stim : process is
 
     alias a_rd_we    is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rf_we
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_regfile_inst.rf_we
       : std_ulogic >>;
     alias a_rd_addr  is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.addr
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_regfile_inst.addr
       : std_ulogic_vector(4 downto 0) >>;
     alias a_wdata    is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.rf_wdata
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.rf_wdata
       : std_ulogic_vector(31 downto 0) >>;
     alias trace_a    is << signal i_soc.w_core_a_trace : trace_port_t >>;
     alias status_sys is << signal i_soc.i_watchdog_supervisor.r_status_sys : std_logic_vector(9 downto 0) >>;

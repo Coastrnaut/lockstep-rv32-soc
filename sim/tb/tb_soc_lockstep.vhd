@@ -265,34 +265,34 @@ begin
     -- Each core's interrupt logic: MEI pending, MEI pending and enabled (MEIE),
     -- an interrupt being taken (which needs MIE), and trap entry with its cause
     alias a_irq_pnd  is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.irq_pnd
       : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
     alias a_irq_buf  is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.irq_buf
       : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
     alias a_irq_fire is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.irq_fire
       : std_ulogic_vector(1 downto 0) >>;
     alias a_enter    is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.env_enter
       : std_ulogic >>;
     alias a_cause    is
-      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.ecause
       : std_ulogic_vector(6 downto 0) >>;
     alias b_irq_pnd  is
-      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.irq_pnd
       : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
     alias b_irq_buf  is
-      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.irq_buf
       : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
     alias b_irq_fire is
-      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.irq_fire
       : std_ulogic_vector(1 downto 0) >>;
     alias b_enter    is
-      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.env_enter
       : std_ulogic >>;
     alias b_cause    is
-      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.cpu_control_inst.ecause
       : std_ulogic_vector(6 downto 0) >>;
 
     variable v_found : boolean;

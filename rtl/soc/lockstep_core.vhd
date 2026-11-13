@@ -217,10 +217,10 @@ begin
       io_slink_rx_fifo => 1,
       io_slink_tx_fifo => 1,
 
-      -- TRACER
-      io_tracer_en        => false,
-      io_tracer_buffer    => 1,
-      io_tracer_simlog_en => false
+      -- TRACEBUF (NEORV32 v1.13.7 renamed the tracer; its simulation log is
+      -- the top-level TRACE_SIMLOG_EN, left at its default, off)
+      io_tracebuf_en    => false,
+      io_tracebuf_depth => 1
     )
     -- vsg_on generic_map_601
     port map (

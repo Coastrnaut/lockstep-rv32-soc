@@ -56,7 +56,7 @@ architecture tb of trace_compare is
     v_t := t;
 
     if (unsigned(v_t.rd_addr) = 0) then
-      v_t.rd_rdata := (others => '0');
+      v_t.rd_wdata := (others => '0');
     end if;
 
     loop_lane : for lv_lane in 0 to 3 loop
@@ -91,7 +91,7 @@ architecture tb of trace_compare is
       return "insn     ";
     elsif (a.trap /= b.trap or a.intr /= b.intr or a.halt /= b.halt or a.mode /= b.mode) then
       return "trap/intr";
-    elsif (a.rd_addr /= b.rd_addr or a.rd_rdata /= b.rd_rdata) then
+    elsif (a.rd_addr /= b.rd_addr or a.rd_wdata /= b.rd_wdata) then
       return "rd       ";
     elsif (a.rs1_rdata /= b.rs1_rdata or a.rs2_rdata /= b.rs2_rdata) then
       return "rs       ";
