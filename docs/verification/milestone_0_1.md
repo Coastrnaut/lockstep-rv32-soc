@@ -7,7 +7,7 @@ test. Nothing here is formal, gate-level, FPGA or bench evidence.
 
 - **Base:** `73c0afa` on `main` (the roadmap commit, whose RTL equals the
   reviewed baseline `102de394aa48aecc68018f505aa8057e724e35fc`)
-- **Branch:** `m0-m1-fault-containment`, local, not pushed
+- **Landed:** on `main`, `e0d937f` to `8d36ca4`, pushed 2026-11-13
 - **Date:** 2026-11-12
 
 ## 1. Toolchain and pins
@@ -21,9 +21,11 @@ test. Nothing here is formal, gate-level, FPGA or bench evidence.
 | NEORV32 pin | `4d6eaf3fde1edfe7421083fd8412d30200466e85`, unchanged |
 | OSVVM pin | `249495946eb113284d243ffa9fa8362c296e9d96`, unchanged, not compiled by `sim/run.py` |
 
-CI uses Ubuntu 24.04's GHDL 4.1. This series was not run on GHDL 4.1 or in
-CI, because publishing is left to the maintainer. The first CI run of the
-branch is the check on that toolchain.
+The series was developed and verified locally with the toolchain above. CI
+then ran it on Ubuntu 24.04's GHDL 4.1 (section 4): [run 43415316025][ci-run]
+on `8d36ca4`, 2026-11-13.
+
+[ci-run]: https://github.com/Coastrnaut/lockstep-rv32-soc/actions/runs/43415316025
 
 ## 2. Baseline
 
@@ -120,6 +122,25 @@ tests: 5 new benches (`tb_watchdog_window`, `tb_lockstep_illegal_state`,
 The run reported 210 GHDL warnings, all from VUnit and its OSVVM, and none from
 first-party or NEORV32 sources.
 
+### In CI, on GHDL 4.1
+
+[Run 43415316025][ci-run] of `ci.yml`, on `8d36ca4` after the push to `main`,
+passed every step in 2 min 37 s. Its manifest records GHDL 4.1.0
+(`4.1.0+dfsg-0ubuntu2.1`, mcode JIT), Python 3.11.18, VUnit 4.7.1, VSG 3.35.0
+and the same two submodule pins.
+
+| Step | Result |
+|------|--------|
+| Tool and submodule manifest | Pass |
+| Generated fixtures match their generators | Pass, both files |
+| Mutation patterns still apply | Pass, 412 mutants, 0 problems |
+| Semantic lint (`ghdl -Wall`, `ghdl --synth` of every block) | Pass |
+| Style lint (VSG) | Pass |
+| Full regression, `-p 4` | 226 passed of 226, 0 failed, 0 skipped, 40 benches, 92.5 s |
+| Warnings by provenance | 210 from VUnit and OSVVM, none first-party, NEORV32 or GHDL libraries |
+
+The two simulators agree on every test, and the counts match the local run.
+
 ## 5. Synthesis smoke test
 
 GHDL 6.0.0 `--synth` of `top_automotive_soc` with `-gg_boot_mode=2` and the
@@ -158,8 +179,8 @@ campaign, so a full campaign is due before a release.
 
 | Item | Status |
 |------|--------|
-| R0.1 Windows `--workdir` patch | Investigated, not narrowed. It drops `--workdir` on every platform, so GHDL writes library files into `sim/`. Narrowing it to Windows would move CI's libraries, and needs a CI run to check. Two concurrent runs in one directory are therefore not supported |
-| R0.1 GHDL 4.1 | Not run locally. The WSL toolchain recorded earlier was gone, and CI is the maintainer's to trigger |
+| R0.1 Windows `--workdir` patch | Investigated, not narrowed. It drops `--workdir` on every platform, so GHDL writes library files into `sim/`. CI passes with it unchanged. Narrowing it to Windows would move CI's libraries, so it needs its own change and CI run. Two concurrent runs in one directory are therefore not supported |
+| R0.1 GHDL 4.1 | Closed: CI run 43415316025 passed on GHDL 4.1.0 (section 4). It was not run locally, because the WSL toolchain recorded earlier was gone |
 | R0.3 warning provenance | Counted per run in the CI summary. No baseline of accepted warnings exists yet |
 | R1.3 MIE observation | MEIE is checked through NEORV32's `irq_buf`. `mstatus.MIE` sits in a record local to the CPU and cannot be named from a testbench, so MIE=0 rests on the firmware's structure, which enables it only after the RAM test |
 | R1.4 watchdog clock loss | Open target requirement (HSI WD-04): an independent supervisor on the board |
