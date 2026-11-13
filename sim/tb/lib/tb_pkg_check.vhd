@@ -6,8 +6,8 @@
 -- must make of it, and the runner counts it as passed only if that is what
 -- happened, on every simulator: a passing test passes; a failed check, an
 -- assertion of severity error, a test that never finishes, and a test name the
--- bench does not have all fail; a test that reaches a force is skipped where
--- forces cannot run.
+-- bench does not have all fail; a forced signal holds the forced value
+-- until it is released, on both simulators.
 -- ============================================================================
 
 library ieee;
@@ -24,7 +24,8 @@ end entity tb_pkg_check;
 
 architecture tb of tb_pkg_check is
 
-  signal trip : std_logic;
+  signal trip   : std_logic;
+  signal driven : std_logic;
 
 begin
 
@@ -62,10 +63,19 @@ begin
         wait for 10 ns;
       elsif run("expect_fail_a_test_that_never_finishes") then
         wait;
-      elsif run("expect_skip_a_test_that_forces") then
-        trip <= force '0';
+      elsif run("expect_pass_a_forced_signal_holds_the_value_until_released") then
+        driven <= '0';
         wait for 10 ns;
-        trip <= release;
+        driven <= force '1';
+        wait for 10 ns;
+        check_equal(driven, '1', "forced");
+        driven <= 'L';
+        wait for 10 ns;
+        check_equal(driven, '1', "a new value from the driver does not lift the force");
+        driven <= release;
+        wait for 10 ns;
+        check_equal(driven, 'L', "released to the driver's value");
+        info("force and release work");
       end if;
 
     end loop loop_while;

@@ -20,7 +20,7 @@
 --   TB INFO <ns> <message>
 --   TB PASS <test>
 --   TB FAIL <ns> <message>
---   TB SKIP <test>: <reason>
+--   TB SKIP <test>: <reason>    (a test that cannot run here)
 --
 -- A failed check is a report of severity failure, which stops both
 -- simulators. A bench that never reaches test_runner_cleanup has not passed.
@@ -49,11 +49,46 @@ package tb_pkg is
 
   procedure test_runner_cleanup;
 
-  -- sim/run.py puts this in place of each force and release when it builds a
-  -- bench for a simulator without VHDL-2008 force (xsim): a test that reaches
-  -- one ends there, as skipped, and the bench's other tests still run
+  -- xsim cannot simulate VHDL-2008 force, but its Tcl add_force can force a
+  -- signal. When sim/run.py builds a bench for xsim it puts one of these in
+  -- place of each force and release: the hierarchical path of the target, the
+  -- target itself (which picks the overload) and the value. Each writes the
+  -- request to tb_force.txt and pauses the simulation with std.env.stop; the
+  -- run's Tcl script applies it with add_force or remove_forces and resumes.
 
-  procedure tb_needs_force;
+  procedure tb_force (
+    constant path   : in string;
+    constant target : in std_ulogic;
+    constant value  : in std_ulogic
+  );
+
+  procedure tb_force (
+    constant path   : in string;
+    constant target : in std_ulogic_vector;
+    constant value  : in std_ulogic_vector
+  );
+
+  procedure tb_force (
+    constant path   : in string;
+    constant target : in unsigned;
+    constant value  : in unsigned
+  );
+
+  procedure tb_force (
+    constant path   : in string;
+    constant target : in signed;
+    constant value  : in signed
+  );
+
+  procedure tb_force (
+    constant path   : in string;
+    constant target : in integer;
+    constant value  : in integer
+  );
+
+  procedure tb_release (
+    constant path : in string
+  );
 
   -- Called as a concurrent procedure; it never returns
 
@@ -289,6 +324,22 @@ package body tb_pkg is
 
   end function now_ns;
 
+  -- A time the same way on every simulator: time'image gives fs on GHDL and ps
+  -- on xsim
+
+  function time_image (
+    constant value : in time
+  ) return string is
+  begin
+
+    if (value mod 1 ns = 0 ns) then
+      return integer'image(value / 1 ns) & " ns";
+    else
+      return integer'image(value / 1 ps) & " ps";
+    end if;
+
+  end function time_image;
+
   procedure test_runner_setup (
     constant test_name : in string
   ) is
@@ -377,14 +428,86 @@ package body tb_pkg is
 
   end procedure test_runner_cleanup;
 
-  procedure tb_needs_force is
+  procedure tb_force_request (
+    constant request : in string
+  ) is
+
+    file f_request : text;
+    variable v_line : line;
+
   begin
 
-    v_runner.set_done;
-    report "TB SKIP " & v_runner.get_selected & ": it forces a signal, which this simulator cannot";
-    std.env.finish;
+    file_open(f_request, "tb_force.txt", write_mode);
+    write(v_line, request & " " & integer'image(now / 1 ns));
+    writeline(f_request, v_line);
+    file_close(f_request);
+    std.env.stop;
 
-  end procedure tb_needs_force;
+  end procedure tb_force_request;
+
+  procedure tb_force (
+    constant path   : in string;
+    constant target : in std_ulogic;
+    constant value  : in std_ulogic
+  ) is
+  begin
+
+    tb_force_request("force " & path & " bin " & to_string(value));
+
+  end procedure tb_force;
+
+  procedure tb_force (
+    constant path   : in string;
+    constant target : in std_ulogic_vector;
+    constant value  : in std_ulogic_vector
+  ) is
+  begin
+
+    tb_force_request("force " & path & " bin " & to_string(value));
+
+  end procedure tb_force;
+
+  procedure tb_force (
+    constant path   : in string;
+    constant target : in unsigned;
+    constant value  : in unsigned
+  ) is
+  begin
+
+    tb_force_request("force " & path & " bin " & to_string(value));
+
+  end procedure tb_force;
+
+  procedure tb_force (
+    constant path   : in string;
+    constant target : in signed;
+    constant value  : in signed
+  ) is
+  begin
+
+    tb_force_request("force " & path & " bin " & to_string(value));
+
+  end procedure tb_force;
+
+  procedure tb_force (
+    constant path   : in string;
+    constant target : in integer;
+    constant value  : in integer
+  ) is
+  begin
+
+    tb_force_request("force " & path & " dec " & integer'image(value));
+
+  end procedure tb_force;
+
+  procedure tb_release (
+    constant path : in string
+  ) is
+  begin
+
+    tb_force_request("release " & path);
+
+  end procedure tb_release;
 
   procedure test_runner_watchdog (
     constant timeout : in time
@@ -394,7 +517,7 @@ package body tb_pkg is
     wait for timeout;
 
     if (not v_runner.is_done) then
-      fail("the test was still running after " & time'image(timeout));
+      fail("the test was still running after " & time_image(timeout));
     end if;
 
     wait;
@@ -604,7 +727,7 @@ package body tb_pkg is
   begin
 
     if (got /= expected) then
-      differ(time'image(got), time'image(expected), msg);
+      differ(time_image(got), time_image(expected), msg);
     end if;
 
   end procedure check_equal;

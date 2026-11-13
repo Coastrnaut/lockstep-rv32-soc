@@ -79,7 +79,7 @@ or countable facts instead.
 | Evidence | Status | Notes |
 |----------|--------|-------|
 | RTL implementation | 16 first-party RTL files: 14 blocks, the core wrapper and the top level | Boot ROM ECC, Flash and the comparator register block are not built (HSI section 5) |
-| Testbenches | 46 benches, 263 tests, all passing on GHDL; the 191 that need no force also pass on Vivado's xsim, with the same output | Plain VHDL-2008 on `sim/tb/lib/tb_pkg.vhd`. Tools and counts: `docs/verification/toolchain.md` |
+| Testbenches | 46 benches, 263 tests, all passing on GHDL and on Vivado's xsim, with the same output | Plain VHDL-2008 on `sim/tb/lib/tb_pkg.vhd`. Tools and counts: `docs/verification/toolchain.md` |
 | Fault injection | Directed forces in the benches, and a seeded campaign at 15 RTL sites | `docs/verification/fault_campaign.md`. No netlist-level injection |
 | Structural coverage | Not measured | GHDL in this flow does not report statement, branch or toggle coverage |
 | Mutation | 439 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |

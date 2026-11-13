@@ -60,6 +60,15 @@ architecture tb of tb_soc_trace is
   signal first_time : time;
   signal field      : string(1 to 9);
 
+  -- Core A's first retirement that writes s5 once s5_watch is set: p_s5 records
+  -- it on the clock edge, so the result does not depend on when p_stim resumes
+  -- (xsim resumes it after a force a few delta cycles late)
+  signal core_a_trace : trace_port_t;
+  signal s5_watch     : std_logic;
+  signal s5_seen      : std_logic;
+  signal s5_order     : natural;
+  signal s5_time      : time;
+
 begin
 
   p_clk : process is
@@ -137,6 +146,11 @@ begin
         field_o      => field
       );
 
+    -- Core A's trace for p_s5. xsim reads the 64-bit order field wrongly
+    -- through an external name in a process (twice the value), but rightly
+    -- through a port or an assignment like this one.
+    core_a_trace <= trace_a;
+
   end block b_trace;
 
   p_stim : process is
@@ -156,12 +170,12 @@ begin
     variable v_traps : natural;
 
     variable v_order : natural;
-    variable v_found : boolean;
     variable v_time  : time;
 
   begin
 
     test_runner_setup(g_test);
+    s5_watch <= '0';
 
     loop_while : while test_suite loop
 
@@ -203,36 +217,32 @@ begin
         -- value instead. Core B's does not.
         wait until a_rd_we = '1' and a_rd_addr = c_s5 for c_timeout;
         check_equal(a_rd_addr, c_s5, "core A writes s5");
-        a_wdata <= force x"DEADBEEF";
+        -- From here, p_s5 records the order number of that instruction, from
+        -- core A's own trace
+        s5_watch <= '1';
+        a_wdata  <= force x"DEADBEEF";
         wait until rising_edge(clk);
-        a_wdata <= release;
+        a_wdata  <= release;
 
-        -- The order number of that instruction, from core A's own trace
-        v_found := false;
+        if (s5_seen /= '1') then
+          wait until s5_seen = '1' for c_clk_period * 8;
+        end if;
 
-        loop_dummy_2 : for lv_dummy in 1 to 8 loop
+        check_equal(s5_seen, '1', "core A retired the corrupted write");
+        v_order := s5_order;
+        v_time  := s5_time;
 
-          if (trace_a.valid = '1' and trace_a.rd_addr = c_s5) then
-            v_order := to_integer(unsigned(trace_a.order(31 downto 0)));
-            v_time  := now;
-            v_found := true;
-            exit;
-          end if;
+        if (mismatch /= '1') then
+          wait until mismatch = '1' for 1 us;
+        end if;
 
-          wait until rising_edge(clk);
-
-        end loop loop_dummy_2;
-
-        check(v_found, "core A retired the corrupted write");
-
-        wait until mismatch = '1' for 1 us;
         check_equal(mismatch, '1', "the trace comparison sees it");
         check_equal(first, v_order, "at that instruction");
         check_equal(field, string'("rd       "), "in the register write");
         check(first_time - v_time <= c_clk_period * 4,
-              "within 4 clocks of core A retiring it: " & time'image(first_time - v_time));
+              "within 4 clocks of core A retiring it: " & integer'image((first_time - v_time) / 1 ns) & " ns");
         info("divergence at order " & integer'image(v_order) & ", core A retired it at " &
-             time'image(v_time) & ", trace mismatch at " & time'image(first_time));
+             integer'image(v_time / 1 ns) & " ns, trace mismatch at " & integer'image(first_time / 1 ns) & " ns");
 
         -- The bus comparator never sees it: the program runs to the end
         wait until rx_done = 1 for c_timeout;
@@ -249,5 +259,20 @@ begin
     test_runner_cleanup;
 
   end process p_stim;
+
+  p_s5 : process (clk) is
+  begin
+
+    if rising_edge(clk) then
+      if (s5_watch /= '1') then
+        s5_seen <= '0';
+      elsif (s5_seen = '0' and core_a_trace.valid = '1' and core_a_trace.rd_addr = c_s5) then
+        s5_seen  <= '1';
+        s5_order <= to_integer(unsigned(core_a_trace.order(31 downto 0)));
+        s5_time  <= now;
+      end if;
+    end if;
+
+  end process p_s5;
 
 end architecture tb;

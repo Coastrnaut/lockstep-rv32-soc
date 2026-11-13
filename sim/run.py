@@ -62,7 +62,7 @@ TB_LIB_AFTER = [SIM / "tb" / "lib" / f for f in ("can_test_node.vhd", "trace_com
 
 # The builds, each with its own IMEM image and benches. "check" is the test
 # framework's own check, with no SoC: its tests say in their names what the
-# runner must make of them (expect_pass_, expect_fail_, expect_skip_).
+# runner must make of them (expect_pass_, expect_fail_).
 BUILDS = {
     "check": {"image": None, "benches": lambda: [SIM / "tb" / "lib" / "tb_pkg_check.vhd"]},
     "sim": {"image": SIM / "firmware" / "neorv32_imem_image.vhd",
@@ -86,8 +86,34 @@ VIVADO_GLOBS = [("C:/AMDDesignTools", "*/Vivado/bin"), ("C:/Xilinx/Vivado", "*/b
                 ("/tools/Xilinx/Vivado", "*/bin"), ("/tools/Xilinx", "*/Vivado/bin"), ("/opt/Xilinx/Vivado", "*/bin")]
 
 TB_LINE = re.compile(r"TB (INFO|PASS|FAIL|SKIP)\b.*")
-# A force or release statement, which xsim cannot simulate, on one line
-FORCE = re.compile(r"^([ \t]*)[^;\n]*<=\s*(?:force|release)\b[^;\n]*;", re.M)
+# A force or release statement, which xsim cannot simulate, on one line:
+# indent, target, force or release, value
+FORCE = re.compile(r"^([ \t]*)(?!--)([^;\n]*?)\s*<=\s*(force|release)\b\s*([^;\n]*);", re.M)
+# An alias of an external name: alias name, path
+EXT_ALIAS = re.compile(r"\balias\s+(\w+)\s+is\s+<<\s*signal\s+([^:]+?)\s*:")
+# The Tcl script for every xsim run. A bench built by tcl_forces pauses at each
+# force or release after writing it to tb_force.txt; this applies it and runs
+# on to the stop time.
+RUN_TCL = """set ids [dict create]
+run {ms} ms
+while {{[file exists tb_force.txt]}} {{
+  set fh [open tb_force.txt r]; set req [split [string trim [read $fh]] " "]; close $fh
+  file delete tb_force.txt
+  set op [lindex $req 0]; set path [lindex $req 1]; set now [lindex $req end]
+  if {{[dict exists $ids $path]}} {{ remove_forces [dict get $ids $path]; dict unset ids $path }}
+  if {{$op eq "force"}} {{
+    if {{[catch {{add_force -radix [lindex $req 2] $path [lindex $req 3]}} id]}} {{
+      puts "Error: cannot force $path: $id"
+      quit
+    }}
+    dict set ids $path $id
+  }}
+  set left [expr {{{ms} * 1000000 - $now}}]
+  if {{$left <= 0}} break
+  run $left ns
+}}
+quit
+"""
 # An assertion or report of severity error: GHDL, then xsim
 ASSERT_ERROR = re.compile(r"\((?:assertion|report) error\)|^Error: (?!\[)", re.M)
 
@@ -296,10 +322,85 @@ class Ghdl:
         return run_process(cmd, rundir, 1800)
 
 
+def split_target(target):
+    """A force target as its name and its suffixes: ('.', field) or ('()', text)."""
+    m = re.match(r"\s*(\w+)", target)
+    if not m:
+        raise ValueError(f"cannot read the force target {target!r}")
+    name, rest, parts = m.group(1), target[m.end():].strip(), []
+    while rest:
+        if rest[0] == ".":
+            m = re.match(r"\.\s*(\w+)", rest)
+            parts.append((".", m.group(1)))
+            rest = rest[m.end():].strip()
+        elif rest[0] == "(":
+            depth = 0
+            for i, c in enumerate(rest):
+                depth += {"(": 1, ")": -1}.get(c, 0)
+                if depth == 0:
+                    break
+            parts.append(("()", rest[1:i].strip()))
+            rest = rest[i + 1:].strip()
+        else:
+            raise ValueError(f"cannot read the force target {target!r}")
+    return name, parts
+
+
+def xsim_path(bench, aliases, target):
+    """A VHDL string expression for the xsim object path of a force target:
+    instances joined by '/', a generate scope as an extended identifier
+    (\\gen(0)\\), record fields by '.', an index or a slice in parentheses with
+    ':' for the range, the index evaluated by the bench."""
+    name, parts = split_target(target)
+    if name in aliases:
+        ext = re.sub(r"\s+", "", aliases[name])
+        if ext.startswith(("^", ".", "@")):
+            raise ValueError(f"cannot map the external name {ext!r} to an xsim path")
+        scopes = [f"\\{s}\\" if "(" in s else s for s in ext.split(".")]
+        path = f"/{bench}/" + "/".join(scopes)
+    else:
+        path = f"/{bench}/{name}"
+
+    def image(expr):
+        return expr if re.fullmatch(r"\d+", expr) else f"\" & integer'image({expr}) & \""
+    for kind, text in parts:
+        if kind == ".":
+            path += "." + text
+        else:
+            path += "(" + ":".join(image(r.strip()) for r in re.split(r"\s+(?:downto|to)\s+", text)) + ")"
+    return f'"{path}"'
+
+
+def tcl_forces(text, bench):
+    """The bench with every force and release as a tb_force or tb_release call.
+    An alias is looked up at its latest declaration above the statement, which
+    may span lines."""
+    declared = [(m.start(), m.group(1), m.group(2)) for m in EXT_ALIAS.finditer(text)]
+    aliases, out, pos = {}, [], 0
+    for line in text.splitlines(keepends=True):
+        while declared and declared[0][0] < pos:
+            _, name, ext = declared.pop(0)
+            aliases[name] = ext
+        pos += len(line)
+        m = FORCE.match(line)
+        if m:
+            indent, target, op, value = m.groups()
+            path = xsim_path(bench, aliases, target)
+            if op == "release":
+                call = f"tb_release({path});"
+            else:
+                value = re.sub(r"^(?:in|out)\b\s*", "", value.strip())
+                call = f"tb_force({path}, {target.strip()}, {value});"
+            line = indent + call + line[m.end():]
+        out.append(line)
+    return "".join(out)
+
+
 class Xsim:
     name = "xsim"
 
     def __init__(self, bindir):
+        self.forcing = set()
         self.xvhdl = _vivado_tool(bindir, "xvhdl")
         self.xelab = _vivado_tool(bindir, "xelab")
         self.xsim = _vivado_tool(bindir, "xsim")
@@ -313,18 +414,19 @@ class Xsim:
         errors = [l for l in out.splitlines() if l.startswith("ERROR")]
         return rc == 0 and not errors, "\n".join(errors) or out[-3000:]
 
-    @staticmethod
-    def source(path, libdir):
-        """The file xsim compiles: a bench that forces a signal goes in as a copy with
-        each force and release replaced by tb_needs_force, which ends that test as
-        skipped. xsim cannot elaborate a bench that holds a force at all."""
+    def source(self, path, libdir):
+        """The file xsim compiles. xsim cannot elaborate a VHDL-2008 force, so a
+        bench that forces a signal goes in as a copy with each force and release
+        as a tb_force or tb_release call, which the run's Tcl script carries out."""
         path = path.resolve()
         text = path.read_text(encoding="utf-8")
         if not FORCE.search(text):
             return path
-        copy = libdir / "no_force" / path.name
+        bench = re.search(r"^entity\s+(\w+)\s+is", text, re.M | re.I).group(1)
+        self.forcing.add(bench)
+        copy = libdir / "tcl_force" / path.name
         copy.parent.mkdir(parents=True, exist_ok=True)
-        copy.write_text(FORCE.sub(lambda m: m.group(1) + "tb_needs_force;", text), encoding="utf-8")
+        copy.write_text(tcl_forces(text, bench), encoding="utf-8")
         return copy.resolve()
 
     def elaborate(self, units, libdir, jobs):
@@ -332,7 +434,9 @@ class Xsim:
         def one(unit):
             (bench, config), generics = unit
             snap = bench + (f"__{config}" if config else "")
-            cmd = [self.xelab, "--relax", "--debug", "off", "--nolog", "-L", "sim_lib", "-L", "lockstep",
+            # Tcl can force a signal only with debug access to it
+            debug = "typical" if bench in self.forcing else "off"
+            cmd = [self.xelab, "--relax", "--debug", debug, "--nolog", "-L", "sim_lib", "-L", "lockstep",
                    "-L", "neorv32", f"sim_lib.{bench}", "-s", snap]
             if generics:
                 # In a file: Windows' .bat wrapper would split name=value at the '='
@@ -360,15 +464,16 @@ class Xsim:
         else:
             link.symlink_to(libdir / "xsim.dir", target_is_directory=True)
         (rundir / "tb_select.txt").write_text(job.test, encoding="utf-8")
-        (rundir / "run.tcl").write_text(f"run {STOP_TIME_MS} ms\nquit\n", encoding="utf-8")
-        cmd = [self.xsim, job.unit, "--nolog", "--onfinish", "quit", "--onerror", "quit", "-tclbatch", "run.tcl"]
+        (rundir / "run.tcl").write_text(RUN_TCL.format(ms=STOP_TIME_MS), encoding="utf-8")
+        # No --onfinish quit: xsim would take std.env.stop for the end, and run.tcl quits
+        cmd = [self.xsim, job.unit, "--nolog", "--onerror", "quit", "-tclbatch", "run.tcl"]
         return run_process(cmd, rundir, 1800)
 
 
 def expected_outcome(sim, job, ok, msg):
     """A framework check passes when the test did what its name says it must."""
     kind = job.test.split("_")[1]
-    wanted = {"pass": True, "fail": False, "skip": None if sim.name == "xsim" else True}[kind]
+    wanted = {"pass": True, "fail": False}[kind]
     seen = {True: "passed", False: "failed", None: "was skipped"}[ok]
     if ok is wanted:
         return True, ""

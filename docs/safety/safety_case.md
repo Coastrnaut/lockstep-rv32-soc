@@ -16,8 +16,8 @@ systems. That claim is withdrawn. What exists today is:
 1. Hardware safety mechanisms in RTL: lockstep with a startup self-test,
    temporal diversity, ECC on the shared data RAM, a windowed watchdog, an
    explicit bus response contract and safety-gated CAN and UART pins
-2. Simulation evidence: 46 benches with 263 tests on GHDL, 191 of them
-   also on Vivado's xsim with identical output, directed fault
+2. Simulation evidence: 46 benches with 263 tests, each run on GHDL and
+   on Vivado's xsim with identical output, directed fault
    injection by forcing named signals, clocked simulation assertions and a
    mutation harness
 3. Illustrative hardware metrics, not derived from a target (section 4)

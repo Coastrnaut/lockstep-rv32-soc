@@ -53,12 +53,12 @@ Two NEORV32 RISC-V cores run the same program, core B two clocks behind core A. 
 ## 🛠️ Toolchain
 
 ### Simulation: GHDL and Vivado's xsim
-The benches are plain VHDL-2008 with no VUnit or OSVVM: `sim/tb/lib/tb_pkg.vhd` gives them a test runner and checks, and `sim/tb/lib/tb_random_pkg.vhd` constrained-random stimulus and functional coverage, both of which GHDL and Vivado's xsim compile. `sim/run.py` runs each test in its own simulation, on GHDL (mcode) and, when Vivado is installed, on xsim too, and then checks that every test run on both gave the same verdict and printed the same lines. xsim cannot simulate VHDL-2008 `force`, so a test that forces a signal is reported as skipped there and runs on GHDL. CI uses Ubuntu 24.04's GHDL 4.1; the evidence here was also produced with GHDL 6.0 and Vivado 2026.1 on Windows. `docs/verification/toolchain.md` has the details.
+The benches are plain VHDL-2008 with no VUnit or OSVVM: `sim/tb/lib/tb_pkg.vhd` gives them a test runner and checks, and `sim/tb/lib/tb_random_pkg.vhd` constrained-random stimulus and functional coverage, both of which GHDL and Vivado's xsim compile. `sim/run.py` runs each test in its own simulation, on GHDL (mcode) and, when Vivado is installed, on xsim too, and then checks that every test run on both gave the same verdict and printed the same lines. xsim cannot simulate VHDL-2008 `force`, so for xsim `run.py` turns each force into a Tcl `add_force`, applied while the bench pauses. CI uses Ubuntu 24.04's GHDL 4.1; the evidence here was also produced with GHDL 6.0 and Vivado 2026.1 on Windows. `docs/verification/toolchain.md` has the details.
 
 | Simulator | Tests (2026-11-13) |
 |-----------|--------------------|
 | GHDL | 271 passed of 271: 263 in 46 benches, 7 testing the framework itself, and the board image |
-| xsim | 199 passed, 72 skipped because they force a signal, 0 failed. All 192 tests run on both gave the same output |
+| xsim | 271 passed of 271, forces included (applied through Tcl). All 264 tests outside the framework check gave the same output as on GHDL |
 
 ### Formal, fault campaign, mutation and board checks
 A separate CI job proves properties of the comparator, the bus fabric and the RAM's store commit with YoWASP Yosys and SymbiYosys (`docs/verification/formal.md`). `sim/scripts/fault_campaign.py` runs a seeded fault campaign (`docs/verification/fault_campaign.md`). `sim/scripts/mutate.py` holds 439 RTL mutants. `fpga/arty_a7_100t/check_board.py` checks the board wrapper and image with GHDL in CI.

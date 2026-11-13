@@ -61,10 +61,39 @@ crash) fails it.
 
 `sim/tb/lib/tb_pkg_check.vhd` tests the framework itself: a test that passes,
 a failed `check_equal`, a failed `check`, an assertion of severity error, a
-test that never finishes, a test name the bench does not have, and a test that
-needs a force. Each test's name says what the runner must make of it
-(`expect_pass_`, `expect_fail_`, `expect_skip_`), and the runner counts it as
+test that never finishes, a test name the bench does not have, and a force
+that must hold until its release. Each test's name says what the runner must
+make of it (`expect_pass_`, `expect_fail_`), and the runner counts it as
 passed only when that is what happened, on each simulator.
+
+### Forces on xsim
+
+xsim cannot elaborate a VHDL-2008 `force` or `release`, but its Tcl
+`add_force` and `remove_forces` can force a signal. For xsim, `run.py`
+compiles a copy of each bench that forces (under `sim/out/xsim/<build>/lib/
+tcl_force/`) in which each `target <= force value;` becomes
+`tb_force("<path>", target, value);` and each release `tb_release("<path>");`:
+
+- The path is the target's xsim object path. `run.py` reads it from the
+  external-name alias the target names (the latest one declared above the
+  statement): instances joined by `/`, a generate scope as an extended
+  identifier (`\core_complex_gen(0)\`), a record field after `.`, and an index
+  or slice in parentheses with `:` for a range, which the bench evaluates.
+  A target that is not an alias is a signal of the bench itself.
+- `tb_force` (in `tb_pkg`, one overload per type, chosen by the target) writes
+  the path, the radix and the value to `tb_force.txt` with the time, and calls
+  `std.env.stop`. The run's Tcl script applies it with `add_force` (or
+  `remove_forces`), and runs on to the stop time.
+- A bench that forces is elaborated with `--debug typical`, which `add_force`
+  needs; the rest keep `--debug off`. The run has no `--onfinish quit`,
+  which would end it at the first `std.env.stop`.
+
+One difference remains: when the bench resumes after `std.env.stop`, the rest
+of the design has already run the time step's remaining delta cycles. A test
+that samples a signal in the same delta as a force, rather than on a clock
+edge, can read it a cycle late on xsim; `tb_soc_trace` records what it needs
+from a separate process for that reason. The comparison between the
+simulators finds any such test.
 
 ## Two simulators, one verdict
 
@@ -85,7 +114,9 @@ Found with Vivado 2026.1:
 
 | Limit | What the repository does about it |
 |-------|-----------------------------------|
-| VHDL-2008 `force` and `release` are "not supported yet for simulation" | `run.py` compiles a copy of each bench for xsim in which every force or release line is replaced by `tb_needs_force;`. A test that reaches one reports `TB SKIP` and the test is counted as skipped. Tests that never force still run |
+| VHDL-2008 `force` and `release` are "not supported yet for simulation" | Carried out through Tcl, as above |
+| `time'image` gives fs on GHDL and ps on xsim | `tb_pkg` prints times as whole ns (`time_image`), and benches do the same |
+| A 64-bit record field read through an external name in a process comes out wrong (NEORV32's trace `order`, at twice its value) | `tb_soc_trace` copies the record with a concurrent assignment, which xsim reads correctly |
 | External names cannot reach the ports of an instance | The benches reach internal signals instead (`w_core_a_in.ack` for a core's bus input, the register file's `rf_we` for its write port) |
 | An external name inline in a statement is not found | Every external name is an alias declared at the top of its process |
 | An external name through NEORV32's control record fails with the trace port on ("Cross Language external name") | No bench reaches through it |
@@ -98,8 +129,8 @@ a junction to the build's one.
 
 | Run | GHDL 6.0 (Windows) | xsim, Vivado 2026.1 |
 |-----|--------------------|---------------------|
-| Tests | 271 passed of 271 | 199 passed, 72 skipped (they need a force), 0 failed |
-| Comparison | | All 192 tests that ran on both gave the same verdict and the same `TB` lines |
+| Tests | 271 passed of 271 | 271 passed of 271 |
+| Comparison | | All 264 tests outside the framework check gave the same verdict and the same `TB` lines |
 
 The 271 tests are 263 in the 46 benches in `sim/tb`, 7 in the framework check
 and the board test. CI runs the GHDL half with GHDL 4.1 on Ubuntu 24.04.
