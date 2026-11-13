@@ -144,6 +144,21 @@ begin
         wait for 1 ns;
         check_equal(can_tx, '1', "CAN pin recessive");
         check_equal(actuator_safe, '1', "actuators safe");
+      elsif run("reset_puts_the_uart_at_mark_without_a_clock") then
+        -- HSI section 8.3: the clock stops in the middle of a byte, on a space
+        wait until uart_tx = '0' for c_timeout;
+        check_equal(uart_tx, '0', "byte started");
+        clk_stopped <= true;
+        wait for c_clk_period * 3;
+        check_equal(uart_tx, '0', "the byte stopped with the clock");
+
+        rst_n <= '0';
+        wait for 1 ns;
+        check_equal(uart_tx, '1', "UART at mark");
+        check_equal(can_tx, '1', "CAN pin recessive");
+        check_equal(actuator_safe, '1', "actuators safe");
+        wait for c_clk_period * 100;
+        check_equal(uart_tx, '1', "still at mark");
       elsif run("short_pulse_stops_a_uart_byte_and_restarts_the_program") then
         wait until uart_tx = '0' for c_timeout;
         check_equal(uart_tx, '0', "byte started");

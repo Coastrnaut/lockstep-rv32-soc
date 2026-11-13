@@ -231,6 +231,7 @@ begin
     alias core_a_rsp is << signal i_soc.i_cpu_master.xbus_rsp : bus_rsp_t >>;
     alias core_b_rsp is << signal i_soc.i_cpu_checker.xbus_rsp : bus_rsp_t >>;
 
+    alias can_busy         is << signal i_soc.w_can_busy : std_logic >>;
     alias comparator_state is << signal i_soc.i_lockstep_gate.r_current_state : t_safe_state >>;
     alias soc_bus_valid    is << signal i_soc.w_bus_valid : std_logic >>;
     alias soc_rst_n        is << signal i_soc.w_rst_n : std_logic >>;
@@ -258,6 +259,18 @@ begin
       end loop;
 
     end procedure wait_clocks;
+
+    -- A mismatch on core B's write data for two clocks, as in the other tests
+
+    procedure trip_lockstep is
+    begin
+
+      wait until rising_edge(clk);
+      core_b_data <= force x"FFFFFFFF";
+      wait_clocks(2);
+      core_b_data <= release;
+
+    end procedure trip_lockstep;
 
     procedure check_tripped (
       constant label_s : in string
@@ -360,6 +373,43 @@ begin
 
         wait for c_uart_bit_time * 2;
         check_equal(uart_starts, 0, "the byte never reached the UART");
+      elsif run("lockstep_trip_in_a_uart_byte_goes_to_mark_and_drops_the_byte") then
+        -- HSI section 8.3: mark from the edge that makes the actuators safe
+        cold_reset;
+        wait until uart_tx = '0' for c_timeout;
+        check_equal(uart_tx, '0', "the first byte started");
+        wait for c_uart_bit_time / 2;
+        trip_lockstep;
+        wait until actuator_safe = '1' for c_clk_period * 5;
+        wait for 1 ns;
+        check_equal(actuator_safe, '1', "actuators safe");
+        check_equal(uart_tx, '1', "UART at mark with the actuators");
+        check_equal(can_tx, '1', "CAN recessive with the actuators");
+        check_equal(nmi_fault, '1', "fault on the pin");
+
+        -- Long enough for the abandoned byte, and the next, to have come out
+        wait until uart_tx = '0' for c_uart_bit_time * 24;
+        check_equal(uart_tx, '1', "the UART stays at mark");
+        check_equal(uart_starts, 1, "only the start bit before the trip");
+      elsif run("lockstep_trip_in_a_can_frame_goes_recessive_and_drops_the_frame") then
+        cold_reset;
+        wait until can_tx = '0' for c_timeout;
+        check_equal(can_tx, '0', "the frame started");
+        wait for c_can_bit_time * 10.5;
+        trip_lockstep;
+        wait until actuator_safe = '1' for c_clk_period * 5;
+        wait for 1 ns;
+        check_equal(can_tx, '1', "CAN recessive with the actuators");
+        check_equal(uart_tx, '1', "UART at mark with the actuators");
+        wait_clocks(1);
+        check_equal(can_busy, '0', "the mailbox was cleared");
+
+        -- Long enough for the frame to be sent again if it could be. The other
+        -- node gives up on the cut-off frame at its stuff error.
+        wait until can_tx = '0' for c_can_bit_time * 200;
+        check_equal(can_tx, '1', "the CAN pin stays recessive");
+        check_equal(rx_done, 1, "one frame seen on the bus");
+        check(rx_frame.stuff_error, "and it was cut off");
       elsif run("illegal_comparator_state_is_reported_kept_by_a_watchdog_reset_and_cleared_cold") then
         -- HSI FLT-03 and FLT-04, for each one-bit corruption of 0x5A
         for bit_index in 0 to 7 loop

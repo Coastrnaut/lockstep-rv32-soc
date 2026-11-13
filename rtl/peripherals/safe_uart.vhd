@@ -79,7 +79,14 @@ architecture rtl of safe_uart is
   -- Holds a parity error, which w_error shows for only one clock
   signal r_error_irq : std_logic;
 
+  -- A reset or a closed safety gate: the pin goes to mark at once, and the byte
+  -- on the wire and any byte waiting behind it are thrown away
+  signal w_abort : std_logic;
+
 begin
+
+  w_abort <= '1' when (rst_n_i = '0' or bus_ok_i = '0') else
+             '0';
 
   -- ========================================================================
   -- 1. DATA REGISTERS WITH PARITY PROTECTION
@@ -95,6 +102,9 @@ begin
         r_tx_valid  <= '0';
         r_tx_data   <= (others => '0');
         r_tx_parity <= '0';
+      elsif (bus_ok_i = '0') then
+        -- The byte waiting to go is discarded, so it cannot go when the gate opens
+        r_tx_valid <= '0';
       elsif (bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel(0) = '1' and
              bus_i.addr = c_uart_tx_data_addr) then
         -- Write 8-bit payload to TX buffer
@@ -149,7 +159,8 @@ begin
   begin
 
     if rising_edge(clk_i) then
-      if (rst_n_i = '0') then
+      if (w_abort = '1') then
+        -- The byte on the wire is abandoned and cannot resume
         r_uart_st  <= uart_idle;
         r_baud_cnt <= (others => '0');
         r_tx_bits  <= (others => '0');
@@ -229,7 +240,11 @@ begin
   -- ========================================================================
   -- 4. UART TX OUTPUT
   -- ========================================================================
-  uart_tx_o <= r_tx_shift(0) when r_uart_st /= uart_idle else
+  -- Combinational in w_abort, so the pin goes to mark without waiting for a clock
+  -- edge, as the CAN pin goes recessive (HSI section 8.3). The reset asserts
+  -- asynchronously, so this holds with the system clock stopped too.
+  -- ========================================================================
+  uart_tx_o <= r_tx_shift(0) when (r_uart_st /= uart_idle and w_abort = '0') else
                '1';
 
   -- Busy flag for diagnostics
@@ -305,6 +320,12 @@ begin
         if (r_tx_valid = '1' and w_parity_ok = '0') then
           assert uart_error_o = '1'
             report "FORMAL FAIL: error not flagged on parity mismatch"
+            severity error;
+        end if;
+        -- Property: TX at mark while the gate is closed
+        if (bus_ok_i = '0') then
+          assert uart_tx_o = '1'
+            report "FORMAL FAIL: UART TX not at mark with the safety gate closed"
             severity error;
         end if;
         -- Property: TX only starts when parity valid

@@ -94,6 +94,13 @@ MUTANTS = [
     ("watchdog: timeout reported a clock early", WDT,
      [(r"r_counter >= C_WD_MAX_COUNT and r_timeout_latched = '0'\) then\s+w_late_violation",
        "r_counter >= C_WD_MAX_COUNT - 1 and r_timeout_latched = '0') then\n      w_late_violation")]),
+    # HSI section 8.3: mark at once, and nothing resumes
+    ("uart: pin not forced to mark on abort", UART,
+     [(r"uart_tx_o <= r_tx_shift\(0\) when \(r_uart_st /= uart_idle and w_abort = '0'\) else", "uart_tx_o <= r_tx_shift(0) when (r_uart_st /= uart_idle) else")]),
+    ("uart: pending byte kept while the gate is closed", UART,
+     [(r"elsif \(bus_ok_i = '0'\) then\s+-- The byte waiting to go is discarded, so it cannot go when the gate opens\s+r_tx_valid <= '0';", "elsif (false) then\n        null;")]),
+    ("uart: serializer ignores the gate", UART, [(r"if \(w_abort = '1'\) then\s+-- The byte on the wire", "if (rst_n_i = '0') then\n        -- The byte on the wire")]),
+    ("uart: abort ignores the reset", UART, [(r"w_abort <= '1' when \(rst_n_i = '0' or bus_ok_i = '0'\) else", "w_abort <= '1' when (bus_ok_i = '0') else")]),
     ("uart: safety gate ignored on write", UART,
      [(r"elsif \(bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel\(0\)",
        "elsif (bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel(0)")]),
