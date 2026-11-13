@@ -16,7 +16,8 @@ systems. That claim is withdrawn. What exists today is:
 1. Hardware safety mechanisms in RTL: lockstep with a startup self-test,
    temporal diversity, ECC on the shared data RAM, a windowed watchdog, an
    explicit bus response contract and safety-gated CAN and UART pins
-2. Simulation evidence: 40 VUnit benches with 226 tests, directed fault
+2. Simulation evidence: 46 benches with 263 tests on GHDL, 191 of them
+   also on Vivado's xsim with identical output, directed fault
    injection by forcing named signals, clocked simulation assertions and a
    mutation harness
 3. Illustrative hardware metrics, not derived from a target (section 4)
@@ -92,6 +93,12 @@ mutants for the new rules, for 412 in all. The targeted sample run on those
 changes is recorded in `docs/verification/milestone_0_1.md`. A full campaign is
 not in CI, because it takes hours of CPU. Rerun it before a release.
 
+On 2026-11-13, after the benches moved to `tb_pkg` and the redundant
+comparator was built, there are 439 mutants. Every new one (seven `dual:`
+and two `regmap:`) was run and killed, and a
+one-tenth sample of all of them (`mutate.py --shard 1/10`, 44 mutants)
+killed all 44.
+
 ---
 
 ## 4. HARDWARE METRICS (ILLUSTRATIVE)
@@ -115,7 +122,7 @@ expression to 1.525×10⁻¹¹/h. Section 7 lists what a real calculation needs.
 
 The replacement is `docs/safety/fmeda_inputs.csv`: 25 classified failure modes,
 each with its mechanism, diagnostic interval and evidence, checked by
-`sim/scripts/fmeda.py`. Its failure rates and coverages stay TBD until a target
+`tools/fmeda.py`. Its failure rates and coverages stay TBD until a target
 and a failure-rate source are chosen, and until then it computes no metric.
 
 ---
@@ -126,7 +133,7 @@ Bi-directional traceability from safety goals → FSR → TSR → RTL → test i
 maintained in `docs/safety/traceability_matrix.md`, and from each requirement
 of the implemented contract to its test and result in
 `docs/safety/evidence_index.md`. CI checks that every test, property and file
-these documents cite exists (`sim/scripts/check_evidence.py`). All RTL files carry VHDL
+these documents cite exists (`tools/check_evidence.py`). All RTL files carry VHDL
 traceability attributes (`requirement_id`), and every ID they name is defined
 in `docs/requirements/tsr_safety_core.md`.
 
@@ -139,7 +146,7 @@ in `docs/requirements/tsr_safety_core.md`.
 | Common cause failure in lockstep | Core B 2 clocks behind core A; ECC on the shared RAM | Shared read data from peripherals, decode, clock, power and reset have no independent check. Each is listed in `docs/safety/dependent_failure_analysis.md` |
 | Watchdog oscillator failure | None in the SoC | Independent board supervisor (HSI WD-04) |
 | Instruction fetch corruption | Lockstep detects it once it changes a bus access | No IMEM ECC; private CPU state stays latent until used (trace comparison sees it in verification builds only) |
-| Latent comparator fault after startup | Startup self-test only | Periodic proof test or redundant permit path (roadmap R2.4) |
+| Latent comparator fault after startup | Two comparators cross-checked every clock, each proved by the startup self-test (TSR_LOCKSTEP_045) | Both comparators share clock, reset and inputs (DF-15) |
 | Power supply transient | Watchdog on its own clock | Target-specific analysis |
 | Faults after the comparator | None: CAN, UART and the actuator-safe pin have no read-back | Fault campaign: 9 of 9 effective output-register faults undetected; FMEDA FM-19, FM-20, FM-22 |
 

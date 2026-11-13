@@ -10,6 +10,10 @@ test. Nothing here is formal, gate-level, FPGA or bench evidence.
 - **Landed:** on `main`, `e0d937f` to `8d36ca4`, pushed 2026-11-13
 - **Date:** 2026-11-12
 
+This is the record of that run, with the tools it used. The benches have
+since left VUnit and OSVVM for `sim/tb/lib/tb_pkg.vhd` and run on GHDL and
+Vivado's xsim; `docs/verification/toolchain.md` has the current flow.
+
 ## 1. Toolchain and pins
 
 | Item | Value |
@@ -101,12 +105,12 @@ from a clean `sim/vunit_out` and with no `*.cf` files left over:
 
 ```bash
 python sim/scripts/mutate.py --check        # 412 mutant(s), 0 problem(s)
-python sim/scripts/check_fixtures.py        # both fixtures match their generators
+python tools/check_fixtures.py        # both fixtures match their generators
 (cd sim && python run.py --lint)            # exit 0: ghdl -Wall analysis and --synth of every block
 (cd sim && python run.py --vsg)             # exit 0
 (cd sim && LOCKSTEP_NO_LINT=1 python run.py -p 16     --xunit-xml vunit_out/regression.xml > vunit_out/regression.log 2>&1)    # exit 0
-python sim/scripts/ci_report.py summary sim/vunit_out/regression.xml --log sim/vunit_out/regression.log
-python sim/scripts/ci_report.py manifest sim/vunit_out/tool_manifest.json
+python tools/ci_report.py summary sim/out/regression.xml --log sim/out/regression.log
+python tools/ci_report.py manifest sim/out/tool_manifest.json
 git diff --check                            # clean
 ```
 

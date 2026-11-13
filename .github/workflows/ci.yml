@@ -35,18 +35,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ghdl
 
-      - name: Install pinned VUnit & VSG
+      - name: Install pinned VSG
         run: |
           pip install -r sim/requirements.txt
 
       - name: Tool and submodule manifest
-        # Fails if GHDL, VUnit or VSG is missing
+        # Fails if GHDL or VSG is missing
         run: |
-          python sim/scripts/ci_report.py manifest sim/vunit_out/tool_manifest.json
+          python tools/ci_report.py manifest sim/out/tool_manifest.json
 
       - name: Generated fixtures match their generators
         run: |
-          python sim/scripts/check_fixtures.py
+          python tools/check_fixtures.py
 
       - name: Mutation patterns still apply to the RTL
         run: |
@@ -54,12 +54,12 @@ jobs:
 
       - name: Documents cite only evidence that exists
         run: |
-          python sim/scripts/check_evidence.py
+          python tools/check_evidence.py
 
       - name: FMEDA input table is well formed
         run: |
-          python sim/scripts/fmeda.py --selftest
-          python sim/scripts/fmeda.py --check
+          python tools/fmeda.py --selftest
+          python tools/fmeda.py --check
 
       - name: Semantic safety lint (ghdl -Wall, ghdl --synth)
         run: |
@@ -69,20 +69,21 @@ jobs:
         run: |
           cd sim && python run.py --vsg
 
-      - name: Compile and run full regression
-        # The lint gates ran above, so LOCKSTEP_NO_LINT skips running them twice
-        timeout-minutes: 8
+      - name: Compile and run full regression on GHDL
+        # The lint gates ran above, so LOCKSTEP_NO_LINT skips running them twice.
+        # CI has no Vivado; run.py adds xsim and compares the two when it finds one.
+        timeout-minutes: 10
         env:
           LOCKSTEP_NO_LINT: "1"
         run: |
-          cd sim && mkdir -p reports vunit_out
-          python run.py -p 4 --xunit-xml vunit_out/regression.xml 2>&1 | tee vunit_out/regression.log
+          cd sim && mkdir -p out
+          python run.py --sim ghdl -p 4 --xunit-xml out/regression.xml 2>&1 | tee out/regression.log
           exit "${PIPESTATUS[0]}"
 
       - name: Regression summary
         if: always()
         run: |
-          python sim/scripts/ci_report.py summary sim/vunit_out/regression.xml --log sim/vunit_out/regression.log
+          python tools/ci_report.py summary sim/out/regression.xml --log sim/out/regression.log
 
       - name: Upload regression evidence
         if: always()
@@ -90,8 +91,8 @@ jobs:
         with:
           name: regression-evidence
           path: |
-            sim/vunit_out/regression.xml
-            sim/vunit_out/tool_manifest.json
+            sim/out/regression.xml
+            sim/out/tool_manifest.json
           if-no-files-found: warn
 
       - name: Upload simulation logs on failure
@@ -100,9 +101,8 @@ jobs:
         with:
           name: sim-logs
           path: |
-            sim/vunit_out/regression.log
-            sim/vunit_out/test_output/**/*.txt
-            sim/vunit_out/test_output/**/*.html
+            sim/out/regression.log
+            sim/out/ghdl/**/output.txt
 
   formal:
     # Roadmap R2.1: proofs of the comparator, the bus fabric and the store
@@ -144,8 +144,8 @@ jobs:
 
   board:
     # Roadmap R3.1 and R3.3: the Arty A7 wrapper synthesises in GHDL, and the
-    # board image runs on the SoC. The Vivado build and the Vivado stage of
-    # run.py need a Vivado install, which CI does not have.
+    # board image runs on the SoC. The Vivado build, and run.py's xsim runs,
+    # need a Vivado install, which CI does not have.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

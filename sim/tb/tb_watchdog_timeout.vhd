@@ -1,0 +1,145 @@
+-- ============================================================================
+-- Testbench: Windowed Hardware Watchdog — Timeout Path
+-- ============================================================================
+-- Covers: counter exceeds C_WD_MAX_COUNT without kick -> sys_reset_o asserted
+-- Also covers: recovery after reset, status register contents
+-- ============================================================================
+
+library ieee;
+  use ieee.std_logic_1164.all;
+  use ieee.numeric_std.all;
+
+library lockstep;
+  use lockstep.package_soc_types.all;
+
+library work;
+  use work.tb_pkg.all;
+
+entity tb_watchdog_timeout is
+  generic (
+    g_test : string := ""
+  );
+end entity tb_watchdog_timeout;
+
+architecture rtl of tb_watchdog_timeout is
+
+  constant c_wd_clk_period : time := 10 ns;
+
+  signal wd_clk   : std_logic;
+  signal wd_rst_n : std_logic;
+  signal cpu_kick : std_logic;
+  signal sys_rst  : std_logic;
+  signal wd_stat  : std_logic_vector(7 downto 0);begin
+
+  p_clk : process is
+  begin
+
+    -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
+    wd_clk <= '0', '1' after c_wd_clk_period / 2;
+    wait for c_wd_clk_period;
+
+  end process p_clk;
+
+  i_wdt : entity lockstep.hardware_watchdog
+    port map (
+      wd_clk_i    => wd_clk,
+      rst_n_i     => wd_rst_n,
+      cpu_kick_i  => cpu_kick,
+      sys_reset_o => sys_rst,
+      wd_status_o => wd_stat
+
+    );p_stim : process is
+  begin
+
+    test_runner_setup(g_test);
+
+    cpu_kick <= '0';
+    wd_rst_n <= '0';
+
+    loop_dummy : for lv_dummy in 1 to 5 loop
+
+      wait until rising_edge(wd_clk);
+
+    end loop loop_dummy;
+
+    wd_rst_n <= '1';
+
+    loop_dummy_2 : for lv_dummy in 1 to 10 loop
+
+      wait until rising_edge(wd_clk);
+
+    end loop loop_dummy_2;
+
+    -- --- Test 1: Normal kick within window ---
+    -- C_WD_MIN=40000, C_WD_MAX=50000 — kick at ~45000 counts
+    loop_dummy_3 : for lv_dummy in 1 to 45000 loop
+
+      wait until rising_edge(wd_clk);
+
+    end loop loop_dummy_3;
+
+    cpu_kick <= '1';
+    wait until rising_edge(wd_clk);
+    cpu_kick <= '0';
+    check(sys_rst = '0', "kick within window: no reset");
+
+    -- --- Test 2: Timeout — counter exceeds C_WD_MAX_COUNT ---
+    -- Let counter run past 50000 without a kick -> reset asserted
+    loop_dummy_4 : for lv_dummy in 1 to 51000 loop
+
+      wait until rising_edge(wd_clk);
+
+    end loop loop_dummy_4;
+
+    check(sys_rst = '1', "timeout: sys_reset asserted after max count");
+
+    -- --- Test 3: Recovery after reset ---
+    cpu_kick <= '0';
+    wd_rst_n <= '0';
+
+    loop_dummy_5 : for lv_dummy in 1 to 5 loop
+
+      wait until rising_edge(wd_clk);
+
+    end loop loop_dummy_5;
+
+    wd_rst_n <= '1';
+
+    loop_dummy_6 : for lv_dummy in 1 to 10 loop
+
+      wait until rising_edge(wd_clk);
+
+    end loop loop_dummy_6;
+
+    check(sys_rst = '0', "recovery: sys_reset deasserted after reset");
+
+    -- --- Test 4: Kick exactly at C_WD_MIN_COUNT (boundary) ---
+    loop_dummy_7 : for lv_dummy in 1 to 40000 loop
+
+      wait until rising_edge(wd_clk);
+
+    end loop loop_dummy_7;
+
+    cpu_kick <= '1';
+    wait until rising_edge(wd_clk);
+    cpu_kick <= '0';
+    check(sys_rst = '0', "kick at MIN boundary: no reset");
+
+    -- --- Test 5: Kick just below C_WD_MIN_COUNT (too early) ---
+    loop_dummy_8 : for lv_dummy in 1 to 39999 loop
+
+      wait until rising_edge(wd_clk);
+
+    end loop loop_dummy_8;
+
+    cpu_kick <= '1';
+    wait until rising_edge(wd_clk);
+    cpu_kick <= '0';
+    wait until rising_edge(wd_clk);
+    check(sys_rst = '1', "kick below MIN: reset asserted");
+
+    test_runner_cleanup;
+
+  end process p_stim;
+
+end architecture rtl;

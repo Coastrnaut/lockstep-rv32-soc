@@ -11,7 +11,7 @@
 - **FSR** = Functional Safety Requirement
 - **TSR** = Technical Safety Requirement, defined in `docs/requirements/tsr_safety_core.md`
 - **RTL** = RTL Block
-- **TEST** = Named VUnit bench, or bench.test
+- **TEST** = Named bench in `sim/tb`, or bench.test
 - **STATUS** = **Sim** for implemented and checked in RTL simulation by the named
   test, **Formal** for proved by k-induction on GHDL's synthesis of the RTL
   (`docs/verification/formal.md`), **Planned** for not implemented or not yet
@@ -35,10 +35,12 @@ but no document defined.
 | SG-01 | FSR_MOTION_001 | TSR_RESET_001       | reset_synchronizer        | tb_reset_synchronizer | Sim |
 | SG-01 | FSR_MOTION_001 | TSR_RESET_001       | top_automotive_soc        | tb_soc_reset_network, tb_soc_reset_timing | Sim |
 | SG-01 | FSR_MOTION_001 | TSR_UART_001        | safe_uart                 | tb_uart_abort, tb_soc_lockstep.lockstep_trip_in_a_uart_byte_goes_to_mark_and_drops_the_byte, tb_soc_reset_network.reset_puts_the_uart_at_mark_without_a_clock | Sim |
-| SG-01 | FSR_MOTION_002 | TSR_WD_001          | hardware_watchdog         | tb_watchdog, tb_watchdog_window, tb_watchdog_timeout, tb_watchdog_osvvm | Sim |
+| SG-01 | FSR_MOTION_002 | TSR_WD_001          | hardware_watchdog         | tb_watchdog, tb_watchdog_window, tb_watchdog_timeout, tb_watchdog_kick_sequence | Sim |
 | SG-01 | FSR_MOTION_002 | TSR_WD_001          | watchdog_supervisor       | Watchdog clock loss with an independent board supervisor (HSI WD-04) | Planned |
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_001    | lockstep_comparator       | tb_lockstep_comparator, tb_lockstep_fault_inject | Sim |
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_044    | comparator_self_test      | tb_comparator_self_test | Sim |
+| SG-01 | FSR_MOTION_001 | TSR_LOCKSTEP_045    | dual_comparator           | tb_dual_comparator, tb_dual_comparator_faults | Sim |
+| SG-01 | FSR_MOTION_001 | TSR_LOCKSTEP_045    | top_automotive_soc        | tb_soc_lockstep.comparator_b_stuck_at_no_error_also_fails_the_self_test, tb_soc_lockstep.a_comparator_that_stops_comparing_after_startup_is_found_at_the_first_divergence | Sim |
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_043    | temporal_diversity        | tb_temporal_diversity | Sim |
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_043    | top_automotive_soc        | tb_soc_lockstep | Sim |
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_001    | top_automotive_soc        | tb_soc_trace.a_register_only_divergence_is_caught_by_the_trace_and_not_by_the_bus (diagnostic, verification build only) | Sim |
@@ -76,11 +78,11 @@ or countable facts instead.
 
 | Evidence | Status | Notes |
 |----------|--------|-------|
-| RTL implementation | 15 first-party RTL files: 13 blocks, the core wrapper and the top level | Boot ROM ECC, Flash and the comparator register block are not built (HSI section 5) |
-| Testbenches | 43 benches, 249 tests, all passing | VUnit with GHDL mcode. Counts and tools per run: `docs/verification/milestone_0_1.md` |
+| RTL implementation | 16 first-party RTL files: 14 blocks, the core wrapper and the top level | Boot ROM ECC, Flash and the comparator register block are not built (HSI section 5) |
+| Testbenches | 46 benches, 263 tests, all passing on GHDL; the 191 that need no force also pass on Vivado's xsim, with the same output | Plain VHDL-2008 on `sim/tb/lib/tb_pkg.vhd`. Tools and counts: `docs/verification/toolchain.md` |
 | Fault injection | Directed forces in the benches, and a seeded campaign at 15 RTL sites | `docs/verification/fault_campaign.md`. No netlist-level injection |
 | Structural coverage | Not measured | GHDL in this flow does not report statement, branch or toggle coverage |
-| Mutation | 430 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
+| Mutation | 439 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
 | Assertions | Clocked simulation assertions in the RTL | Checked in simulation |
 | Formal | 3 SymbiYosys jobs, 21 properties, all proved by k-induction, every cover reached, each job rejects a deliberately broken RTL | Comparator, bus fabric, and compare before the RAM commit. CDC, self-test and CPUs are not covered (`docs/verification/formal.md`) |
 | Traceability tags | Every first-party RTL file carries a `requirement_id` that this matrix resolves | |
@@ -110,7 +112,7 @@ or countable facts instead.
 ### Technical Safety Requirements
 Defined in `docs/requirements/tsr_safety_core.md`:
 `TSR_LOCKSTEP_001` (alias `TSR_LOCKSTEP_042`, retired), `TSR_LOCKSTEP_043`,
-`TSR_LOCKSTEP_044`, `TSR_BUS_001`, `TSR_ECC_001`, `TSR_WD_001`,
+`TSR_LOCKSTEP_044`, `TSR_LOCKSTEP_045`, `TSR_BUS_001`, `TSR_ECC_001`, `TSR_WD_001`,
 `TSR_RESET_001`, `TSR_SAFETY_GATE_001`, `TSR_SAFETY_GATE_002`,
 `TSR_SAFETY_GATE_003`, `TSR_TYPES_001`, `TSR_UART_001`, `TSR_CAN_001`,
 `TSR_CAN_002`.

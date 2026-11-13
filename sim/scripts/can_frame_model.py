@@ -3,7 +3,7 @@
 
 Written from the Bosch CAN 2.0 specification, separately from the RTL, so that
 the benches have bits the RTL had no part in producing. The golden wire strings
-in sim/testbenches/tb_can.vhd come from this script, and it writes the frames for
+in sim/tb/tb_can.vhd come from this script, and it writes the frames for
 tb_can_receive as sim/generated/can_rx_frames_pkg.vhd:
 
     python sim/scripts/can_frame_model.py

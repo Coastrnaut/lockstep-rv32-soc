@@ -5,9 +5,8 @@
 *.vo
 *.cm
 
-# VUnit
-vunit_out/
-vunit_log/
+# Regression output (sim/run.py)
+sim/out/
 
 # Vivado
 *.log
@@ -24,13 +23,6 @@ vunit_log/
 *.bin
 *.ltx
 
-# QuestaSim
-*.wav
-*.ucf
-*.f
-*.do
-*.wlf
-*.ust
 
 # General
 *.pyc
@@ -49,3 +41,5 @@ fpga/*/build/
 
 # Fault campaign output (sim/scripts/fault_campaign.py)
 sim/campaign/
+/sim/out
+/sim/vunit_out

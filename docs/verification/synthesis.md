@@ -29,14 +29,19 @@ equivalent-register removal.
 ## What the design does about it
 
 - The RTL marks the protected registers for Vivado:
-  `fsm_encoding = "none"` and `dont_touch = "true"` on the comparator's
+  `fsm_encoding = "none"` and `dont_touch = "true"` on each comparator's
   `r_current_state`, `dont_touch` on its `r_fault_latched`, and both on the
   self-test's `r_result`. `dont_touch` stops the merging, and `fsm_encoding`
   the re-encoding.
 - The FPGA build (`fpga/arty_a7_100t/build.tcl`) also turns FSM extraction off
   for the whole design. It then counts the flip-flops after synthesis and again
-  after routing: 8 for the comparator state, 1 for its latch, 8 for the
-  self-test result. A smaller count stops the build.
+  after routing: 8 for each comparator's state, 1 for each one's latch, 1 for
+  the disagreement latch, 8 for the self-test result. A smaller count stops
+  the build.
+- The two comparators in `dual_comparator` are identical logic on the same
+  inputs, which equivalent-register removal would merge into one. Their
+  instances carry `keep_hierarchy` and `dont_touch`, and the build checks that
+  both still have their own state after routing (16 flip-flops).
 
 ## Status and limits
 

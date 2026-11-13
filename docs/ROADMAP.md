@@ -10,6 +10,11 @@ Where each item stands on `main` (November 13, 2026). "Done" means the
 acceptance below is met in simulation or formal proof; nothing has run on
 hardware yet.
 
+The repository evaluation, the baseline commands and the one-shot prompt
+further down describe the baseline as reviewed, when the benches ran on VUnit
+and OSVVM and lived in `sim/testbenches`. They are kept as written. The
+current flow is in `docs/verification/toolchain.md`.
+
 | ID | Status | Record |
 | --- | --- | --- |
 | R0.1–R0.3 | Done | `docs/verification/milestone_0_1.md` |
@@ -17,8 +22,8 @@ hardware yet.
 | R2.1 | Done: comparator, fabric and store commit proved, with covers and broken-RTL checks; CDC not modelled | `docs/verification/formal.md` |
 | R2.2 | Partial: trace comparison of both cores, with a register-only divergence caught. Sail/Spike pilot and ACT4 blocked: no RISC-V compiler or reference model installed | `docs/verification/trace.md` |
 | R2.3 | Done for single RTL faults at 15 sites; no burst or netlist faults | `docs/verification/fault_campaign.md` |
-| R2.4 | Done as an evaluation: maximum diagnostic interval set, a latent compare failure and a reporting-path failure shown, a stuck sequencer reported. The redundant comparator it recommends is costed, not built | `docs/verification/diagnostics.md` |
-| R3.1 | Partial: board wrapper, constraints, build script with safety-structure checks, GHDL check in CI, and the SoC analysed, elaborated and simulated in Vivado's xsim. No build: the Artix-7 devices are installed, but Vivado reports an Alveo licence and `get_parts` then lists no parts (`docs/verification/toolchain.md`) | `fpga/arty_a7_100t/README.md`, `docs/verification/synthesis.md` |
+| R2.4 | Done as an evaluation: maximum diagnostic interval set, a latent compare failure and a reporting-path failure shown, a stuck sequencer reported. The redundant comparator it recommends is built: two comparators cross-checked every clock, with a latched disagreement (`rtl/safety/dual_comparator.vhd`) | `docs/verification/diagnostics.md` |
+| R3.1 | Partial: board wrapper, constraints, build script with safety-structure checks, GHDL check in CI, and every bench run on Vivado's xsim as well as GHDL, with the two compared test by test. No build: the Artix-7 devices are installed, but Vivado reports an Alveo licence and `get_parts` then lists no parts (`docs/verification/toolchain.md`) | `fpga/arty_a7_100t/README.md`, `docs/verification/synthesis.md` |
 | R3.2 | Blocked: needs the board and a bench | |
 | R3.3 | Partial: a generated board image (Python) checked in simulation; no pinned compiler or ELF flow | `fpga/arty_a7_100t/README.md` |
 | R4.1 | Done in simulation: protection map, writeback, patrol with a measured bound, first-fault telemetry on an independent read-only port | `docs/verification/memory_protection.md`, HSI 8.5 |

@@ -1,7 +1,7 @@
 # Comparator diagnostics (roadmap R2.4)
 
 How the lockstep comparator's own faults are found, how long one can stay
-hidden, and what it would cost to shorten that.
+hidden, and how the redundant comparator, now built, shortens that.
 
 ## What the startup self-test covers
 
@@ -73,9 +73,44 @@ licence offers no parts), so these are not Vivado numbers. They are close enough
 **Recommendation:** B, keeping the startup test for both comparators. It
 removes the dependence on the duty cycle at a cost of under 1% of a 100T
 device's LUTs, and does not interrupt the application. A suits an item that
-already restarts on a schedule. Neither is built yet. B changes the top level,
-the self-test and the formal harnesses, so it is the next step once the
-target's area budget is known.
+already restarts on a schedule. **B is built.**
+
+## The redundant comparator (built)
+
+`rtl/safety/dual_comparator.vhd` holds two `lockstep_comparator`s on the same
+two buses, each with its own state and fault latch, marked `keep_hierarchy`
+and `dont_touch` so synthesis cannot merge them. Every clock it compares their
+decisions (system bus, fault, safe state, bus valid). A difference closes the
+bus in that cycle and is latched in `r_differ`, which is fed back to both
+comparators as a fatal fault and clears only on reset (TSR_LOCKSTEP_045).
+
+| View | Combination | Why |
+|------|-------------|-----|
+| SoC: fault, registered fault, safe state | Either comparator, or a disagreement | One trip is enough to go safe |
+| SoC: bus valid, system bus | Both open, and no disagreement | Either one can close the bus |
+| Self-test: fault, registered fault, safe state | Both comparators | A lane passes the startup test only if it trips both |
+| Self-test: bus valid | Either open, or a disagreement | The gate passes the test only if both close it |
+
+So the startup test proves each comparator, and the SoC's view needs only
+one of them to act. A comparator stuck at "no error" after startup is found
+at the first divergence: the other trips, the two disagree, and the request
+does not leave. A comparator stuck tripped is found at once, with no
+divergence needed. A dangerous failure now needs both comparators to fail
+the same way; their shared clock, reset and inputs are listed as DF-15.
+
+| Demonstration | Test |
+|---------------|------|
+| Matched requests pass; any lane trips both in the same cycle; the fatal input trips both | `tb_dual_comparator` (all three tests run on GHDL and xsim) |
+| Either comparator stuck at "no error" keeps the divergence off the bus and latches the disagreement | `tb_dual_comparator_faults.comparator_b_stuck_at_no_error_is_found_at_the_first_divergence`, `tb_dual_comparator_faults.comparator_a_stuck_at_no_error_cannot_open_the_bus` |
+| A comparator stuck tripped is found with no divergence | `tb_dual_comparator_faults.a_comparator_stuck_tripped_is_found_with_no_divergence` |
+| A trip only one comparator sees on an idle cycle is reported | `tb_dual_comparator_faults.a_trip_only_comparator_b_sees_on_an_idle_cycle_is_reported_at_once` |
+| Only a reset clears a disagreement | `tb_dual_comparator_faults.only_a_reset_clears_a_disagreement` |
+| In the SoC: the self-test fails on either comparator stuck, and a comparator that stops comparing after startup is found at the first divergence | `tb_soc_lockstep.comparator_b_stuck_at_no_error_also_fails_the_self_test`, `tb_soc_lockstep.comparator_b_stuck_tripped_fails_the_self_test`, `tb_soc_lockstep.a_comparator_that_stops_comparing_after_startup_is_found_at_the_first_divergence` |
+
+Seven `dual:` mutants in `sim/scripts/mutate.py` (no cross-check, the bus
+taken from comparator A alone, the disagreement not latched or not fed back,
+and the combinations of each view) are all killed. The formal harnesses still
+prove one comparator; the pair is checked in simulation.
 
 ## Not covered
 

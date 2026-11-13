@@ -4,7 +4,7 @@
     python sim/scripts/fault_campaign.py --per-site 8 --seed 1    generate, run, report
     python sim/scripts/fault_campaign.py --report-only             report the last run again
 
-Each trial is one run of sim/testbenches/tb_fault_campaign.vhd: the simulation
+Each trial is one run of sim/tb/tb_fault_campaign.vhd: the simulation
 firmware on the SoC, with one fault injected at a site, bit, time and duration
 drawn from the seed. Trial 0 has no fault and is the reference. The manifest
 (manifest.csv) and the results (results.csv, report.md) go to
@@ -33,6 +33,7 @@ import csv
 import os
 import random
 import re
+import shutil
 import statistics
 import subprocess
 import sys
@@ -139,8 +140,12 @@ def classify(r, ref, site):
 
 
 def run(manifest, jobs):
+    # Results from an earlier campaign or regression must not stand in for this one's
+    for old in (SIM / "out" / "ghdl" / "sim").glob("tb_fault_campaign.*"):
+        shutil.rmtree(old, ignore_errors=True)
     env = dict(os.environ, LOCKSTEP_CAMPAIGN=str(manifest), LOCKSTEP_NO_LINT="1")
-    cmd = [sys.executable, "run.py", "sim_lib.tb_fault_campaign.*", "-p", str(jobs)]
+    # GHDL: the faults are VHDL-2008 forces, which xsim cannot simulate
+    cmd = [sys.executable, "run.py", "--sim", "ghdl", "tb_fault_campaign.*", "-p", str(jobs)]
     r = subprocess.run(cmd, cwd=SIM, env=env, capture_output=True, text=True)
     (manifest.parent / "run.log").write_text(r.stdout + r.stderr, encoding="utf-8")
     return r.returncode
@@ -148,7 +153,7 @@ def run(manifest, jobs):
 
 def report(folder, manifest_rows, seed):
     results = {}
-    for path in (SIM / "vunit_out" / "test_output").glob("sim_lib.tb_fault_campaign.*/fault_result.txt"):
+    for path in (SIM / "out" / "ghdl" / "sim").glob("tb_fault_campaign.*/fault_result.txt"):
         r = parse(path)
         results[r["trial"]] = r
     if 0 not in results:

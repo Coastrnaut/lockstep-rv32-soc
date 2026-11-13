@@ -11,7 +11,7 @@ diagnostic. The bus comparator stays the authority for side effects.
 - `top_automotive_soc` has a generic `g_trace_en`, false by default, that
   turns on NEORV32's execution trace port in both cores. Nothing else changes,
   and the synthesised design is unchanged with it off.
-- `sim/testbenches/trace_compare.vhd` keeps each of core A's retirements in a
+- `sim/tb/lib/trace_compare.vhd` keeps each of core A's retirements in a
   short queue until core B, two clocks behind, retires the instruction with the
   same order number, then compares them field by field. It normalises the
   fields first: register write data counts only for a register other than x0,
@@ -22,7 +22,7 @@ diagnostic. The bus comparator stays the authority for side effects.
 
 ## Results
 
-`sim/testbenches/tb_soc_trace.vhd`, GHDL 6.0, on the simulation firmware:
+`sim/tb/tb_soc_trace.vhd`, GHDL 6.0, on the simulation firmware:
 
 | Test | Result |
 |------|--------|

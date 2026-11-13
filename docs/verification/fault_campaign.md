@@ -16,7 +16,7 @@ python sim/scripts/fault_campaign.py --per-site 12 --seed 2026     # about 2 min
    `sim/campaign/<name>/manifest.csv` keeps every draw, so a campaign repeats
    exactly.
 2. **Trials.** Each trial is one configuration of
-   `sim/testbenches/tb_fault_campaign.vhd`. The bench runs the simulation
+   `sim/tb/tb_fault_campaign.vhd`. The bench runs the simulation
    firmware for 700 µs with both trace ports on. Where a site is only used at
    times, such as a register write, an instruction fetch, a store, a bus
    response or a RAM access, the fault waits for its next use, so it meets

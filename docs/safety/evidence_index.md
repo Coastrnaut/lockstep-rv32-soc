@@ -4,7 +4,7 @@ Document ID: EVI-LRS-001, revision 0.1 (roadmap milestone 5, item 4).
 
 From each requirement of the implemented contract (HSI-LRS-001 revision 1.2,
 section 8) to where it is implemented, the test or property that checks it,
-and what was measured. `sim/scripts/check_evidence.py` runs in CI and fails if
+and what was measured. `tools/check_evidence.py` runs in CI and fails if
 any bench, test, property or file named here or in the other safety and
 verification documents stops existing.
 
@@ -20,24 +20,24 @@ reason. **Out of scope** outside the profile this release covers.
 
 | Req | Implementation | Test or property | Result | Status |
 |-----|----------------|------------------|--------|--------|
-| BUS-01 Acceptance edge | `rtl/safety_blocks/lockstep_comparator.vhd` | CMP-01; `tb_soc_lockstep.store_the_cores_disagree_on_never_reaches_a_peripheral` | Proved; passes | Formal, Sim |
-| BUS-02 Selected slave | `rtl/safety_blocks/soc_bus_fabric.vhd` | BUS-P5, BUS-P6; `tb_soc_bus_fabric.each_mapped_target_answers_once_with_its_own_data` | Proved; passes | Formal, Sim |
+| BUS-01 Acceptance edge | `rtl/safety/lockstep_comparator.vhd` | CMP-01; `tb_soc_lockstep.store_the_cores_disagree_on_never_reaches_a_peripheral` | Proved; passes | Formal, Sim |
+| BUS-02 Selected slave | `rtl/safety/soc_bus_fabric.vhd` | BUS-P5, BUS-P6; `tb_soc_bus_fabric.each_mapped_target_answers_once_with_its_own_data` | Proved; passes | Formal, Sim |
 | BUS-03 Response edge | `soc_bus_fabric` | BUS-P4; `tb_soc_fabric.ram_256k.probes_get_one_response_each_and_unmapped_ones_change_nothing` | Proved; one response per request through the cores | Formal, Sim |
 | BUS-04 ACK/ERR exclusive | `soc_bus_fabric` | BUS-P1, BUS-P3, BUS-P4 | Proved | Formal |
-| BUS-05 Write commit | `rtl/safety_blocks/ecc_data_ram.vhd` | COM-01 to COM-04 | Proved with the real comparator in front of the RAM | Formal |
+| BUS-05 Write commit | `rtl/safety/ecc_data_ram.vhd` | COM-01 to COM-04 | Proved with the real comparator in front of the RAM | Formal |
 | BUS-06 Byte lanes | `ecc_data_ram` | `tb_ecc_data_ram.byte_enables_merge_into_either_half`; `tb_soc_bus_fabric.back_to_back_requests_to_both_halves_of_a_word_each_land_once` | Passes | Sim |
 | BUS-07 Register directions | Peripherals, `ecc_data_ram` | BUS-P6; `tb_ecc_data_ram.registers_read_only_at_their_own_address_and_ignore_writes` | Proved; passes | Formal, Sim |
 | BUS-08 Address holes answer ERR | `soc_bus_fabric` | BUS-P5; `tb_soc_bus_fabric.unmapped_addresses_answer_one_err_with_no_data_and_no_store`; `tb_soc_fabric.ram_32k.probes_get_one_response_each_and_unmapped_ones_change_nothing` | Proved; 11 ERRs on 256 KB, 13 on 32 KB | Formal, Sim |
 | BUS-09 Fatal RAM response | `soc_bus_fabric`, `ecc_data_ram` | BUS-P5; `tb_soc_ecc.double_bit_error_on_a_load_answers_err_and_traps_without_writeback`; `tb_soc_ecc.double_bit_error_on_a_byte_store_answers_err_and_leaves_the_word` | Proved; passes | Formal, Sim |
 | BUS-10 Denied requests | `lockstep_comparator` | `tb_soc_bus_fabric.double_bit_error_answers_err_and_the_next_request_is_denied` | Passes | Sim |
 | BUS-11 Warm reset | `soc_bus_fabric`, `ecc_data_ram` | BUS-P2; `tb_soc_fabric.warm_reset_drops_a_store_caught_between_acceptance_and_commit` | Proved; passes | Formal, Sim |
-| BUS-12 CYC, CTI and TAG unused | `rtl/lockstep_core.vhd` leaves them open | Review | | Waived: unused by design; the comparator does not compare them |
+| BUS-12 CYC, CTI and TAG unused | `rtl/soc/lockstep_core.vhd` leaves them open | Review | | Waived: unused by design; the comparator does not compare them |
 
 ## Fault indication (HSI 8.2)
 
 | Req | Implementation | Test or property | Result | Status |
 |-----|----------------|------------------|--------|--------|
-| FLT-01 Registered fault pin | `rtl/top_automotive_soc.vhd`, `lockstep_comparator` | CMP-06, CMP-11; `tb_soc_ecc.two_stuck_bits_lock_the_soc_within_the_ftti` | Proved; pin at the edge after detection | Formal, Sim |
+| FLT-01 Registered fault pin | `rtl/soc/top_automotive_soc.vhd`, `lockstep_comparator` | CMP-06, CMP-11; `tb_soc_ecc.two_stuck_bits_lock_the_soc_within_the_ftti` | Proved; pin at the edge after detection | Formal, Sim |
 | FLT-02 MEI maskable only | Top level | `tb_soc_lockstep.lockstep_trip_with_mie_and_meie_masked_is_contained_without_an_interrupt` | Contained with interrupts masked | Sim |
 | FLT-03 Illegal comparator state | `lockstep_comparator` | CMP-04, CMP-05, CMP-09; `tb_lockstep_illegal_state.every_one_bit_corruption_of_the_healthy_state_is_a_held_fault` | Proved; every one-bit upset of 0x5A reported at once | Formal, Sim |
 | FLT-04 Sticky until cold reset | `lockstep_comparator` | CMP-08; `tb_soc_watchdog.watchdog_reset_leaves_a_lockstep_fault_latched` | Proved; passes | Formal, Sim |
@@ -76,10 +76,12 @@ reason. **Out of scope** outside the profile this release covers.
 | Claim | Evidence | Result | Status |
 |-------|----------|--------|--------|
 | Core B is core A two clocks late | `tb_soc_lockstep.core_b_is_core_a_two_clocks_ago_all_through_the_program`, `tb_soc_trace.core_b_retires_exactly_what_core_a_retired_all_through_the_program` | Every input and every retirement | Sim |
-| Every compared lane trips the comparator, in the cycle it differs; a matched request passes unchanged | `tb_lockstep_comparator`: OSVVM coverage over all 70 lanes and read or write by matched or not | Covered in 136 vectors, every vector checked | Sim |
-| A second simulator agrees | `docs/verification/toolchain.md`: every file analysed and the SoC elaborated by Vivado; `tb_soc_smoke` and `tb_board_firmware` on xsim and GHDL | Same results on both | Sim (local; CI has no Vivado) |
+| Every compared lane trips the comparator, in the cycle it differs; a matched request passes unchanged | `tb_lockstep_comparator`: `tb_random_pkg` coverage over all 70 lanes and read or write by matched or not | Covered in 136 vectors, every vector checked | Sim |
+| A second simulator agrees | `docs/verification/toolchain.md`: every bench on GHDL and Vivado's xsim, compared test by test | 192 tests run on both with the same verdict and output; 72 need a force and run on GHDL only | Sim (local; CI has no Vivado) |
 | A common glitch in one cycle is caught | `tb_soc_lockstep.same_glitch_on_both_core_buses_is_caught`, `tb_soc_lockstep.same_glitch_on_both_cores_read_data_is_caught` | Passes | Sim |
-| Comparator latent faults are tested | `tb_comparator_self_test`, `tb_soc_lockstep.comparator_stuck_at_no_error_keeps_the_soc_safe` | At startup only | Sim; periodic test Pending (R2.4, FMEDA FM-07) |
+| Comparator latent faults are tested | `tb_comparator_self_test`, `tb_soc_lockstep.comparator_stuck_at_no_error_keeps_the_soc_safe`, `tb_soc_lockstep.comparator_b_stuck_at_no_error_also_fails_the_self_test` | Both comparators at startup | Sim |
+| A comparator that fails after startup cannot let a divergence out | `tb_dual_comparator`, `tb_dual_comparator_faults`, `tb_soc_lockstep.a_comparator_that_stops_comparing_after_startup_is_found_at_the_first_divergence` | Found at the first divergence, which stays off the bus; the disagreement holds until reset | Sim (R2.4, FMEDA FM-07) |
+| Every register answers ACK and every hole ERR | `tb_register_map` (generated from `tools/register_map.py`) | Every byte of every register; every other word in the peripheral window | Sim |
 | Register-only divergence | `tb_soc_trace.a_register_only_divergence_is_caught_by_the_trace_and_not_by_the_bus` | Caught by the trace, in verification builds only | Sim |
 | Fault campaign coverage | `docs/verification/fault_campaign.md`, seed 2026 | 67 of 88 effective faults detected in time; the rest are after the comparator or in the reset synchroniser | Sim; sample, not an FMEDA coverage figure |
 | Test strength | `sim/scripts/mutate.py`, 430 mutants | Every mutant of R4.1 and R4.3 killed; full campaign before a release | Sim |
@@ -90,7 +92,7 @@ reason. **Out of scope** outside the profile this release covers.
 | Item | Document | Status |
 |------|----------|--------|
 | Item definition, safety goals, FTTI, external safe state | | Pending: needs an integrator and a target (milestone 5, item 1) |
-| FMEDA inputs | `docs/safety/fmeda_inputs.csv`, checked by `sim/scripts/fmeda.py` | 25 failure modes classified; failure rates and coverages TBD, so no metric is computed |
+| FMEDA inputs | `docs/safety/fmeda_inputs.csv`, checked by `tools/fmeda.py` | 25 failure modes classified; failure rates and coverages TBD, so no metric is computed |
 | Earlier FMEDA figures | `docs/safety/fmeda_analysis.md` | Illustrative, kept for provenance; superseded by the input table |
 | Dependent-failure analysis | `docs/safety/dependent_failure_analysis.md` | Checklist with 17 initiators; 5 open, 4 target-dependent; not independently reviewed |
 | Tool confidence | `docs/safety/dependent_failure_analysis.md` | Arguments listed; no tool qualified |

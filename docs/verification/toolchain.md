@@ -1,84 +1,124 @@
-# Toolchain: Vivado, VSG and the September notes
+# Toolchain: GHDL, Vivado's xsim and VSG
 
-What changed in the local flow when Vivado 2026.1 became available on the
-development machine, how style is checked, and what became of each idea in
-the September 2026 development notes.
+How the regression runs, on which simulators, how style is checked, and what
+became of each idea in the September 2026 development notes.
 
 ## Running the regression
 
 ```bash
 cd sim
-python run.py              # GHDL lint, VSG, the Vivado stage (if Vivado is installed), every GHDL test
-python run.py --lint       # GHDL lint only, then exit
-python run.py --vsg        # VSG only, then exit
-python run.py --vsg-fix    # let VSG fix what it can, then exit
-python run.py --vivado     # the Vivado stage only, then exit
+python run.py               # GHDL lint, VSG, then every test on every simulator found
+python run.py --sim ghdl    # GHDL only (what CI runs)
+python run.py --sim xsim    # Vivado's xsim only
+python run.py --sim both    # both, and fail if Vivado is missing
+python run.py --list        # every bench.test, without running anything
+python run.py "tb_soc_ecc.*"            # one bench; patterns take * and ?
+python run.py --lint        # GHDL lint only, then exit
+python run.py --vsg         # VSG only, then exit
+python run.py --vsg-fix     # let VSG fix what it can, then exit
+python run.py --compile     # analyse and elaborate only
+python run.py -p 4 -x out/regression.xml   # four jobs, with an xUnit report
 ```
 
-Every bench in `sim/testbenches` runs without being named: VUnit finds them by
-the wildcard `sim/testbenches/*.vhd`. `LOCKSTEP_NO_VIVADO=1` skips the Vivado
-stage, and `LOCKSTEP_NO_LINT=1` skips the lint gates and the Vivado stage, as
-the mutation and fault campaigns do. CI has no Vivado, so it runs the GHDL
-regression, `--lint` and `--vsg` as separate steps.
+`--sim auto`, the default, runs GHDL and, when Vivado is found, xsim as well.
+`LOCKSTEP_NO_LINT=1` skips the lint gates, as the mutation and fault campaigns
+do. Every bench `sim/tb/tb_*.vhd` runs without being named: `run.py` reads
+each bench's tests from its `run("...")` calls.
 
-GHDL is found from `VUNIT_GHDL_PATH`, then on Windows
+GHDL is found from `GHDL_BIN` (the folder holding `ghdl`), then on Windows
 `C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin` or `C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin`,
-then `ghdl` on PATH, which is how CI finds it on Linux.
+then `ghdl` on PATH, which is how CI finds it on Linux. Vivado is found from
+`VIVADO_BIN` (its bin folder), `XILINX_VIVADO`, `xvhdl` on PATH, then the
+default install folders (`C:\AMDDesignTools\*\Vivado\bin`, `C:\Xilinx\...`,
+`/tools/Xilinx/...`, `/opt/Xilinx/...`).
 
-## The Vivado stage
+## The test framework
 
-`sim/scripts/vivado_sim.py`, run by `run.py` when it finds Vivado
-(`VIVADO_BIN`, `XILINX_VIVADO`, PATH, or the default install folders).
+The benches use no VUnit or OSVVM. They are plain VHDL-2008 on two packages
+in `sim/tb/lib`, which both GHDL and xsim compile:
 
-| Step | What | Result, Vivado 2026.1 |
-|------|------|-----------------------|
-| Analysis | Every file the GHDL regression compiles, in VUnit's order, through `xvhdl --2008`: our RTL and benches, NEORV32, VUnit and OSVVM | 199 files, no errors |
-| Elaboration | `xelab` of the SoC with both NEORV32 cores, the core wrapper and every first-party RTL entity | 15 entities, no errors |
-| Simulation | The plain-VHDL benches on xsim and on GHDL, each of which must print its pass line | `tb_soc_smoke`: the simulation firmware prints `0M0KD` and sends its CAN frame, on both. `tb_board_firmware`: the board image prints `LS0...`, on both |
+| Package | What it gives a bench |
+|---------|-----------------------|
+| `tb_pkg` | The runner: `test_runner_setup(g_test)`, `while test_suite loop`, `if run("name")`, `test_runner_cleanup`, `test_runner_watchdog(t)`; checks `check`, `check_equal` (std_logic, vectors, integers, booleans), `fail`; `info` for log lines |
+| `tb_random_pkg` | `t_random`, a Park-Miller generator (Schrage's method) that draws the same numbers on every simulator, seeded from a string; and a coverage store: bins, crosses, `sample`, `is_covered`, `rand_uncovered` for coverage-driven stimulus |
 
-The whole default run, lint to the last GHDL test, takes about 2 minutes on
-16 cores.
-
-### Why xsim does not run the VUnit benches
-
-VUnit has no xsim interface, in 4.7.1 or in any 5.0 pre-release up to
-5.0.0.dev15. Driving xsim directly does not help: `xvhdl` analyses all of
-VUnit's VHDL, but `xelab`'s static elaboration of any bench stops inside
-VUnit's own pointer package:
+Each simulation runs one test. `run.py` names it with the generic `g_test`
+(on xsim through an option file, since the `.bat` wrapper splits `k=v` at the
+`=`), and the bench also reads `tb_select.txt` in its working folder. A bench
+prints one line per event:
 
 ```
-ERROR: [VRFC 10-3457] index -2147483648 is out of array constraint 0 to 65537 for target 'st'
-  [vunit/vhdl/data_types/src/integer_vector_ptr_pkg-body-2002p.vhd:209]
+TB INFO <time> <message>
+TB PASS <test>
+TB FAIL <time> <message>
+TB SKIP <test>: <reason>
 ```
 
-VUnit's VHDL-93 variant of the package fails the same way (line 163), and
-`-O0`, `--mt off` and `--debug typical` change nothing. The note's
-`vunit_vivado` package does not change this either: it imports a Vivado
-project's IP compile order into VUnit 5, and does not run xsim. So the 249
-VUnit tests run on GHDL, and xsim runs what does not need VUnit. Porting the
-benches off VUnit to run them on xsim would lose VUnit's runner, checks and
-reports for a second simulator that a licensed simulator (below) would give
-anyway.
+A test passes only on its `TB PASS` line. Any `TB FAIL`, any assertion of
+severity error (GHDL runs with `--assert-level=error`; on xsim `run.py`
+looks for `Error:` lines), or no result line at all (a watchdog timeout or a
+crash) fails it.
 
-### Synthesis
+`sim/tb/lib/tb_pkg_check.vhd` tests the framework itself: a test that passes,
+a failed `check_equal`, a failed `check`, an assertion of severity error, a
+test that never finishes, a test name the bench does not have, and a test that
+needs a force. Each test's name says what the runner must make of it
+(`expect_pass_`, `expect_fail_`, `expect_skip_`), and the runner counts it as
+passed only when that is what happened, on each simulator.
 
-`fpga/arty_a7_100t/build.py` still cannot build: this Vivado reports "A valid
-Vivado Design Suite ALVEO license has been detected", and `get_parts` then
-returns no parts at all, although `data/installed.devices` lists the xc7a100t.
-The licence is the user's to change. `build.py` now says so, instead of
-reporting the Tcl source it had mistaken for check results.
+## Two simulators, one verdict
+
+When both simulators run, `run.py` compares them test by test. Every test run
+on both must end with the same verdict and print the same `TB` lines (times
+included). A difference fails the run, and `--no-compare` turns the check
+off. The framework check build is left out of the comparison, since its tests
+fail on purpose.
+
+Output goes to `sim/out/<simulator>/<build>/<bench>.<test>/output.txt`. The
+three builds are `check` (the framework), `sim` (every bench in `sim/tb`,
+with the simulation firmware image) and `board` (`tb_board_firmware` with the
+Arty board image).
+
+### What xsim cannot do
+
+Found with Vivado 2026.1:
+
+| Limit | What the repository does about it |
+|-------|-----------------------------------|
+| VHDL-2008 `force` and `release` are "not supported yet for simulation" | `run.py` compiles a copy of each bench for xsim in which every force or release line is replaced by `tb_needs_force;`. A test that reaches one reports `TB SKIP` and the test is counted as skipped. Tests that never force still run |
+| External names cannot reach the ports of an instance | The benches reach internal signals instead (`w_core_a_in.ack` for a core's bus input, the register file's `rf_we` for its write port) |
+| An external name inline in a statement is not found | Every external name is an alias declared at the top of its process |
+| An external name through NEORV32's control record fails with the trace port on ("Cross Language external name") | No bench reaches through it |
+| VUnit does not run on xsim, in 4.7.1 or 5.0 up to 5.0.0.dev15; its pointer package stops `xelab` (`VRFC 10-3457`) | The reason the benches left VUnit |
+
+xsim also needs its `xsim.dir` in the working folder: each test's folder gets
+a junction to the build's one.
+
+### Results, 2026-11-13
+
+| Run | GHDL 6.0 (Windows) | xsim, Vivado 2026.1 |
+|-----|--------------------|---------------------|
+| Tests | 271 passed of 271 | 199 passed, 72 skipped (they need a force), 0 failed |
+| Comparison | | All 192 tests that ran on both gave the same verdict and the same `TB` lines |
+
+The 271 tests are 263 in the 46 benches in `sim/tb`, 7 in the framework check
+and the board test. CI runs the GHDL half with GHDL 4.1 on Ubuntu 24.04.
+
+## Synthesis
+
+`fpga/arty_a7_100t/build.py` still cannot build here: this Vivado reports "A
+valid Vivado Design Suite ALVEO license has been detected", and `get_parts`
+then returns no parts at all, although `data/installed.devices` lists the
+xc7a100t. The licence is the user's to change. `build.py` says so, instead of
+reporting the Tcl source as check results.
 
 ## Style: every VSG rule
 
 `sim/vsg_config.yaml` lists all 972 rules of VSG 3.35.0 with all of their
-options, generated by `sim/scripts/vsg_config.py` from the installed VSG
+options, generated by `tools/vsg_config.py` from the installed VSG
 (`vsg -oc`), not from the documentation. 941 rules are on at severity Error;
-`check_fixtures.py` regenerates the file in CI, so a rule cannot be turned off
-by hand. Before, the file named options that VSG does not have
-(`must_have_when_others`, `allow_variables_in_clocked_processes`,
-`wait_for_statement: forbidden` and more) and left all 78 of VSG's
-default-off rules off, including the port and signal naming rules it claimed
-to enforce.
+`tools/check_fixtures.py` regenerates the file in CI, so a rule cannot be
+turned off by hand.
 
 The 31 rules that stay off, each with its reason in the YAML:
 
@@ -91,53 +131,48 @@ Turned on and configured to the repository's conventions: `c_`/`st_`
 constants, `w_`/`r_` signals, `v_` variables, `t_` types, `g_` generics,
 `p_` processes, `i_` instances, `a_` aliases, `_i`/`_o` ports, `loop_`
 labels and `lv_` loop variables, entity instantiation, `rising_edge` clocks
-and the architecture names in use. Getting the code there took labels on
-every loop, `lv_` loop variables, 20 instance renames, 17 constant renames,
-inline comments moved above their lines, and long lines wrapped. NEORV32's
-own generic names in `rtl/lockstep_core.vhd` sit between
-`vsg_off generic_map_601` and `vsg_on`.
+and the architecture names in use. NEORV32's own generic names in
+`rtl/soc/lockstep_core.vhd` sit between `vsg_off generic_map_601` and
+`vsg_on`.
 
-`sim/vsg_testbench.yaml` turns three more rules off for the VUnit benches
-only: signal and alias prefixes (a bench signal carries the name of the port
-it drives, and an alias the name of the RTL signal it reaches) and process
-length (VUnit runs every test from one process).
+`sim/vsg_testbench.yaml` turns three more rules off for the benches in
+`sim/tb` and `sim/tb/lib` only: alias prefixes (an alias carries the name of
+the RTL signal it reaches), signal prefixes (a bench signal carries the name
+of the port it drives) and process length (every test of a bench runs from
+one process).
 
 ## The comparator bench
 
-The suggested OSVVM bench was already in the repository as
-`tb_lockstep_comparator`, a working version of the note's snippet. The snippet
-as written does not compile: its clock process is cut off, its bus records
-lack `sel`, it uses the old `ICov` API and `work.package_soc_types`, and it
-multiplies a time by a real.
+The September notes suggested an OSVVM constrained-random comparator bench.
+It was already in the repository as `tb_lockstep_comparator`, and checking it
+turned up a real fault: its checks were OSVVM `AffirmIfEqual` calls whose
+errors never reached the test result, so with its expectation inverted it
+still passed. It now:
 
-Checking the bench turned up a real fault in it: its checks were OSVVM
-`AffirmIfEqual` calls, whose errors VUnit never sees. With its expectation
-inverted, it still passed. It now:
-
-- checks with VUnit's `check_equal`, and fails when an expectation is wrong
-  (inverted on purpose, it failed at once on lane 69);
-- flips one random lane of the 70 compared bits, chosen by OSVVM's coverage
-  model among the lanes not yet hit, instead of bit 0 of the address or data;
+- checks with `tb_pkg`'s `check_equal`, and fails when an expectation is
+  wrong (inverted on purpose, it failed at once on lane 69);
+- flips one random lane of the 70 compared bits, chosen by `tb_random_pkg`'s
+  coverage model among the lanes not yet hit;
 - runs until every lane has been flipped and every combination of read or
-  write with a matched or mismatched copy has run: 136 vectors with the fixed
-  seed;
+  write with a matched or mismatched copy has run;
 - checks, for every vector, the system bus and the fault output in the same
   cycle, the latched safe state and closed bus after the edge, and recovery
-  after a cold reset.
+  after a cold reset;
+- runs on both simulators with the same random stream and the same output.
 
 ## The September notes
 
 | Note | Outcome |
 |------|---------|
-| GHDL path on Windows, then Linux | Done: both Windows folders, then PATH |
-| CI passing `--test` | Not present: CI calls `run.py` with VUnit's own arguments |
-| Run every bench by wildcard | Already so: `sim/testbenches/*.vhd` |
-| `--lint` and `--vsg` that run one gate and exit, in CI | Already so; `--vsg-fix` and `--vivado` added the same way |
-| `vunit_vivado` in place of `vunit.vivado`, xsim when Vivado is found | Vivado is used when found, through the stage above. `vunit_vivado` is not used: it needs VUnit 5 and imports IP; it does not run xsim |
-| VUnit on xsim | Not possible: see above |
+| GHDL path on Windows, then Linux | Done: `GHDL_BIN`, both Windows folders, then PATH |
+| CI passing `--test` | Not present: CI calls `run.py --sim ghdl` with patterns and `-x` |
+| Run every bench by wildcard | Done: every `sim/tb/tb_*.vhd` |
+| `--lint` and `--vsg` that run one gate and exit, in CI | Done; `--vsg-fix`, `--list` and `--compile` the same way |
+| `vunit_vivado` in place of `vunit.vivado`, xsim when Vivado is found | xsim runs every bench when Vivado is found, with no VUnit: `vunit_vivado` needs VUnit 5, imports IP and does not run xsim |
+| VUnit on xsim | Not possible, so the benches left VUnit for `tb_pkg` |
 | VSG: every rule group and every rule | Done: every rule defined, 941 on, the rest off for the reasons above |
-| OSVVM constrained-random comparator bench | Already present; its checks now count, and it covers every lane |
+| OSVVM constrained-random comparator bench | Already present; its checks now count, it covers every lane, and it runs on both simulators |
 | XDC for the Arty LEDs and UART | Already present: `fpga/arty_a7_100t/arty_a7_100t.xdc`, now also with the diagnostic port on Pmod JB |
-| IP Integrator for memory | Not used: the RAM is inferred from RTL, so the same source simulates in GHDL and synthesises without generated IP |
-| Questa Tcl flow for sign-off | Not written: VUnit already drives Questa. `run.py` now keeps a `VUNIT_SIMULATOR` that is set, such as `modelsim`, instead of forcing GHDL. Untested here, with no Questa licence |
+| IP Integrator for memory | Not used: the RAM is inferred from RTL, so the same source simulates and synthesises without generated IP |
+| Questa Tcl flow for sign-off | Not written; untested here, with no Questa licence. `run.py`'s `Ghdl` and `Xsim` classes show the three steps (compile, elaborate, run) a third simulator would need |
 | `hermes setup --portal` | Unrelated to this repository; not acted on |

@@ -13,7 +13,7 @@ shows that each property's antecedent can happen. Results go to
 sim/formal/build/results.json and results.md; the build directory is not
 tracked.
 
-Tools: GHDL from VUNIT_GHDL_PATH, the Windows install or PATH, as sim/run.py
+Tools: GHDL found as sim/run.py finds it (GHDL_BIN, the Windows installs, PATH), as sim/run.py
 picks it. Yosys and SymbiYosys natively (yosys, sby) if both are on PATH, else
 YoWASP (pip install -r sim/requirements-formal.txt). z3 from PATH or from the
 Python environment's bin directory.
@@ -38,11 +38,11 @@ ROOT = Path(__file__).resolve().parents[2]
 FORMAL = ROOT / "sim" / "formal"
 BUILD = FORMAL / "build"
 
-PKG = "config/package_soc_types.vhd"
+PKG = "rtl/pkg/package_soc_types.vhd"
 VHDL = {
-    "lockstep_comparator": [PKG, "rtl/safety_blocks/lockstep_comparator.vhd"],
-    "soc_bus_fabric": [PKG, "rtl/safety_blocks/soc_bus_fabric.vhd"],
-    "ecc_data_ram": [PKG, "rtl/safety_blocks/hamming_ecc_wrapper.vhd", "rtl/safety_blocks/ecc_data_ram.vhd"],
+    "lockstep_comparator": [PKG, "rtl/safety/lockstep_comparator.vhd"],
+    "soc_bus_fabric": [PKG, "rtl/safety/soc_bus_fabric.vhd"],
+    "ecc_data_ram": [PKG, "rtl/safety/hamming_ecc_wrapper.vhd", "rtl/safety/ecc_data_ram.vhd"],
 }
 
 # name, sby file, the Verilog it needs (entity, generics, free memory), and a
@@ -54,7 +54,7 @@ JOBS = [
         "netlists": [("lockstep_comparator", {}, False)],
         # Revision 1.0's fault output: the latch only, so an illegal state that
         # closes the bus is not reported in that cycle
-        "broken": ("rtl/safety_blocks/lockstep_comparator.vhd",
+        "broken": ("rtl/safety/lockstep_comparator.vhd",
                    r"w_fault_reg <= '1' when \(r_fault_latched = '1' or r_current_state /= ST_SYSTEM_OK\) else",
                    "w_fault_reg <= '1' when (r_fault_latched = '1') else"),
     },
@@ -62,31 +62,27 @@ JOBS = [
         "name": "soc_bus_fabric",
         "sby": "soc_bus_fabric.sby",
         "netlists": [("soc_bus_fabric", {}, False)],
-        "broken": ("rtl/safety_blocks/soc_bus_fabric.vhd",
+        "broken": ("rtl/safety/soc_bus_fabric.vhd",
                    r"\(r_target\(c_tgt_none\) = '1' or \(", "(false or ("),
     },
     {
         "name": "store_commit",
         "sby": "store_commit.sby",
         "netlists": [("lockstep_comparator", {}, False), ("ecc_data_ram", {"g_addr_bits": 4}, True)],
-        "broken": ("rtl/safety_blocks/ecc_data_ram.vhd",
+        "broken": ("rtl/safety/ecc_data_ram.vhd",
                    r"w_commit <= '1' when \(r_write = '1' and bus_ok_i = '1' and",
                    "w_commit <= '1' when (r_write = '1' and"),
     },
 ]
 
-WINDOWS_GHDL = Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin\ghdl.exe")
 
 
 def find_ghdl():
-    explicit = os.environ.get("VUNIT_GHDL_PATH")
-    if explicit:
-        for name in ("ghdl", "ghdl.exe"):
-            if (Path(explicit) / name).is_file():
-                return str(Path(explicit) / name)
-    if os.name == "nt" and WINDOWS_GHDL.is_file():
-        return str(WINDOWS_GHDL)
-    return shutil.which("ghdl")
+    """The GHDL that sim/run.py uses: GHDL_BIN, the Windows installs, then PATH."""
+    sys.path.insert(0, str(ROOT / "sim"))
+    from run import find_ghdl as run_find_ghdl  # noqa: E402
+
+    return run_find_ghdl()
 
 
 def tool_env():
@@ -178,7 +174,7 @@ def broken_copy(job):
     rel, pattern, replacement = job["broken"]
     copy = BUILD / ("src_broken_" + job["name"])
     shutil.rmtree(copy, ignore_errors=True)
-    for part in ("config", "rtl/safety_blocks"):
+    for part in ("rtl/pkg", "rtl/safety"):
         shutil.copytree(ROOT / part, copy / part)
     path = copy / rel
     text = path.read_text(encoding="utf-8").replace("\r\n", "\n")

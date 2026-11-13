@@ -6,10 +6,10 @@ profile at the board boundary.
 
 ## One register table
 
-`sim/scripts/register_map.py` holds every address the RTL decodes. It writes
-the address constants in `config/package_soc_types.vhd` (between the GENERATED
+`tools/register_map.py` holds every address the RTL decodes. It writes
+the address constants in `rtl/pkg/package_soc_types.vhd` (between the GENERATED
 markers), the C header `sw/include/lockstep_soc_regs.h`, and the reference page
-`docs/safety/register_map.md`. `sim/scripts/check_fixtures.py`, which CI runs,
+`docs/safety/register_map.md`. `tools/check_fixtures.py`, which CI runs,
 regenerates all three and fails if any differs, so an address cannot change in
 one place only.
 
@@ -20,7 +20,7 @@ wrong table entry fails them rather than moving with them.
 
 ## One core wrapper
 
-`rtl/lockstep_core.vhd` is one NEORV32 as the SoC uses it. Both cores are
+`rtl/soc/lockstep_core.vhd` is one NEORV32 as the SoC uses it. Both cores are
 instances of it, so the 160-line NEORV32 configuration is written once and the
 two cores cannot be configured apart. Before, the top level had two copies of
 it, about 270 lines each, and a diagnostic process (`p_diag_monitor`) whose

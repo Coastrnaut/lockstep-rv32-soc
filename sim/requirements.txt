@@ -1,4 +1,4 @@
-# Python tools for sim/run.py and its lint gates, pinned for reproducible runs.
+# Python tools for sim/run.py's lint gates, pinned for reproducible runs. The
+# runner itself needs only the standard library.
 # CI installs exactly these: pip install -r sim/requirements.txt
-vunit_hdl==4.7.1
 vsg==3.35.0

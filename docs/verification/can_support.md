@@ -3,7 +3,7 @@
 What the CAN node (`automotive_can_controller` with `can_receiver`) supports,
 against Classical CAN as ISO 11898-1 defines it, and how far each item has been
 checked. Every check so far is in simulation, against models written in this
-repository (`sim/scripts/can_frame_model.py`, `sim/testbenches/can_test_node.vhd`).
+repository (`sim/scripts/can_frame_model.py`, `sim/tb/lib/can_test_node.vhd`).
 No real transceiver, independent controller or analyser has been on the bus
 yet, so nothing here is a measured bound on hardware.
 

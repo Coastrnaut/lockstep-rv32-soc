@@ -6,7 +6,7 @@ source text. A strong regression fails at least one test for every mutant. A
 mutant that survives marks a rule that no test checks. Code coverage cannot
 show that: it says a line ran, not that any test would notice the line change.
 
-The campaign copies config/, rtl/ and sim/ to a temporary directory and never
+The campaign copies rtl/ and sim/ to a temporary directory and never
 touches the working tree. The unmutated copy must pass first. Each mutant then
 meets the quick benches, and the full regression only if it gets past them.
 The lint gates are off (LOCKSTEP_NO_LINT), because a mutant can be legal VHDL
@@ -53,21 +53,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-LOCK = "rtl/safety_blocks/lockstep_comparator.vhd"
-WDT = "rtl/safety_blocks/hardware_watchdog.vhd"
+LOCK = "rtl/safety/lockstep_comparator.vhd"
+WDT = "rtl/safety/hardware_watchdog.vhd"
 UART = "rtl/peripherals/safe_uart.vhd"
 CAN = "rtl/peripherals/automotive_can_controller.vhd"
-PKG = "config/package_soc_types.vhd"
-TOP = "rtl/top_automotive_soc.vhd"
-RST = "rtl/safety_blocks/reset_synchronizer.vhd"
-ECC = "rtl/safety_blocks/hamming_ecc_wrapper.vhd"
-RAM = "rtl/safety_blocks/ecc_data_ram.vhd"
-SKEW = "rtl/safety_blocks/temporal_diversity.vhd"
-TEST = "rtl/safety_blocks/comparator_self_test.vhd"
+PKG = "rtl/pkg/package_soc_types.vhd"
+TOP = "rtl/soc/top_automotive_soc.vhd"
+RST = "rtl/safety/reset_synchronizer.vhd"
+ECC = "rtl/safety/hamming_ecc_wrapper.vhd"
+RAM = "rtl/safety/ecc_data_ram.vhd"
+SKEW = "rtl/safety/temporal_diversity.vhd"
+TEST = "rtl/safety/comparator_self_test.vhd"
 RX = "rtl/peripherals/can_receiver.vhd"
-SUP = "rtl/safety_blocks/watchdog_supervisor.vhd"
-FAB = "rtl/safety_blocks/soc_bus_fabric.vhd"
-TEL = "rtl/safety_blocks/telemetry_port.vhd"
+SUP = "rtl/safety/watchdog_supervisor.vhd"
+FAB = "rtl/safety/soc_bus_fabric.vhd"
+TEL = "rtl/safety/telemetry_port.vhd"
+DUAL = "rtl/safety/dual_comparator.vhd"
 
 CLEAR = r"w_tx_clear <= '1' when \(rst_n_i = '0' or bus_ok_i = '0' or r_bus_off = '1'\) else"
 
@@ -366,6 +367,17 @@ MUTANTS = [
     ("bus: RAM decoded half size", FAB, [(r"addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\) =\s+c_ram_base_addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\)", "addr(c_addr_width - 1 downto g_ram_addr_bits + 2) = c_ram_base_addr(c_addr_width - 1 downto g_ram_addr_bits + 2)")]),
     ("bus: RAM decoded double size", FAB, [(r"addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\) =\s+c_ram_base_addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\)", "addr(c_addr_width - 1 downto g_ram_addr_bits + 4) = c_ram_base_addr(c_addr_width - 1 downto g_ram_addr_bits + 4)")]),
     ("bus: target not captured with the request", FAB, [(r"r_target  <= decode\(bus_i\.addr\);", "null;")]),
+    # --- The register table against the fabric (tb_register_map)
+    ("regmap: a table register the fabric does not decode", FAB, [(r"c_ecc_first_time_addr,\s+", "")]),
+    ("regmap: the fabric decodes a word the table does not have", FAB, [(r"c_uart_parity_addr\n  \);", "c_uart_parity_addr,\n    x\"4000040C\"\n  );")]),
+    # --- The redundant comparator pair (roadmap R2.4)
+    ("dual: no cross-check", DUAL, [(r"w_differ <= '1' when \(", "w_differ <= '0' when (")]),
+    ("dual: the bus is comparator A's alone", DUAL, [(r"sys_bus_o <= w_bus_a when \(w_differ = '0' and r_differ = '0'\) else", "sys_bus_o <= w_bus_a when (true) else")]),
+    ("dual: comparator B's trip is not a fault", DUAL, [(r"nmi_fault_o  <= w_nmi_a or w_nmi_b or w_differ or r_differ;", "nmi_fault_o  <= w_nmi_a or w_differ or r_differ;")]),
+    ("dual: the disagreement is not held", DUAL, [(r"elsif \(w_differ = '1'\) then\s+r_differ <= '1';", "else\\n        r_differ <= w_differ;")]),
+    ("dual: a disagreement does not trip the comparators", DUAL, [(r"w_fatal <= fatal_fault_i or r_differ;", "w_fatal <= fatal_fault_i;")]),
+    ("dual: the self-test sees either comparator", DUAL, [(r"test_nmi_fault_o  <= w_nmi_a and w_nmi_b;", "test_nmi_fault_o  <= w_nmi_a or w_nmi_b;")]),
+    ("dual: the bus is open if comparator A opens it", DUAL, [(r"bus_valid_o  <= w_valid_a and w_valid_b and not r_differ;", "bus_valid_o  <= w_valid_a and not r_differ;")]),
     # --- Repair, patrol and first-fault telemetry (roadmap R4.1)
     ("repair: a load does not write back its corrected word", RAM, [(r"w_repair <= \(r_read and w_sbe_found\) or w_scrub_sbe;", "w_repair <= w_scrub_sbe;")]),
     ("repair: the patrol does not write back", RAM, [(r"w_repair <= \(r_read and w_sbe_found\) or w_scrub_sbe;", "w_repair <= r_read and w_sbe_found;")]),
@@ -647,8 +659,8 @@ SLOW_BENCHES = {
     "tb_soc_reset_network", "tb_soc_uart_error", "tb_soc_watchdog",
 }
 
-# run.py does not use sim/OsvvmLibraries, which is most of the tree
-COPY_IGNORE = shutil.ignore_patterns(".git", "vunit_out", "__pycache__", "*.cf", "OsvvmLibraries")
+# Build output stays behind
+COPY_IGNORE = shutil.ignore_patterns(".git", "out", "build", "__pycache__", "*.cf")
 
 LABELS = {
     "killed": "killed ",
@@ -749,7 +761,8 @@ def kill_tree(proc):
 def regression(repo, patterns, args):
     """Run run.py in the copy. Returns its exit code, or None on a timeout, and its output."""
     env = dict(os.environ, LOCKSTEP_NO_LINT="1", PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
-    cmd = [sys.executable, "run.py", "--no-color", "-p", str(args.jobs), *patterns]
+    # GHDL only: it runs every test, including the fault-injection ones xsim cannot
+    cmd = [sys.executable, "run.py", "--sim", "ghdl", "-p", str(args.jobs), *patterns]
     # In a group of its own, so that a timeout can stop the simulators too
     group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
              else {"start_new_session": True})
@@ -775,7 +788,7 @@ def classify(rc, out):
         return "compile", error[-130:]
     if rc == 0:
         return "survive", ""
-    failed = sorted(set(re.findall(r"^fail\s+sim_lib\.(\w+)\.(\S+)", out, re.M)))
+    failed = sorted(set(re.findall(r"^fail\s+ghdl\s+(\w+)\.(\S+)", out, re.M)))
     if failed:
         benches = sorted({bench for bench, _ in failed})
         return "killed", f"{len(failed)} test(s) in {', '.join(benches)}"
@@ -792,9 +805,7 @@ def attempt(repo, fast, args):
 
 
 def clean_build(repo):
-    shutil.rmtree(repo / "sim" / "vunit_out", ignore_errors=True)
-    for library in (repo / "sim").glob("*.cf"):
-        library.unlink()
+    shutil.rmtree(repo / "sim" / "out", ignore_errors=True)
 
 
 def run_mutant(repo, rel, subs, fast, args):
@@ -816,8 +827,8 @@ def run_mutant(repo, rel, subs, fast, args):
 
 
 def fast_patterns(repo):
-    benches = sorted(path.stem for path in (repo / "sim" / "testbenches").glob("tb_*.vhd"))
-    return [f"sim_lib.{bench}.*" for bench in benches if bench not in SLOW_BENCHES]
+    benches = sorted(path.stem for path in (repo / "sim" / "tb").glob("tb_*.vhd"))
+    return [f"{bench}.*" for bench in benches if bench not in SLOW_BENCHES]
 
 
 def baseline(repo, args):
@@ -851,7 +862,7 @@ def main():
     results, missed = Counter(), []
     with tempfile.TemporaryDirectory(prefix="lockstep_mutate_", ignore_cleanup_errors=True) as tmp:
         repo = Path(tmp)
-        for part in ("config", "rtl", "sim"):
+        for part in ("rtl", "sim", "fpga"):
             shutil.copytree(source / part, repo / part, ignore=COPY_IGNORE)
         fast = args.fast.split() if args.fast is not None else fast_patterns(repo)
         print(f"{len(chosen)} of {len(MUTANTS)} mutant(s), on a copy of {source} in {repo}", flush=True)

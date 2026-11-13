@@ -105,7 +105,7 @@ when others =>
 | V-01 | Every safety block must have a functional testbench |
 | V-02 | Every safety block must have fault injection tests |
 | V-03 | Formal assertions must verify safety properties |
-| V-04 | Testbenches must use VUnit `check()` API |
+| V-04 | Testbenches must check with `tb_pkg` (`check`, `check_equal`), so that a failure reaches the test result, and must compile on GHDL and Vivado's xsim |
 | V-05 | Simulation must pass with GHDL mcode backend |
 
 ---

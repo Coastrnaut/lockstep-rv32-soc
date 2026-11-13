@@ -44,10 +44,10 @@ close $fh
 read_vhdl -vhdl2008 -library neorv32 [concat [list $here/board_imem_image.vhd] $core_files]
 
 read_vhdl -vhdl2008 -library lockstep [concat \
-  [list $root/config/package_soc_types.vhd] \
-  [glob $root/rtl/safety_blocks/*.vhd] \
+  [list $root/rtl/pkg/package_soc_types.vhd] \
+  [glob $root/rtl/safety/*.vhd] \
   [glob $root/rtl/peripherals/*.vhd] \
-  [list $root/rtl/lockstep_core.vhd $root/rtl/top_automotive_soc.vhd]]
+  [list $root/rtl/soc/lockstep_core.vhd $root/rtl/soc/top_automotive_soc.vhd]]
 read_vhdl -vhdl2008 [list $here/arty_a7_top.vhd]
 read_xdc $here/arty_a7_100t.xdc
 
@@ -63,10 +63,14 @@ report_utilization -file $out/utilization_synth.txt
 proc flops {pattern} {
   return [llength [get_cells -hier -quiet -filter "IS_SEQUENTIAL && NAME =~ $pattern"]]
 }
-require {[flops {*i_lockstep_gate/r_current_state_reg*}] == 8} \
-  "the comparator state keeps all 8 flip-flops of its encoding"
-require {[flops {*i_lockstep_gate/r_fault_latched_reg*}] == 1} \
-  "the comparator fault latch is kept"
+foreach side {a b} {
+  require {[flops "*i_lockstep_gate/i_comparator_$side/r_current_state_reg*"] == 8} \
+    "comparator $side keeps all 8 flip-flops of its state encoding"
+  require {[flops "*i_lockstep_gate/i_comparator_$side/r_fault_latched_reg*"] == 1} \
+    "comparator $side keeps its fault latch"
+}
+require {[flops {*i_lockstep_gate/r_differ_reg*}] == 1} \
+  "the comparators' cross-check latch is kept"
 require {[flops {*i_comparator_self_test/r_result_reg*}] == 8} \
   "the self-test result keeps all 8 flip-flops of its encoding"
 require {[llength [get_cells -hier -quiet -filter {NAME =~ *i_cpu_master/*}]] > 0} \
@@ -108,8 +112,8 @@ require {$wns >= 0} "setup timing met (WNS $wns ns)"
 require {$whs >= 0} "hold timing met (WHS $whs ns)"
 
 # The same structural checks after implementation, which can also optimise
-require {[flops {*i_lockstep_gate/r_current_state_reg*}] == 8} \
-  "after routing, the comparator state still has 8 flip-flops"
+require {[flops {*i_lockstep_gate/i_comparator_*/r_current_state_reg*}] == 16} \
+  "after routing, both comparators' states still have 8 flip-flops each"
 require {[flops {*i_comparator_self_test/r_result_reg*}] == 8} \
   "after routing, the self-test result still has 8 flip-flops"
 

@@ -2,7 +2,7 @@
 // Formal harness: lockstep_comparator (roadmap R2.1)
 // ============================================================================
 // The comparator comes from sim/formal/run_formal.py as Verilog that GHDL
-// synthesised from rtl/safety_blocks/lockstep_comparator.vhd. Its state
+// synthesised from rtl/safety/lockstep_comparator.vhd. Its state
 // register is brought out with Yosys's expose pass, so the RTL is unchanged.
 //
 // Assumptions: one clock, and every input is free in every cycle: both buses,

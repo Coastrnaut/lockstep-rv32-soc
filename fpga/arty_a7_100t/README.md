@@ -12,7 +12,7 @@ Vivado. This folder has everything for a build and a bench run. A build has
 | `build.py` | Runs `build.tcl`, hashes the bitstream, writes `build/manifest.json` |
 | `board_firmware.py` | Generates `board_imem_image.vhd`, the board's boot image |
 | `check_board.py` | Checks the wrapper and the image with GHDL alone; CI runs it |
-| `ghdl/` | A stand-in for the UNISIM primitives, and the board image testbench |
+| `sim/` | A stand-in for the UNISIM primitives, and the board image testbench (run by `sim/run.py` on GHDL and xsim) |
 
 ## The design on the board
 
@@ -45,8 +45,9 @@ python fpga/arty_a7_100t/check_board.py      # GHDL only: wrapper synthesis and 
 python fpga/arty_a7_100t/build.py            # Vivado: bitstream, reports, manifest.json
 ```
 
-`build.tcl` turns FSM extraction off and checks, after synthesis, that the
-comparator state and the self-test result keep 8 flip-flops each
+`build.tcl` turns FSM extraction off and checks, after synthesis, that each of the two
+comparators' states and the self-test result keep 8 flip-flops each, with
+each comparator's latch and the disagreement latch
 (`docs/verification/synthesis.md`), that both cores and the bus delay line are
 present, and that the ECC RAM is in block RAM. After routing it requires
 setup and hold slack of at least zero, and repeats the flip-flop checks. It
@@ -82,7 +83,7 @@ analyser's resolution.
 |------|--------|
 | Wrapper, constraints, build script, board image | Written. `check_board.py` passes: the wrapper synthesises in GHDL, and the board image prints `LS0...` on the SoC in simulation |
 | Vivado build | **Blocked.** Vivado 2026.1 and its Artix-7 devices are installed on the development machine, but Vivado reports an Alveo licence and `get_parts` then lists no parts, so `build.py` stops at `set_part`. A licence that offers the xc7a100t (the free Standard edition covers it) unblocks it |
-| Vivado simulation | **Runs.** `sim/run.py` analyses every file with xvhdl, elaborates the SoC with xelab, and runs the board image bench on xsim as well as GHDL (`docs/verification/toolchain.md`) |
+| Vivado simulation | **Runs.** `sim/run.py` runs the board image bench, and every bench in `sim/tb`, on xsim as well as GHDL and compares the two (`docs/verification/toolchain.md`) |
 | Timing, utilisation, mapped-design checks | Waiting for the build |
 | Bench (R3.2) | Needs the board and a logic analyser |
 | Compiled firmware with a pinned toolchain (R3.3) | No RISC-V compiler on the development machine. The assembled board image is the first boot profile until one is chosen |

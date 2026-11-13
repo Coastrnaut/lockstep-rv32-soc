@@ -16,7 +16,7 @@
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** Close the system bus in the cycle of the mismatch, drop `bus_valid_o` and raise `safe_state_o` at the next edge, and drive the external fault pin `nmi_fault_o` from the registered fault, independent of any interrupt mask (HSI section 8.2).
 - **Verification Method:** Fault Injection Simulation
-- **Implemented In:** `rtl/safety_blocks/lockstep_comparator.vhd`, `rtl/top_automotive_soc.vhd`
+- **Implemented In:** `rtl/safety/lockstep_comparator.vhd`, `rtl/soc/top_automotive_soc.vhd`
 - **Verified by:** `tb_lockstep_comparator`, `tb_lockstep_fault_inject`, `tb_lockstep_fault_inject_permanent`, `tb_soc_lockstep`; formal proofs CMP-01 to CMP-11 and COM-03, COM-04 (`docs/verification/formal.md`)
 - **Alias:** `TSR_LOCKSTEP_042` was the comparator's own tag for this requirement until revision 1.1. It is retired, and the comparator now carries `TSR_LOCKSTEP_001`.
 
@@ -25,7 +25,7 @@
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** `soc_bus_fabric` registers the decoded target with the accepted request and drives one response record, which core B receives two clocks after core A (HSI section 8.1).
 - **Verification Method:** Directed and seeded random simulation, firmware loads and stores
-- **Implemented In:** `rtl/safety_blocks/soc_bus_fabric.vhd`, `rtl/safety_blocks/ecc_data_ram.vhd`, `rtl/top_automotive_soc.vhd`
+- **Implemented In:** `rtl/safety/soc_bus_fabric.vhd`, `rtl/safety/ecc_data_ram.vhd`, `rtl/soc/top_automotive_soc.vhd`
 - **Verified by:** `tb_soc_bus_fabric`, `tb_soc_fabric`, `tb_soc_ecc`; formal proofs BUS-P1 to BUS-P6 (`docs/verification/formal.md`)
 
 ## TSR_ECC_001
@@ -34,7 +34,7 @@
 - **Mitigation:** Correct SBE transparently; flag DBE, end the access with ERR and trip the comparator.
 - **Scope:** The shared data RAM only. The cores' instruction memories have no ECC (HSI section 5).
 - **Verification Method:** Randomized Error Injection Testbench
-- **Implemented In:** `rtl/safety_blocks/hamming_ecc_wrapper.vhd`, `rtl/safety_blocks/ecc_data_ram.vhd`
+- **Implemented In:** `rtl/safety/hamming_ecc_wrapper.vhd`, `rtl/safety/ecc_data_ram.vhd`
 - **Verified by:** `tb_ecc`, `tb_ecc_exhaustive`, `tb_ecc_fault_inject`, `tb_ecc_seu_inject`, `tb_ecc_write_read`, `tb_ecc_data_ram`, `tb_soc_ecc`
 
 ## TSR_WD_001
@@ -42,8 +42,8 @@
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** Hardware reset to critical actuators via `sys_reset_o`.
 - **Verification Method:** Timeout Simulation + Fault Injection
-- **Implemented In:** `rtl/safety_blocks/hardware_watchdog.vhd`, `rtl/safety_blocks/watchdog_supervisor.vhd`
-- **Verified by:** `tb_watchdog`, `tb_watchdog_window`, `tb_watchdog_timeout`, `tb_watchdog_osvvm`, `tb_watchdog_supervisor`, `tb_soc_watchdog`
+- **Implemented In:** `rtl/safety/hardware_watchdog.vhd`, `rtl/safety/watchdog_supervisor.vhd`
+- **Verified by:** `tb_watchdog`, `tb_watchdog_window`, `tb_watchdog_timeout`, `tb_watchdog_kick_sequence`, `tb_watchdog_supervisor`, `tb_soc_watchdog`
 - **Open:** containment of a lost watchdog clock needs an independent supervisor on the board (HSI WD-04).
 
 ## TSR_LOCKSTEP_043
@@ -51,7 +51,7 @@
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** All of Core B's changing inputs, including the bus response, and Core A's bus pass through 2-clock delay lines, and the comparator stops a bad bus cycle in the cycle it finds it.
 - **Verification Method:** Simultaneous Glitch Injection + Functional Coverage
-- **Implemented In:** `rtl/safety_blocks/temporal_diversity.vhd`, `rtl/safety_blocks/lockstep_comparator.vhd`, `rtl/top_automotive_soc.vhd`
+- **Implemented In:** `rtl/safety/temporal_diversity.vhd`, `rtl/safety/lockstep_comparator.vhd`, `rtl/soc/top_automotive_soc.vhd`
 - **Verified by:** `tb_temporal_diversity`, `tb_soc_lockstep`
 
 ## TSR_LOCKSTEP_044
@@ -59,15 +59,24 @@
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** A startup self-test trips the comparator through its real logic, and holds the cores in reset unless every step passes. A failure leaves `actuator_safe_o` and `nmi_fault_o` high.
 - **Verification Method:** Comparator Fault Injection
-- **Implemented In:** `rtl/safety_blocks/comparator_self_test.vhd`, `rtl/top_automotive_soc.vhd`
+- **Implemented In:** `rtl/safety/comparator_self_test.vhd`, `rtl/soc/top_automotive_soc.vhd`
 - **Verified by:** `tb_comparator_self_test`, `tb_soc_lockstep`, including the reporting path and a stuck sequencer (`docs/verification/diagnostics.md`)
+
+## TSR_LOCKSTEP_045
+- **Description:** A lockstep comparator that fails after its startup self-test must not let a divergent request reach a slave. Two comparators must check the same buses; the bus may carry a request only while both pass it and their decisions agree, either one's trip is a fault, and a disagreement between them is a fault that holds until a reset.
+- **ASIL Allocation:** ASIL-D (intent)
+- **Mitigation:** `dual_comparator` instantiates two `lockstep_comparator`s with their own state, compares their outputs every clock, latches a disagreement, and feeds it back to both as a fatal fault. The startup self-test sees a trip only when both comparators trip, so it tests each of them.
+- **Verification Method:** Comparator Fault Injection
+- **Implemented In:** `rtl/safety/dual_comparator.vhd`, `rtl/soc/top_automotive_soc.vhd`
+- **Verified by:** `tb_dual_comparator`, `tb_dual_comparator_faults`, `tb_soc_lockstep.comparator_b_stuck_at_no_error_also_fails_the_self_test`, `tb_soc_lockstep.comparator_b_stuck_tripped_fails_the_self_test`, `tb_soc_lockstep.a_comparator_that_stops_comparing_after_startup_is_found_at_the_first_divergence`
+- **Open:** both comparators share the clock, the reset and the inputs (DFA DF-15).
 
 ## TSR_RESET_001
 - **Description:** A reset must take effect at once, with or without a clock, and be released on a clock edge, with both cores released on the same edge. Actuators must be held safe, the CAN pin recessive and the UART pin at mark during a reset.
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** One synchroniser drives both cores, the comparator and the peripherals, and `actuator_safe_o` is high whenever its output is low.
 - **Verification Method:** Functional Testbench + Reset Pulse Injection
-- **Implemented In:** `rtl/safety_blocks/reset_synchronizer.vhd`, `rtl/top_automotive_soc.vhd`
+- **Implemented In:** `rtl/safety/reset_synchronizer.vhd`, `rtl/soc/top_automotive_soc.vhd`
 - **Verified by:** `tb_reset_synchronizer`, `tb_soc_reset_network`, `tb_soc_reset_timing`
 
 ## TSR_SAFETY_GATE_001
@@ -75,7 +84,7 @@
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** 8-bit encoded states (0x5A / 0xA5) with a Hamming distance of 8. Any other value closes the bus, latches and reports a fault, and holds the safe state (HSI FLT-03). The fault latch and the state register each report a fault on their own, so an upset of either cannot hide one.
 - **Verification Method:** Bit-Flip Injection in simulation, and a k-induction proof from arbitrary register values.
-- **Implemented In:** `config/package_soc_types.vhd`, `rtl/safety_blocks/lockstep_comparator.vhd`
+- **Implemented In:** `rtl/pkg/package_soc_types.vhd`, `rtl/safety/lockstep_comparator.vhd`
 - **Verified by:** `tb_lockstep_illegal_state`, `tb_soc_lockstep`; formal proofs CMP-04, CMP-05, CMP-09 (`docs/verification/formal.md`)
 
 ## TSR_SAFETY_GATE_002
@@ -83,7 +92,7 @@
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** `bus_ok_i` gates selection and the write-commit strobe `w_commit` (HSI BUS-05).
 - **Verification Method:** Functional Testbench + Gate Drop and Reset Injection
-- **Implemented In:** `rtl/safety_blocks/ecc_data_ram.vhd`
+- **Implemented In:** `rtl/safety/ecc_data_ram.vhd`
 - **Verified by:** `tb_ecc_data_ram`, `tb_soc_bus_fabric`, `tb_soc_fabric`; formal proofs COM-01 to COM-04 (`docs/verification/formal.md`)
 
 ## TSR_SAFETY_GATE_003
@@ -91,7 +100,7 @@
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** `bus_ok_i` gates kicks and reads. The reset pulse comes from a flip-flop on `wd_clk_i` and asserts the reset network asynchronously.
 - **Verification Method:** Functional Testbench + Clock Stop
-- **Implemented In:** `rtl/safety_blocks/hardware_watchdog.vhd`, `rtl/safety_blocks/watchdog_supervisor.vhd`
+- **Implemented In:** `rtl/safety/hardware_watchdog.vhd`, `rtl/safety/watchdog_supervisor.vhd`
 - **Verified by:** `tb_watchdog_supervisor`, `tb_soc_watchdog`
 
 ## TSR_TYPES_001
@@ -99,7 +108,7 @@
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** `package_soc_types`. Testbenches that check addresses write them out from the HSI rather than reading this package, so a wrong address here fails them.
 - **Verification Method:** Address decode testbenches and mutation of the constants
-- **Implemented In:** `config/package_soc_types.vhd`
+- **Implemented In:** `rtl/pkg/package_soc_types.vhd`
 - **Verified by:** `tb_soc_periph_decode`, `tb_soc_fabric`
 
 ## TSR_UART_001
