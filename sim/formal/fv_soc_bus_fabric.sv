@@ -27,11 +27,11 @@ module fv_soc_bus_fabric (
 
   soc_bus_fabric dut (
     .clk_i(clk_i), .rst_n_i(rst_n),
-    .\bus_i[addr] (addr), .\bus_i[data] (data), .\bus_i[sel] (sel),
-    .\bus_i[we] (we), .\bus_i[valid] (valid),
+    .bus_i_addr(addr), .bus_i_data(data), .bus_i_sel(sel),
+    .bus_i_we(we), .bus_i_valid(valid),
     .ram_rdata_i(ram_rdata), .wd_rdata_i(wd_rdata), .can_rdata_i(can_rdata),
     .uart_rdata_i(uart_rdata), .ram_fatal_i(ram_fatal),
-    .\rsp_o[rdata] (rdata), .\rsp_o[ack] (ack), .\rsp_o[err] (err)
+    .rsp_o_rdata(rdata), .rsp_o_ack(ack), .rsp_o_err(err)
   );
 
   // HSI BUS-02, from the address map: 0 unmapped, 1 RAM block, 2 watchdog,

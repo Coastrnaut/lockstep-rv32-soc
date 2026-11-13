@@ -17,9 +17,13 @@ python sim/scripts/run_formal.py --broken      # all jobs; writes sim/formal/bui
    The RTL is not changed for the proof. Internal signals that a property needs,
    such as the comparator's state register and the RAM's commit strobe, are
    brought out with Yosys's `expose` pass.
-2. The RTL's own clocked "FORMAL FAIL" assertions, which GHDL keeps as `$fatal`
-   calls, are removed from the netlist. They are simulation checks that assume
-   a reset first; the harnesses restate them without that assumption.
+2. The RTL's own clocked "FORMAL FAIL" assertions, which GHDL 6 keeps as
+   `$fatal` calls, are removed from the netlist. They are simulation checks that
+   assume a reset first; the harnesses restate them without that assumption.
+   GHDL 6 also names record fields as escaped identifiers (`us_i[addr]`)
+   where GHDL 4.1, which CI uses, writes `bus_i_addr`. The driver rewrites the
+   first form into the second, and the harnesses use it, so the same jobs run
+   on either version. All three prove and cover on both.
 3. SymbiYosys runs `smtbmc` with z3:
    - **prove**: k-induction. PASS is a proof for every depth, not a bounded
      result.

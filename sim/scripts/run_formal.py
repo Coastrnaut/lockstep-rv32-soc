@@ -112,7 +112,13 @@ def first_line(cmd, env=None):
 
 
 def strip_checks(text, free_memory):
-    """Remove the RTL's simulation assertions, and optionally the array's zeros."""
+    """Remove the RTL's simulation assertions, and optionally the array's zeros.
+
+    GHDL 6 names a record port's fields as escaped identifiers, such as
+    \\bus_i[addr], where GHDL 4.1 writes bus_i_addr. Both become the 4.1 form,
+    which the harnesses use, so they work with either version.
+    """
+    text = re.sub(r"\\(\w+)\[(\w+)\] ", r"\1_\2 ", text)
     text = re.sub(r'\$fatal\(1, "[^"]*"\);', ";", text)
     if free_memory:
         text = re.sub(r"initial begin\n(\s*\w+\[\d+\] = \d+'b[01]+;\n)+\s*end\n", "", text)

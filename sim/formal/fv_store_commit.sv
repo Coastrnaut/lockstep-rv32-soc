@@ -30,20 +30,20 @@ module fv_store_commit (
 
   lockstep_comparator cmp (
     .clk_i(clk_i), .rst_n_syn_i(rst_cold_n),
-    .\core_a_bus_i[addr] (a_addr), .\core_a_bus_i[data] (a_data), .\core_a_bus_i[sel] (a_sel),
-    .\core_a_bus_i[we] (a_we), .\core_a_bus_i[valid] (a_valid),
-    .\core_b_bus_i[addr] (b_addr), .\core_b_bus_i[data] (b_data), .\core_b_bus_i[sel] (b_sel),
-    .\core_b_bus_i[we] (b_we), .\core_b_bus_i[valid] (b_valid),
+    .core_a_bus_i_addr(a_addr), .core_a_bus_i_data(a_data), .core_a_bus_i_sel(a_sel),
+    .core_a_bus_i_we(a_we), .core_a_bus_i_valid(a_valid),
+    .core_b_bus_i_addr(b_addr), .core_b_bus_i_data(b_data), .core_b_bus_i_sel(b_sel),
+    .core_b_bus_i_we(b_we), .core_b_bus_i_valid(b_valid),
     .fatal_fault_i(dbe),
     .nmi_fault_o(nmi), .fault_o(fault), .safe_state_o(safe), .bus_valid_o(bus_valid),
-    .\sys_bus_o[addr] (s_addr), .\sys_bus_o[data] (s_data), .\sys_bus_o[sel] (s_sel),
-    .\sys_bus_o[we] (s_we), .\sys_bus_o[valid] (s_valid)
+    .sys_bus_o_addr(s_addr), .sys_bus_o_data(s_data), .sys_bus_o_sel(s_sel),
+    .sys_bus_o_we(s_we), .sys_bus_o_valid(s_valid)
   );
 
   ecc_data_ram ram (
     .clk_i(clk_i), .rst_n_i(rst_cold_n), .bus_rst_n_i(rst_warm_n),
-    .\bus_i[addr] (s_addr), .\bus_i[data] (s_data), .\bus_i[sel] (s_sel),
-    .\bus_i[we] (s_we), .\bus_i[valid] (s_valid),
+    .bus_i_addr(s_addr), .bus_i_data(s_data), .bus_i_sel(s_sel),
+    .bus_i_we(s_we), .bus_i_valid(s_valid),
     .bus_ok_i(bus_valid), .rdata_o(ram_rdata), .dbe_fatal_o(dbe),
     .w_commit(commit)
   );
