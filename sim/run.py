@@ -161,8 +161,9 @@ else:
     print("  Run: git submodule update --init --recursive")
 
 # ---------------------------------------------------------------------------
-# 5. Top-level SoC
+# 5. The core wrapper both lockstep cores use, and the top-level SoC
 # ---------------------------------------------------------------------------
+lockstep_lib.add_source_files(root / "rtl" / "lockstep_core.vhd")
 lockstep_lib.add_source_files(root / "rtl" / "top_automotive_soc.vhd")
 
 # ---------------------------------------------------------------------------
@@ -191,6 +192,8 @@ def _run_ghdl_lint(ghdl_exe):
     periph_files = sorted((root / "rtl" / "peripherals").glob("*.vhd"),
                           key=lambda f: (f.stem in wrappers, f.stem))
     top_soc = root / "rtl" / "top_automotive_soc.vhd"
+    # Both cores are this one NEORV32 wrapper; it is analysed before the top
+    core_wrapper = root / "rtl" / "lockstep_core.vhd"
     # NEORV32: use file_list_core.f for correct dependency order
     neorv32_files = []
     fl = root / "rtl" / "core" / "neorv32" / "rtl" / "file_list_core.f"
@@ -206,7 +209,7 @@ def _run_ghdl_lint(ghdl_exe):
                 neorv32_files.append(p)
 
     total = len(config_files) + len(safety_files) + len(periph_files) \
-            + (1 if top_soc.exists() else 0) + len(neorv32_files)
+            + (2 if top_soc.exists() else 0) + len(neorv32_files)
 
     if total == 0:
         print("WARNING: No VHDL files found for linting.")
@@ -266,9 +269,9 @@ def _run_ghdl_lint(ghdl_exe):
                 print(f"\nLINT FAILED at neorv32 phase (exit {r.returncode}).")
                 return False
 
-        # Phase 5: top_automotive_soc  -> library lockstep
+        # Phase 5: the core wrapper and top_automotive_soc  -> library lockstep
         if top_soc.exists():
-            cmd = analyse + [str(top_soc).replace("\\", "/")]
+            cmd = analyse + [str(f).replace("\\", "/") for f in (core_wrapper, top_soc)]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
                                cwd=tmp)
             if r.returncode != 0:
@@ -306,9 +309,9 @@ def _run_vsg(vsg_exe):
     our_files.extend(sorted((root / "config").glob("*.vhd")))
     our_files.extend(sorted((root / "rtl" / "safety_blocks").glob("*.vhd")))
     our_files.extend(sorted((root / "rtl" / "peripherals").glob("*.vhd")))
-    top = root / "rtl" / "top_automotive_soc.vhd"
-    if top.exists():
-        our_files.append(top)
+    for top in (root / "rtl" / "lockstep_core.vhd", root / "rtl" / "top_automotive_soc.vhd"):
+        if top.exists():
+            our_files.append(top)
     our_files.extend(sorted((root / "sim" / "testbenches").glob("*.vhd")))
 
     if not our_files:
@@ -407,6 +410,13 @@ if _campaign:
                 name=f"trial_{int(_row['trial']):04d}",
                 generics={f"g_{key}": int(_row[key])
                           for key in ("trial", "site", "bit", "kind", "duration", "inject_ns", "run_us")})
+
+# RAM profiles (roadmap R4.3): the SoC's bus probes run on the full 256 KB RAM
+# and on a 32 KB one, whose end the program's last-word probes lie beyond
+_probe = sim_lib.test_bench("tb_soc_fabric").test(
+    "probes_get_one_response_each_and_unmapped_ones_change_nothing")
+for _bits, _name in ((15, "ram_256k"), (12, "ram_32k")):
+    _probe.add_config(name=_name, generics={"g_ram_addr_bits": _bits})
 
 # ---------------------------------------------------------------------------
 # GHDL options

@@ -16,12 +16,12 @@ as achieved. Per-run evidence is in `docs/verification/milestone_0_1.md`.
 | 100% statement, branch, condition, MC/DC, toggle and FSM coverage (section 1) | Not measured. GHDL in this flow reports no structural coverage, and no licensed simulator job exists |
 | Illegal FSM recovery by forcing (section 1) | Done for the comparator state register (`tb_lockstep_illegal_state`). `tb_fsm_illegal_recovery` exercises the CAN gate and traffic, not illegal states. CAN, UART and self-test FSMs use enumerated types and have no illegal-state tests |
 | OSVVM functional coverage bins (section 2) | Bus access kind, target and spacing in `tb_soc_lockstep`. Address-space corners are directed tests in `tb_soc_bus_fabric` and `tb_soc_fabric`, not coverage bins |
-| Stuck-at and transient fault injection (section 3) | Directed forces on named signals in simulation. No campaign with denominators, and no netlist injection (roadmap R2.3) |
+| Stuck-at and transient fault injection (section 3) | A seeded campaign of single forced bits at 15 RTL sites, classified with denominators and latencies (`docs/verification/fault_campaign.md`). No netlist injection |
 | 50 µs fault-to-safe-pin bound (section 3.C) | Checked from the ECC fault to `actuator_safe_o` in `tb_soc_ecc`. Other fault classes are checked in clocks from the comparator. No item FTTI exists |
 | Comparator self-checking (section 4.A) | Startup self-test after each cold reset. No periodic heartbeat (roadmap R2.4) |
 | Gate-level netlist simulation (section 4.B) | Not done. GHDL synthesis is used as a lint and smoke test only |
 | CI blocks on coverage and FTTI (section 5) | CI blocks on lint, VSG, the regression, fixture drift and stale mutation patterns. It does not measure coverage |
-| Mutation campaign | 412 mutants. Full campaign is manual, before a release |
+| Mutation campaign | 418 mutants. Full campaign is manual, before a release |
 
 The signal names `sys_outputs_valid_o` and `core_mismatch_detected` below come
 from an early draft. The implemented equivalents are the comparator's

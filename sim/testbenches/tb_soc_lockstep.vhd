@@ -230,26 +230,26 @@ begin
     -- The bus response inside each core. A glitch further upstream would reach
     -- core B through its delay line and look the same to both, as any fault in
     -- data that they share does.
-    alias core_a_rsp is << signal i_soc.i_cpu_master.xbus_rsp : bus_rsp_t >>;
-    alias core_b_rsp is << signal i_soc.i_cpu_checker.xbus_rsp : bus_rsp_t >>;
+    alias core_a_rsp is << signal i_soc.i_cpu_master.i_neorv32.xbus_rsp : bus_rsp_t >>;
+    alias core_b_rsp is << signal i_soc.i_cpu_checker.i_neorv32.xbus_rsp : bus_rsp_t >>;
 
-    alias can_busy       is << signal i_soc.w_can_busy : std_logic >>;
+    alias can_busy       is << signal i_soc.i_automotive_can.can_busy_o : std_logic >>;
     alias self_test_lane is << signal i_soc.i_comparator_self_test.r_lane : natural range 0 to 70 >>;
     alias ram_word       is << signal i_soc.i_ecc_ram.r_word : std_logic_vector(71 downto 0) >>;
     alias sys_bus        is << signal i_soc.w_safe_sys_bus : t_rv_bus >>;
 
     -- Each core's interrupt logic: MEI pending, MEI pending and enabled (MEIE),
     -- an interrupt being taken (which needs MIE), and trap entry with its cause
-    alias a_irq_pnd  is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
-    alias a_irq_buf  is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
-    alias a_irq_fire is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire : std_ulogic_vector(1 downto 0) >>;
-    alias a_enter    is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
-    alias a_cause    is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
-    alias b_irq_pnd  is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
-    alias b_irq_buf  is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
-    alias b_irq_fire is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire : std_ulogic_vector(1 downto 0) >>;
-    alias b_enter    is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
-    alias b_cause    is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
+    alias a_irq_pnd  is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias a_irq_buf  is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias a_irq_fire is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire : std_ulogic_vector(1 downto 0) >>;
+    alias a_enter    is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
+    alias a_cause    is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
+    alias b_irq_pnd  is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias b_irq_buf  is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias b_irq_fire is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire : std_ulogic_vector(1 downto 0) >>;
+    alias b_enter    is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
+    alias b_cause    is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
 
     variable v_found          : boolean;
     alias    comparator_state is << signal i_soc.i_lockstep_gate.r_current_state : t_safe_state >>;

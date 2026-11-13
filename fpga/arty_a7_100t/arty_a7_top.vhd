@@ -36,6 +36,10 @@ library unisim;
 library lockstep;
 
 entity arty_a7_top is
+  generic (
+    -- RAM profile, see top_automotive_soc: 15 is the full 256 KB
+    g_ram_addr_bits : positive range 4 to 15 := 15
+  );
   port (
     clk100mhz : in    std_logic;                    -- E3
     ck_rst    : in    std_logic;                    -- C2, low while pressed
@@ -172,7 +176,8 @@ begin
   -- ========================================================================
   i_soc : entity lockstep.top_automotive_soc
     generic map (
-      g_boot_mode => 2
+      g_boot_mode     => 2,
+      g_ram_addr_bits => g_ram_addr_bits
     )
     port map (
       clk_i           => w_clk50,

@@ -204,9 +204,9 @@ begin
 
   p_stim : process is
 
-    alias a_wdata      is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.rf_wdata : std_ulogic_vector(31 downto 0) >>;
-    alias b_wdata      is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.rf_wdata : std_ulogic_vector(31 downto 0) >>;
-    alias a_fetch      is << signal i_soc.i_cpu_master.imem_rsp : bus_rsp_t >>;
+    alias a_wdata      is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.rf_wdata : std_ulogic_vector(31 downto 0) >>;
+    alias b_wdata      is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.rf_wdata : std_ulogic_vector(31 downto 0) >>;
+    alias a_fetch      is << signal i_soc.i_cpu_master.i_neorv32.imem_rsp : bus_rsp_t >>;
     alias a_bus_data   is << signal i_soc.w_core_a_xbus_data : std_logic_vector(31 downto 0) >>;
     alias a_bus_addr   is << signal i_soc.w_core_a_xbus_addr : std_logic_vector(31 downto 0) >>;
     alias delayed_bus  is << signal i_soc.w_core_a_bus_late : t_rv_bus >>;
@@ -218,8 +218,8 @@ begin
     alias can_pin      is << signal i_soc.i_automotive_can.r_tx_pin : std_logic >>;
     alias reset_stages is << signal i_soc.i_reset_sync.r_stages : std_logic_vector(1 downto 0) >>;
     alias selftest_res is << signal i_soc.i_comparator_self_test.r_result : t_safe_state >>;
-    alias a_rd_we      is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
-    alias b_rd_we      is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
+    alias a_rd_we      is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
+    alias b_rd_we      is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
     alias a_bus        is << signal i_soc.w_core_a_bus : t_rv_bus >>;
     alias ram_read     is << signal i_soc.i_ecc_ram.r_read : std_logic >>;
     alias ram_write    is << signal i_soc.i_ecc_ram.r_write : std_logic >>;

@@ -22,7 +22,7 @@ Vivado. This folder has everything for a build and a bench run. A build has
 | Watchdog clock | The FPGA's internal configuration oscillator (STARTUPE2 CFGMCLK, nominally 65 MHz) divided by 64, about 1 MHz. It shares no source with the board oscillator, so a stopped system clock does not stop the watchdog |
 | Reset | The reset button, held until the MMCM locks |
 | Boot | Boot mode 2: the IMEM image from `board_firmware.py`, in both cores |
-| Memory | The 256 KB ECC RAM in block RAM: 2,304 Kib of the device's 4,860 Kib |
+| Memory | The 256 KB ECC RAM in block RAM: 2,304 Kib of the device's 4,860 Kib. `build.py --ram-addr-bits 12` builds a 32 KB profile instead (`docs/verification/integration.md`) |
 
 | Signal | Board connection |
 |--------|------------------|

@@ -28,7 +28,9 @@ library work;
 
 entity tb_soc_fabric is
   generic (
-    runner_cfg : string := ""
+    runner_cfg : string := "";
+    -- The SoC's RAM profile (roadmap R4.3): 15 is the full 256 KB
+    g_ram_addr_bits : positive range 4 to 15 := 15
   );
 end entity tb_soc_fabric;
 
@@ -39,8 +41,18 @@ architecture tb of tb_soc_fabric is
   constant c_uart_bit_time : time := c_clk_period * 434;
   constant c_timeout       : time := 2 ms;
 
+  -- A smaller RAM profile ends below the program's last-word probes, so its
+  -- store and load there answer ERR too, and the word does not read back
+  constant c_small_ram : boolean := g_ram_addr_bits < 15;
+
   -- The unmapped loads and stores among the program's probes
-  constant c_probe_errs : natural := 11;
+  constant c_probe_errs : natural := 11 + 2 * boolean'pos(c_small_ram);
+
+  type t_flag is array (boolean) of std_logic_vector(7 downto 0);
+
+  -- 'P' when the RAM kept its data through the probes; 'F' when the last-word
+  -- probe did not read back, as it cannot past a smaller RAM
+  constant c_probe_flag : t_flag := (false => x"50", true => x"46");
 
   signal clk           : std_logic;
   signal wd_clk        : std_logic;
@@ -93,7 +105,8 @@ begin
 
   i_soc : entity lockstep.top_automotive_soc
     generic map (
-      g_boot_mode => 2
+      g_boot_mode     => 2,
+      g_ram_addr_bits => g_ram_addr_bits
     )
     port map (
       clk_i           => clk,
@@ -155,6 +168,7 @@ begin
     alias soc_rst_n is << signal i_soc.w_rst_n : std_logic >>;
     alias a_ack     is << signal i_soc.i_cpu_master.xbus_ack_i : std_ulogic >>;
     alias a_err     is << signal i_soc.i_cpu_master.xbus_err_i : std_ulogic >>;
+    alias ram_write is << signal i_soc.i_ecc_ram.r_write : std_logic >>;
 
     variable v_pending : boolean;
 
@@ -178,6 +192,9 @@ begin
 
     if (a_err = '1') then
       errs <= errs + 1;
+      -- The RAM decodes its own range, which must be the fabric's: a store the
+      -- fabric refuses, past a smaller RAM's end, must not land in it either
+      check_equal(ram_write, '0', "no RAM write for a request answered ERR");
     end if;
 
     v_pending := sys_bus.valid = '1' and soc_rst_n = '1';
@@ -253,7 +270,7 @@ begin
         -- held its data through the unmapped stores
         check_uart_byte(1, x"33");
         check_uart_byte(2, std_logic_vector(to_unsigned(character'pos('A') + c_probe_errs, 8)));
-        check_uart_byte(3, x"50");
+        check_uart_byte(3, c_probe_flag(c_small_ram));
 
         -- Long enough for a byte or a frame from an alias to have come out
         wait for c_uart_bit_time * 30;

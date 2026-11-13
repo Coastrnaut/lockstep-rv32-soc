@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Build the Arty A7-100T bitstream with Vivado, and record what it produced.
 
-    python fpga/arty_a7_100t/build.py [OUT_DIR]       default fpga/arty_a7_100t/build
+    python fpga/arty_a7_100t/build.py [OUT_DIR] [--ram-addr-bits N]
+
+OUT_DIR defaults to fpga/arty_a7_100t/build. --ram-addr-bits picks the RAM
+profile, 4 to 15 bits of 64-bit words; 15, the default, is the full 256 KB of
+HSI section 5, and 12 is 32 KB. The manifest records the profile with its
+utilisation and timing, so each profile's cost is on record.
 
 Runs build.tcl in Vivado batch mode, which stops if the safety structure does
 not survive synthesis or implementation, or timing is missed. Then writes
@@ -12,6 +17,7 @@ Vivado comes from VIVADO (the executable), then PATH, then the default Windows
 install. The device must be installed: Vivado's get_parts has to list
 xc7a100tcsg324-1.
 """
+import argparse
 import hashlib
 import json
 import os
@@ -49,11 +55,15 @@ def utilisation(report):
 
 
 def main():
-    out = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else HERE / "build"
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("out", nargs="?", default=str(HERE / "build"))
+    parser.add_argument("--ram-addr-bits", type=int, default=15, choices=range(4, 16), metavar="4..15")
+    args = parser.parse_args()
+    out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     vivado = find_vivado()
     cmd = [vivado, "-mode", "batch", "-nojournal", "-log", str(out / "vivado.log"),
-           "-source", str(HERE / "build.tcl"), "-tclargs", str(ROOT), str(out)]
+           "-source", str(HERE / "build.tcl"), "-tclargs", str(ROOT), str(out), str(args.ram_addr_bits)]
     print(" ".join(cmd), flush=True)
     r = subprocess.run(cmd, capture_output=True, text=True)
     log = r.stdout + r.stderr
@@ -74,6 +84,7 @@ def main():
         "commit": commit,
         "vivado": version[0] if version else None,
         "part": PART,
+        "ram_profile": {"addr_bits": args.ram_addr_bits, "bytes": 8 << args.ram_addr_bits},
         "wns_ns": timing.group(1) if timing else None,
         "whs_ns": timing.group(2) if timing else None,
         "utilisation": utilisation(out / "utilization.txt"),

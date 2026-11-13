@@ -71,7 +71,7 @@ def main():
     first_party = [ROOT / "config" / "package_soc_types.vhd"]
     for folder in ("safety_blocks", "peripherals"):
         first_party += sorted((ROOT / "rtl" / folder).glob("*.vhd"), key=lambda f: (f.stem in WRAPPERS, f.stem))
-    first_party.append(ROOT / "rtl" / "top_automotive_soc.vhd")
+    first_party += [ROOT / "rtl" / "lockstep_core.vhd", ROOT / "rtl" / "top_automotive_soc.vhd"]
     run(analyse + ["--work=lockstep"] + [posix(f) for f in first_party], "SoC RTL")
 
     run(analyse + [posix(HERE / "arty_a7_top.vhd")], "board wrapper")

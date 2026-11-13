@@ -28,12 +28,18 @@ Two NEORV32 RISC-V cores run the same program, core B two clocks behind core A. 
 │   ├── safety/           # HSI, safety case, FMEDA, traceability, coding standard
 │   ├── requirements/     # Technical Safety Requirements (TSR)
 │   └── verification/     # Evidence records for each milestone
+├── fpga/arty_a7_100t/    # Board wrapper, constraints and Vivado build (no build has run yet)
 ├── rtl/                  # Hand-coded VHDL-2008 source files
+│   ├── top_automotive_soc.vhd  # The SoC
+│   ├── lockstep_core.vhd # The one NEORV32 configuration both cores use
 │   ├── core/             # NEORV32 RISC-V processor (git submodule)
 │   ├── safety_blocks/    # Lockstep comparator, bus fabric, ECC RAM, watchdog, resets
 │   └── peripherals/      # Safety-gated CAN controller and diagnostic UART
+├── sw/include/           # Generated C register header
 └── sim/                  # Verification environment (VUnit)
     ├── testbenches/      # Functional and fault-injection test suites
+    ├── formal/           # SymbiYosys properties and jobs
+    ├── campaign/         # Fault campaign manifests and results
     ├── firmware/         # Generated test program for the cores
     ├── generated/        # Generated CAN reference frames
     └── scripts/          # Generators, mutation harness, CI evidence scripts
@@ -46,8 +52,11 @@ Two NEORV32 RISC-V cores run the same program, core B two clocks behind core A. 
 ### What runs today: GHDL + VUnit
 Local development and CI use **GHDL** with the **mcode** backend and the **VUnit** test runner, with the Python tools pinned in `sim/requirements.txt` (VUnit 4.7.1, VSG 3.35.0). VUnit compiles its own bundled OSVVM; the `sim/OsvvmLibraries` submodule is pinned but not compiled by the runner. CI uses Ubuntu 24.04's GHDL 4.1; the evidence in this repository was also produced with GHDL 6.0 on Windows.
 
-### Planned: licensed simulator and formal jobs
-Structural coverage, gate-level simulation and formal proofs are not part of the flow yet. They are roadmap milestones 2 and 3, each to run as its own job with its own tool versions and evidence.
+### Formal, fault campaign and board checks
+A separate CI job proves properties of the comparator, the bus fabric and the RAM's store commit with YoWASP Yosys and SymbiYosys (`docs/verification/formal.md`). `sim/scripts/fault_campaign.py` runs a seeded fault campaign (`docs/verification/fault_campaign.md`). `fpga/arty_a7_100t/check_board.py` checks the board wrapper and image with GHDL in CI.
+
+### Planned: licensed simulator
+Structural coverage and gate-level simulation are not part of the flow yet.
 
 ---
 
@@ -77,6 +86,7 @@ python3 run.py "sim_lib.tb_soc_ecc.*"    # one bench
 ### Evidence checks
 ```bash
 python3 sim/scripts/check_fixtures.py                 # generated files match their generators
+python3 sim/scripts/register_map.py                   # regenerate the register constants, C header and table
 python3 sim/scripts/ci_report.py manifest manifest.json
 python3 sim/scripts/ci_report.py summary sim/vunit_out/regression.xml
 ```

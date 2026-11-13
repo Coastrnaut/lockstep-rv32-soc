@@ -1,7 +1,10 @@
 # ============================================================================
 # Vivado non-project build for the Arty A7-100T (roadmap R3.1)
 #
-#   vivado -mode batch -source fpga/arty_a7_100t/build.tcl -tclargs <repo> <out>
+#   vivado -mode batch -source fpga/arty_a7_100t/build.tcl -tclargs <repo> <out> [ram_addr_bits]
+#
+# ram_addr_bits picks the RAM profile, 4 to 15; 15, the default, is the full
+# 256 KB of HSI section 5.
 #
 # Usually run through fpga/arty_a7_100t/build.py, which also hashes the
 # bitstream and writes the build manifest. The build stops with an error if
@@ -11,6 +14,7 @@
 
 set root [file normalize [lindex $argv 0]]
 set out  [file normalize [lindex $argv 1]]
+set ram_bits [expr {[llength $argv] > 2 ? [lindex $argv 2] : 15}]
 set part xc7a100tcsg324-1
 set here $root/fpga/arty_a7_100t
 file mkdir $out
@@ -43,7 +47,7 @@ read_vhdl -vhdl2008 -library lockstep [concat \
   [list $root/config/package_soc_types.vhd] \
   [glob $root/rtl/safety_blocks/*.vhd] \
   [glob $root/rtl/peripherals/*.vhd] \
-  [list $root/rtl/top_automotive_soc.vhd]]
+  [list $root/rtl/lockstep_core.vhd $root/rtl/top_automotive_soc.vhd]]
 read_vhdl -vhdl2008 [list $here/arty_a7_top.vhd]
 read_xdc $here/arty_a7_100t.xdc
 
@@ -51,7 +55,7 @@ read_xdc $here/arty_a7_100t.xdc
 # FSM extraction is off for the whole design: the comparator's and the
 # self-test's safe-state encodings must not be re-encoded. Their registers also
 # carry fsm_encoding and dont_touch in the RTL. See docs/verification/synthesis.md.
-synth_design -top arty_a7_top -part $part -fsm_extraction off
+synth_design -top arty_a7_top -part $part -fsm_extraction off -generic g_ram_addr_bits=$ram_bits
 write_checkpoint -force $out/post_synth.dcp
 report_utilization -file $out/utilization_synth.txt
 
@@ -71,9 +75,14 @@ require {[llength [get_cells -hier -quiet -filter {NAME =~ *i_cpu_checker/*}]] >
   "core B is in the design"
 require {[flops {*i_temporal_diversity/r_bus_reg*}] >= 2 * 70} \
   "core A's bus delay line keeps two stages of the 70 compared bits"
+# 72 bits a word, 36 Kib a RAMB36: a profile of 9 or fewer bits may map to
+# LUT RAM instead, and is not checked here
 set ram_tiles [get_cells -hier -quiet -filter {REF_NAME =~ RAMB36* && NAME =~ *i_ecc_ram*}]
-require {[llength $ram_tiles] >= 64} \
-  "the 256 KB ECC RAM is in block RAM (64 or more RAMB36)"
+set ram_need  [expr {(72 * (1 << $ram_bits)) / 36864}]
+if {$ram_bits >= 10} {
+  require {[llength $ram_tiles] >= $ram_need} \
+    "the [expr {8 << $ram_bits >> 10}] KB ECC RAM is in block RAM ($ram_need or more RAMB36)"
+}
 
 # --- Implementation ----------------------------------------------------------------
 opt_design

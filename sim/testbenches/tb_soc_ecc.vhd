@@ -150,14 +150,14 @@ begin
     alias b_ack     is << signal i_soc.i_cpu_checker.xbus_ack_i : std_ulogic >>;
     alias b_err     is << signal i_soc.i_cpu_checker.xbus_err_i : std_ulogic >>;
     alias b_dat     is << signal i_soc.i_cpu_checker.xbus_dat_i : std_ulogic_vector(31 downto 0) >>;
-    alias a_enter   is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
-    alias a_cause   is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
-    alias b_enter   is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
-    alias b_cause   is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
-    alias a_rd_we   is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
-    alias a_rd_addr is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i : std_ulogic_vector(4 downto 0) >>;
-    alias b_rd_we   is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
-    alias b_rd_addr is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i : std_ulogic_vector(4 downto 0) >>;
+    alias a_enter   is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
+    alias a_cause   is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
+    alias b_enter   is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
+    alias b_cause   is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
+    alias a_rd_we   is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
+    alias a_rd_addr is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i : std_ulogic_vector(4 downto 0) >>;
+    alias b_rd_we   is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
+    alias b_rd_addr is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i : std_ulogic_vector(4 downto 0) >>;
 
     -- The load and the byte store in the program's RAM test, to the word at
     -- 0x20000008, whose low half then holds 0x12345678 and 0x12345A78. Both have
