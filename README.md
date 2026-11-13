@@ -16,27 +16,30 @@ Two NEORV32 RISC-V cores run the same program, core B two clocks behind core A. 
 - **SECDED ECC on the data RAM:** 256 KB of shared RAM in 72-bit words corrects single-bit errors and ends a load or store of an uncorrectable word with ERR, while tripping the comparator. The instruction memories have no ECC; an upset there shows up as a lockstep mismatch.
 - **Windowed Hardware Watchdog:** Runs on its own clock input, with an inclusive kick window of 40,000 to 50,000 watchdog clocks, and resets the SoC through a reset network that asserts without a system clock.
 - **Safe outputs:** A trip or a reset forces `actuator_safe_o` high, the CAN pin recessive and the UART pin to mark, and discards the frame or byte in progress (HSI section 8.3).
+- **Two actuator channels with read-back:** `actuator_en_o`, of the opposite polarity, must be high as well before the actuator may be powered. `actuator_safe_o` is read back at the driver on `actuator_fb_i`, and a line that does not follow its command trips the comparators (TSR_ACTUATOR_001).
+- **System clock monitor:** The independent watchdog clock checks the system clock's rate. A stopped or wrong clock raises the fault pin and holds the SoC in reset, without needing the system clock (TSR_CLOCK_001, `docs/verification/clocks.md`).
 
 ---
 
 ## 📂 Repository Directory Layout
 
 ```
-├── .github/workflows/    # CI: lint, regression, formal, board check, evidence; PR checklist gate
+├── .github/workflows/    # CI: lint, regression, formal, board and firmware checks, evidence, RISC-V ACT; PR checklist gate
 ├── docs/
 │   ├── ROADMAP.md        # Evaluation and engineering roadmap, with the status of each item
 │   ├── requirements/     # Technical Safety Requirements (TSR)
-│   ├── safety/           # HSI, safety case, FMEDA inputs, DFA, traceability, evidence index
-│   └── verification/     # Toolchain, formal, fault campaign, diagnostics and other evidence records
+│   ├── safety/           # Item definition, HSI, safety case, FMEDA inputs, DFA, traceability, evidence index
+│   └── verification/     # Toolchain, coverage, ISA compliance, clocks, bench hardware, formal, fault campaign, diagnostics
 ├── fpga/arty_a7_100t/    # Board wrapper, constraints, Vivado build and board image (no build has run yet)
 ├── rtl/
 │   ├── pkg/              # Types, records, safe-state encodings and the generated register map
 │   ├── soc/              # The SoC top level and the one NEORV32 configuration both cores use
-│   ├── safety/           # Comparators, self-test, bus fabric, ECC RAM, watchdog, resets, telemetry
+│   ├── safety/           # Comparators, self-test, clock and actuator monitors, bus fabric, ECC RAM, watchdog, resets, telemetry
 │   ├── peripherals/      # Safety-gated CAN controller and diagnostic UART
 │   └── core/             # NEORV32 RISC-V processor (git submodule)
 ├── sim/
-│   ├── run.py            # The regression: lint, VSG, every test on GHDL and xsim, compared
+│   ├── run.py            # The regression: lint, VSG, every test on GHDL and xsim, compared; code coverage
+│   ├── coverage_waivers.txt  # The lines left out of the coverage figure, each with its reason
 │   ├── tb/               # Benches, plain VHDL-2008
 │   │   └── lib/          # tb_pkg (runner and checks), tb_random_pkg (random and coverage), CAN and trace helpers
 │   ├── formal/           # SymbiYosys properties and jobs
@@ -45,9 +48,11 @@ Two NEORV32 RISC-V cores run the same program, core B two clocks behind core A. 
 │   ├── generated/        # Generated CAN reference frames and register-map package
 │   └── scripts/          # Firmware and CAN generators, mutation, fault campaign, formal runner
 ├── sw/
-│   ├── board/            # The board program: startup and trap code, main.c, linker script
+│   ├── common/           # Startup and trap code, linker script, helpers, shared by every program
+│   ├── board/            # The board program: UART, ECC RAM, CAN and watchdog checks
+│   ├── hello/            # Hello, world: the smallest program, with its bench
 │   ├── include/          # Generated C register header
-│   └── build.py          # Builds the board image with the pinned RISC-V compiler
+│   └── build.py          # Builds every program's IMEM image with the pinned RISC-V compiler
 └── tools/                # Register map, VSG config, fixture, evidence, FMEDA and CI report scripts
 ```
 
@@ -60,8 +65,10 @@ The benches are plain VHDL-2008 with no VUnit or OSVVM: `sim/tb/lib/tb_pkg.vhd` 
 
 | Simulator | Tests (2026-11-13) |
 |-----------|--------------------|
-| GHDL | 285 passed of 285: 277 in 47 benches, 7 testing the framework itself, and the board image |
-| xsim | 285 passed of 285, forces included (applied through Tcl). All 278 tests outside the framework check gave the same output as on GHDL |
+| GHDL | 298 passed of 298: 289 in 48 benches, 7 testing the framework itself, the board image and hello world |
+| xsim | 298 passed of 298, forces included (applied through Tcl). All 291 tests outside the framework check gave the same output as on GHDL |
+| Code coverage (xsim) | 100 % of the first-party RTL's 1,131 statement lines and 850 branch outcomes, with 82 lines waived for stated reasons (`docs/verification/coverage.md`) |
+| ISA (RISC-V ACT) | 346 of 347 on the pinned NEORV32; the one failure is a counter-CSR bug the SoC's cores cannot reach (`docs/verification/isa_compliance.md`) |
 
 ### Formal, fault campaign, mutation and board checks
 A clock monitor on the independent watchdog clock holds the SoC safe if the system clock stops or strays (TSR_CLOCK_001). A separate CI job proves properties of the comparator, the bus fabric and the RAM's store commit with YoWASP Yosys and SymbiYosys (`docs/verification/formal.md`). `sim/scripts/fault_campaign.py` runs a seeded fault campaign (`docs/verification/fault_campaign.md`). `sim/scripts/mutate.py` holds 439 RTL mutants. `fpga/arty_a7_100t/check_board.py` checks the board wrapper and image with GHDL in CI.
@@ -70,7 +77,7 @@ A clock monitor on the independent watchdog clock holds the SoC safe if the syst
 VSG 3.35.0 with every one of its 972 rules defined, 941 on (`sim/vsg_config.yaml`, generated by `tools/vsg_config.py`).
 
 ### Not yet in the flow
-Structural coverage, gate-level simulation and a Vivado build: the installed Vivado reports an Alveo licence that offers no parts.
+MC/DC, FSM and toggle coverage, gate-level simulation, and a Vivado build: the installed Vivado is the Enterprise edition with only an Alveo licence (`docs/verification/bench_hardware.md` says how to fix it).
 
 ---
 
@@ -99,6 +106,7 @@ python3 run.py --list          # every bench.test
 python3 run.py --lint          # ghdl -Wall analysis and ghdl --synth of every block
 python3 run.py --vsg           # style, every VSG rule
 python3 run.py --vsg-fix       # let VSG fix what it can
+python3 run.py --coverage      # xsim: statement and branch coverage of the RTL, in sim/out/coverage
 ```
 
 Each test's log is in `sim/out/<simulator>/<build>/<bench>.<test>/output.txt`.
@@ -110,7 +118,7 @@ python3 tools/register_map.py                   # regenerate the register consta
 python3 tools/vsg_config.py                     # regenerate the VSG configuration from the installed VSG
 python3 tools/check_evidence.py                 # every bench, test, property and file the documents cite exists
 python3 tools/fmeda.py                          # check the FMEDA input table; metrics once it has rates
-python3 sw/build.py --check                     # the board image is a build of sw/board/ (xPack GCC 15.2.0-1)
+python3 sw/build.py --check                     # the program images are builds of sw/ (xPack GCC 15.2.0-1)
 python3 tools/ci_report.py manifest manifest.json
 python3 tools/ci_report.py summary sim/out/regression.xml
 ```
@@ -130,7 +138,7 @@ python3 sim/scripts/mutate.py              # all of them
 All Pull Requests must meet the following entry criteria:
 
 1. **Zero Linting Failures:** Code must pass `run.py --lint` and `run.py --vsg`.
-2. **Tests:** New behaviour needs a test that fails without it, and new safety rules need a mutant in `sim/scripts/mutate.py`. Structural coverage is a goal that the flow cannot measure yet.
+2. **Tests:** New behaviour needs a test that fails without it, and new safety rules need a mutant in `sim/scripts/mutate.py`. Statement and branch coverage of the RTL must stay at 100 % (`python sim/run.py --coverage`), or the new line needs a waiver with its reason.
 3. **Traceability:** Every new architecture file must embed a `requirement_id` attribute linking it to a TSR defined in `docs/requirements/`.
 4. **Mandatory Checklist:** The PR description must contain a completed copy of the [Automotive VHDL Coding Standard Checklist](docs/safety/PR_CHECKLIST.md). The PR workflow checks that it is there, not what it says.
 

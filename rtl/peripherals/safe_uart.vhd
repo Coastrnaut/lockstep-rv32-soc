@@ -62,9 +62,11 @@ architecture rtl of safe_uart is
   signal r_tx_shift : std_logic_vector(10 downto 0);
   signal r_tx_bits  : unsigned(3 downto 0);
 
-  -- UART state machine
+  -- UART state machine: the start bit, then the data, parity and stop bits,
+  -- shifted out of one 11-bit register in uart_data, which counts them down
+  -- to idle
 
-  type t_uart_st is (uart_idle, uart_start, uart_data, uart_parity, uart_stop);
+  type t_uart_st is (uart_idle, uart_start, uart_data);
 
   signal r_uart_st : t_uart_st;
 
@@ -191,11 +193,7 @@ begin
               r_baud_cnt <= (others => '0');
               r_tx_shift <= '1' & r_tx_shift(10 downto 1);
               r_tx_bits  <= r_tx_bits - 1;
-              if (r_tx_bits = 0) then
-                r_uart_st <= uart_idle;
-              else
-                r_uart_st <= uart_data;
-              end if;
+              r_uart_st  <= uart_data;
             end if;
 
           when uart_data =>
@@ -208,25 +206,6 @@ begin
               if (r_tx_bits = 0) then
                 r_uart_st <= uart_idle;
               end if;
-            end if;
-
-          when uart_parity =>
-
-            r_baud_cnt <= r_baud_cnt + 1;
-            if (r_baud_cnt >= c_baud_div - 1) then
-              r_baud_cnt <= (others => '0');
-              r_tx_shift <= '1' & r_tx_shift(10 downto 1);
-              r_tx_bits  <= r_tx_bits - 1;
-              if (r_tx_bits = 0) then
-                r_uart_st <= uart_idle;
-              end if;
-            end if;
-
-          when uart_stop =>
-
-            r_baud_cnt <= r_baud_cnt + 1;
-            if (r_baud_cnt >= c_baud_div - 1) then
-              r_uart_st <= uart_idle;
             end if;
 
           when others =>

@@ -16,6 +16,7 @@ on:
     paths:
       - 'rtl/core/neorv32'
       - '.github/workflows/riscv-act.yml'
+      - '.github/act_known_failures.txt'
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:
@@ -106,7 +107,20 @@ jobs:
         run: make sim
 
       - name: Run the tests
-        run: make run
+        run: |
+          set -o pipefail
+          make run 2>&1 | tee "$RUNNER_TEMP/act_run.log" || true
+
+      - name: Only the known failures, each with its reason
+        run: |
+          grep -oE 'FAIL +[^ ]+\.elf' "$RUNNER_TEMP/act_run.log" | sed -E 's/FAIL +//; s/\.elf$//' | sort -u > failed.txt || true
+          grep -vE '^\s*(#|$)' dut/.github/act_known_failures.txt | sed -E 's/ *#.*//' | sort -u > known.txt
+          grep -E 'RESULT:' "$RUNNER_TEMP/act_run.log" || { echo "no result line: the run did not finish"; exit 1; }
+          echo "Failed:"; cat failed.txt
+          new=$(comm -23 failed.txt known.txt); fixed=$(comm -13 failed.txt known.txt)
+          if [ -n "$new" ]; then echo "Unexpected failures:"; echo "$new"; exit 1; fi
+          if [ -n "$fixed" ]; then echo "Listed as known but passed (remove them from .github/act_known_failures.txt):"; echo "$fixed"; exit 1; fi
+          echo "Every failure is a known one, with its reason in .github/act_known_failures.txt"
 
       - name: Summary
         if: always()

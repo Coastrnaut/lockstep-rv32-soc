@@ -401,8 +401,10 @@ def tcl_forces(text, bench):
 class Xsim:
     name = "xsim"
 
-    def __init__(self, bindir):
+    def __init__(self, bindir, coverage=False):
         self.forcing = set()
+        self.coverage = coverage
+        self.bindir = bindir
         self.xvhdl = _vivado_tool(bindir, "xvhdl")
         self.xelab = _vivado_tool(bindir, "xelab")
         self.xsim = _vivado_tool(bindir, "xsim")
@@ -440,6 +442,10 @@ class Xsim:
             debug = "typical" if bench in self.forcing else "off"
             cmd = [self.xelab, "--relax", "--debug", debug, "--nolog", "-L", "sim_lib", "-L", "lockstep",
                    "-L", "neorv32", f"sim_lib.{bench}", "-s", snap]
+            if self.coverage:
+                # Statement, branch, condition and toggle coverage, one database per
+                # snapshot; every run of the snapshot adds to it
+                cmd += ["-cc_type", "sbct", "-cc_db", snap, "-cc_dir", posix(libdir / "codecov")]
             if generics:
                 # In a file: Windows' .bat wrapper would split name=value at the '='
                 opts = libdir / f"{snap}.opts"
@@ -630,14 +636,23 @@ def regression(sims, jobs, workers, compare, compile_only):
                 print(f"elaborated {len(units)} units of {build} for xsim ({time.time() - start:.0f} s)", flush=True)
             for unit, error in failed.items():
                 print(f"Elaboration failed: xsim {unit}\n{error[:1500]}")
+        # With coverage, a snapshot's runs all add to its one database, so they run
+        # one after another; different snapshots still run side by side
+        if getattr(sim, "coverage", False):
+            groups = {}
+            for job in mine:
+                groups.setdefault((job.build, job.unit), []).append(job)
+            batches = list(groups.values())
+        else:
+            batches = [[job] for job in mine]
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(task, sim, job, broken) for job in mine]
+            futures = [pool.submit(lambda b, s=sim: [task(s, j, broken) for j in b], batch) for batch in batches]
             for fut in concurrent.futures.as_completed(futures):
-                s, job, res = fut.result()
-                results[(s.name, job.name)] = (job, res)
-                ok, msg, _, secs = res
-                word = {True: "pass", False: "fail", None: "skip"}[ok]
-                print(f"{word} {s.name} {job.name} ({secs:.1f} s)" + ("" if ok else f": {msg}"), flush=True)
+                for s, job, res in fut.result():
+                    results[(s.name, job.name)] = (job, res)
+                    ok, msg, _, secs = res
+                    word = {True: "pass", False: "fail", None: "skip"}[ok]
+                    print(f"{word} {s.name} {job.name} ({secs:.1f} s)" + ("" if ok else f": {msg}"), flush=True)
 
     ok_all = True
     print()
@@ -676,6 +691,151 @@ def regression(sims, jobs, workers, compare, compile_only):
     return ok_all, flat
 
 
+COVERED_RTL = ("rtl/pkg/", "rtl/safety/", "rtl/peripherals/", "rtl/soc/")
+COVERAGE_KINDS = ("Statement", "Branch", "Condition", "Toggle")
+
+
+def read_xcrg(folder):
+    """One xcrg text report: {file: {"stmt": {line: (count, source)}, "branch": {key: {"T"/"F"/"E": count}}}}."""
+    found = {}
+    heading = re.compile(r"(\w+) Coverage (?:Summary )?(?:of|for) File(?: \d+)? : (.+?)\s*\|?\s*$")
+    for report in sorted((folder / "codeCoverageReport").glob("file*.txt")):
+        kind, rel, last_line = None, None, 0
+        for line in report.read_text(encoding="utf-8", errors="replace").splitlines():
+            m = heading.search(line)
+            if m:
+                path = m.group(2).replace("\\", "/")
+                rel = path.split(ROOT.as_posix() + "/", 1)[-1]
+                kind = m.group(1) if rel.startswith(COVERED_RTL) else None
+                continue
+            if kind not in ("Statement", "Branch"):
+                continue
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            entry = found.setdefault(rel, {"stmt": {}, "branch": {}})
+            if kind == "Statement":
+                # line | source | execution count | statements on the line
+                if len(cells) == 4 and cells[0].isdigit() and cells[3].isdigit() and not cells[1].isdigit():
+                    count = int(cells[2]) if cells[2].isdigit() else 0
+                    old = entry["stmt"].get(int(cells[0]), (0, cells[1]))[0]
+                    entry["stmt"][int(cells[0])] = (old + count, cells[1])
+            elif len(cells) >= 4:
+                # line | source | Branch n count | outcomes, e.g. "25T 71F"; a missing else
+                # carries its count in the last cell
+                if cells[0].isdigit():
+                    last_line = int(cells[0])
+                if "MISSING ELSE" in cells[1]:
+                    key, outcomes = (last_line, "else"), {"E": int(cells[-1]) if cells[-1].isdigit() else 0}
+                elif cells[2].startswith("Branch"):
+                    key = (last_line, "if")
+                    outcomes = {k: int(v) for v, k in re.findall(r"(\d+)([TF])", cells[3])}
+                else:
+                    continue
+                merged = entry["branch"].setdefault(key, {})
+                for k, v in outcomes.items():
+                    merged[k] = merged.get(k, 0) + v
+    return found
+
+
+def coverage_report(sim, builds):
+    """Report every snapshot's code coverage with xcrg, merge them line by line, and
+    summarise the first-party RTL: a statement is covered if any test ran it, and a
+    branch outcome if any test took it. (xcrg's own merge of databases with
+    different hierarchies keeps one instance per file, and loses the rest.)"""
+    out = OUT / "coverage"
+    remove_tree(out)
+    out.mkdir(parents=True)
+    xcrg = _vivado_tool(sim.bindir, "xcrg")
+    dbs = []
+    for build in builds:
+        cc = OUT / "xsim" / build / "lib" / "codecov"
+        dbs += [(build, cc, db.name) for db in sorted((cc / "xsim.codeCov").glob("*"))]
+
+    def one(item):
+        build, cc, db = item
+        folder = out / "xcrg" / f"{build}.{db}"
+        rc, text = run_process([xcrg, "-report_format", "text", "-cc_report", posix(folder),
+                                "-cc_dir", posix(cc), "-cc_db", db], out, 3600)
+        return item, rc, text, folder
+
+    merged = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, os.cpu_count() or 4)) as pool:
+        for (build, _, db), rc, text, folder in pool.map(one, dbs):
+            if rc != 0:
+                print(f"ERROR: xcrg failed on {build}.{db}:\n{text[-1500:]}")
+                return False
+            for rel, data in read_xcrg(folder).items():
+                target = merged.setdefault(rel, {"stmt": {}, "branch": {}})
+                for n, (count, source) in data["stmt"].items():
+                    target["stmt"][n] = (target["stmt"].get(n, (0, source))[0] + count, source)
+                for key, outcomes in data["branch"].items():
+                    into = target["branch"].setdefault(key, {})
+                    for k, v in outcomes.items():
+                        into[k] = into.get(k, 0) + v
+
+    # Statements no passing simulation can execute, each with its reason:
+    # sim/coverage_waivers.txt; "*" matches every file
+    waivers = []
+    for line in (SIM / "coverage_waivers.txt").read_text(encoding="utf-8").splitlines():
+        if line.strip() and not line.startswith("#"):
+            where, _, reason = line.partition("#")
+            path_part, _, pattern = where.strip().partition(" ")
+            waivers.append((path_part, pattern.strip(), reason.strip()))
+
+    def waiver(rel, source):
+        return next((r for wf, wp, r in waivers if wf in (rel, "*") and source.startswith(wp)), None)
+
+    rows, missed, waived, branch_missed = [], [], [], []
+    for rel in sorted(merged):
+        stmt, branch = merged[rel]["stmt"], merged[rel]["branch"]
+        counted = hit = 0
+        for n in sorted(stmt):
+            count, source = stmt[n]
+            reason = waiver(rel, source)
+            if reason and count == 0:
+                waived.append((rel, n, source, reason))
+                continue
+            counted += 1
+            hit += count > 0
+            if count == 0:
+                missed.append((rel, n, source))
+        # A waived line's branches go with it, and so do a waived branch line's (a
+        # case arm, say), matched against the source as it is
+        source_lines = (ROOT / rel).read_text(encoding="utf-8").splitlines()
+        skip = {n for f, n, _, _ in waived if f == rel}
+        skip |= {key[0] for key in branch if 0 < key[0] <= len(source_lines)
+                 and waiver(rel, source_lines[key[0] - 1].strip())
+                 and all(v == 0 for v in branch[key].values())}
+        outcomes = [(key, k, v) for key, d in branch.items() for k, v in d.items() if key[0] not in skip]
+        b_hit = sum(1 for _, _, v in outcomes if v > 0)
+        branch_missed += [(rel, key[0], k) for key, k, v in outcomes if v == 0]
+        rows.append((rel, counted, hit, len(outcomes), b_hit))
+
+    def pct(total, got):
+        return f"{got} of {total} ({100.0 * got / total:.1f} %)" if total else "-"
+    md = ["# RTL code coverage", "",
+          "Every test of the regression on xsim (`python sim/run.py --coverage`), merged line by line",
+          "over all snapshots. A statement line counts once, covered if any test ran it; a branch",
+          "outcome (true, false, or a missing else) is covered if any test took it.", "",
+          "| File | Statement lines | Branch outcomes |", "|------|------:|------:|"]
+    tot = [0, 0, 0, 0]
+    for rel, counted, hit, b_total, b_hit in rows:
+        md.append(f"| `{rel}` | {pct(counted, hit)} | {pct(b_total, b_hit)} |")
+        tot = [tot[0] + counted, tot[1] + hit, tot[2] + b_total, tot[3] + b_hit]
+    md.append(f"| **All** | {pct(tot[0], tot[1])} | {pct(tot[2], tot[3])} |")
+    md += ["", "## Statements never executed", "", "| File | Line | Source |", "|------|-----:|--------|"]
+    md += [f"| `{f}` | {n} | `{s.replace('|', '/')}` |" for f, n, s in missed]
+    md += ["", "## Branch outcomes never taken", "", "| File | Line | Outcome |", "|------|-----:|---------|"]
+    names = {"T": "true", "F": "false", "E": "the implicit else"}
+    md += [f"| `{f}` | {n} | {names[k]} |" for f, n, k in branch_missed]
+    md += ["", "## Waived", "", "| File | Line | Source | Why |", "|------|-----:|--------|-----|"]
+    md += [f"| `{f}` | {n} | `{s.replace('|', '/')}` | {r} |" for f, n, s, r in waived]
+    (out / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    print("\n".join(md[:len(rows) + 9]))
+    print(f"\n{len(missed)} statements never executed, {len(branch_missed)} branch outcomes never taken, "
+          f"{len(waived)} waived; the report is {out / 'summary.md'}")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("patterns", nargs="*", help="bench.test patterns, with * and ?")
@@ -689,7 +849,21 @@ def main():
     parser.add_argument("--no-compare", action="store_true")
     parser.add_argument("--no-color", action="store_true", help="accepted; the output has no colour")
     parser.add_argument("-x", "--xunit-xml")
+    parser.add_argument("--coverage", action="store_true",
+                        help="xsim only: code coverage of the RTL over the tests run, in sim/out/coverage")
+    parser.add_argument("--coverage-report", action="store_true",
+                        help="only rebuild the coverage summary from the last --coverage run's databases")
     args = parser.parse_args()
+    if args.coverage_report:
+        vivado = find_vivado()
+        if not vivado:
+            print("ERROR: Vivado not found.")
+            return 1
+        builds = sorted(b for b in BUILDS if (OUT / "xsim" / b / "lib" / "codecov").is_dir())
+        return 0 if coverage_report(Xsim(vivado), builds) else 1
+    if args.coverage:
+        args.sim = "xsim"
+        args.no_compare = True
 
     ghdl = find_ghdl()
     if args.vsg or args.vsg_fix:
@@ -721,7 +895,7 @@ def main():
             return 1
     if "xsim" in wanted:
         if vivado:
-            sims.append(Xsim(vivado))
+            sims.append(Xsim(vivado, coverage=args.coverage))
         elif args.sim != "auto":
             print("ERROR: Vivado not found. Set VIVADO_BIN to its bin folder.")
             return 1
@@ -740,6 +914,8 @@ def main():
     ok, results = outcome
     if args.xunit_xml and results:
         write_xunit(args.xunit_xml, results)
+    if args.coverage and results:
+        ok &= coverage_report(sims[0], sorted({j.build for j in jobs}))
     return 0 if ok else 1
 
 

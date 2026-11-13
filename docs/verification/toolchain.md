@@ -17,6 +17,7 @@ python run.py --lint        # GHDL lint only, then exit
 python run.py --vsg         # VSG only, then exit
 python run.py --vsg-fix     # let VSG fix what it can, then exit
 python run.py --compile     # analyse and elaborate only
+python run.py --coverage    # xsim only: code coverage of the RTL, in sim/out/coverage
 python run.py -p 4 -x out/regression.xml   # four jobs, with an xUnit report
 ```
 
@@ -129,11 +130,36 @@ a junction to the build's one.
 
 | Run | GHDL 6.0 (Windows) | xsim, Vivado 2026.1 |
 |-----|--------------------|---------------------|
-| Tests | 285 passed of 285 | 285 passed of 285 |
-| Comparison | | All 278 tests outside the framework check gave the same verdict and the same `TB` lines |
+| Tests | 298 passed of 298 | 298 passed of 298 |
+| Comparison | | All 291 tests outside the framework check gave the same verdict and the same `TB` lines |
 
-The 285 tests are 277 in the 47 benches in `sim/tb`, 7 in the framework check
+The 298 tests are 289 in the 48 benches in `sim/tb`, 7 in the framework check
 and the board test. CI runs the GHDL half with GHDL 4.1 on Ubuntu 24.04.
+
+## Code coverage
+
+`python run.py --coverage` runs the tests on xsim with Vivado's code
+coverage on: `xelab -cc_type sbct` counts statements, branches, conditions
+and toggles, into one database per snapshot (a bench, or a bench and a
+configuration). Every run of a snapshot adds to its database, so a
+snapshot's tests run one after another; different snapshots still run side
+by side. `xcrg` then merges all the databases, and `run.py` writes
+`sim/out/coverage/summary.md`: the four figures for each first-party RTL file
+(`rtl/pkg`, `rtl/safety`, `rtl/peripherals`, `rtl/soc`), and every statement
+no test executed, with its line and source. The full `xcrg` report, in text
+and HTML, is beside it.
+
+xsim counts simulation only. Code that runs while the design is elaborated
+(a function that sizes a register from generics, an assertion on the
+generics) shows as never executed; `sim/coverage_waivers.txt` lists each such
+statement with its reason, and the summary lists the waived ones apart.
+
+GHDL's mcode backend has no coverage. Its GCC backend can write gcov data,
+but it failed 117 of the 290 tests here: it aborts in the CAN receiver bench
+and dereferences NULL on external names declared before the instance they
+reach, which most SoC benches use. xsim runs every test.
+
+The figures are in `docs/verification/coverage.md`.
 
 ## Synthesis
 

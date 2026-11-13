@@ -1,0 +1,5 @@
+# ACT tests allowed to fail on the NEORV32 revision this repository pins, each
+# with its reason. The workflow fails on any other failure, and on a listed
+# test that passes again (so the list cannot go stale). Remove an entry when
+# the NEORV32 submodule moves past the fix.
+Sm_mcsr_cntr-00 # counter CSRs incremented during a CSR write; fixed upstream after our pin by stnolting/neorv32 90a4c867 (#1654). The SoC's cores have no counters (RISCV_ISA_Zicntr off, rtl/soc/lockstep_core.vhd), so the bug cannot reach them

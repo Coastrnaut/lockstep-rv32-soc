@@ -16,14 +16,17 @@ systems. That claim is withdrawn. What exists today is:
 1. Hardware safety mechanisms in RTL: lockstep with a startup self-test,
    temporal diversity, ECC on the shared data RAM, a windowed watchdog, an
    explicit bus response contract and safety-gated CAN and UART pins
-2. Simulation evidence: 47 benches with 277 tests, each run on GHDL and
+2. Simulation evidence: 48 benches with 289 tests, each run on GHDL and
    on Vivado's xsim with identical output, directed fault
    injection by forcing named signals, clocked simulation assertions and a
    mutation harness
 3. Illustrative hardware metrics, not derived from a target (section 4)
 4. Traceability from safety goals through TSRs to named tests
 
-An ASIL claim needs a defined item, a selected target, an FMEDA and
+A reference item, a torque-enable supervisor for an EV traction inverter,
+is defined with its hazard analysis, safety goals, FTTI and assumptions of
+use in `docs/safety/item_definition.md`; a real product replaces it with its
+own. An ASIL claim needs a defined item, a selected target, an FMEDA and
 dependent-failure analysis built from that target, formal and post-route
 evidence, bench measurements and independent assessment. Section 7 lists what
 is missing.
@@ -153,7 +156,7 @@ in `docs/requirements/tsr_safety_core.md`.
 | Instruction fetch corruption | Lockstep detects it once it changes a bus access | No IMEM ECC; private CPU state stays latent until used (trace comparison sees it in verification builds only) |
 | Latent comparator fault after startup | Two comparators cross-checked every clock, each proved by the startup self-test (TSR_LOCKSTEP_045) | Both comparators share clock, reset and inputs (DF-15) |
 | Power supply transient | Watchdog on its own clock | Target-specific analysis |
-| Faults after the comparator | None: CAN, UART and the actuator-safe pin have no read-back | Fault campaign: 9 of 9 effective output-register faults undetected; FMEDA FM-19, FM-20, FM-22 |
+| Faults after the comparator | Actuator: read-back and a second channel (TSR_ACTUATOR_001); CAN: bit monitoring and CRC | A line stuck at "permit" is latent until the next demand or start, when the second channel acts; the UART is diagnostic only; FMEDA FM-19, FM-20, FM-22 |
 
 ---
 

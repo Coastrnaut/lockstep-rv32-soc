@@ -80,6 +80,15 @@
 - **Verified by:** `tb_clock_monitor`, `tb_soc_watchdog.a_stopped_system_clock_is_reported_within_two_monitor_windows`
 - **Open:** the nominal frequencies and the tolerance are generics the integrator sets; on the Arty board the watchdog clock is CFGMCLK, whose own tolerance is wide (`fpga/arty_a7_100t/arty_a7_top.vhd`). A watchdog clock that stops leaves the monitor unable to judge (HSI WD-04).
 
+## TSR_ACTUATOR_001
+- **Description:** The actuator must be removable by two channels of opposite polarity, `actuator_safe_o` (high: safe) and `actuator_en_o` (high: may be powered), so that one stuck pin cannot permit it alone. `actuator_safe_o`, read back at the actuator's driver on `actuator_fb_i`, must follow its command: a difference lasting longer than the driver's delay (8 clocks by default) must trip the comparators and hold until a cold reset. `actuator_en_o` must drop at once on such a fault, and on any SoC reset without a clock. The reset holds the command at safe, so the line is checked at every start.
+- **ASIL Allocation:** ASIL-D (intent)
+- **Mitigation:** `actuator_monitor` synchronises the read-back, compares it with the command delayed as long, filters, and latches; its fault trips both comparators through their fatal input. The second channel is a register of its own, from the comparators' bus permission rather than their safe-state output.
+- **Verification Method:** Output Fault Injection
+- **Implemented In:** `rtl/safety/actuator_monitor.vhd`, `rtl/soc/top_automotive_soc.vhd`
+- **Verified by:** `tb_actuator_monitor`, `tb_soc_lockstep.an_actuator_line_stuck_at_permit_is_found_and_the_second_channel_cuts_power`, `tb_soc_lockstep.an_actuator_line_stuck_at_safe_is_found_when_the_cores_start`, `tb_soc_lockstep.an_actuator_line_stuck_at_permit_is_found_before_the_cores_start`
+- **Open:** a line stuck at "permit" while the command is "permit" stays latent until the next demand or start; the second channel covers that demand. The driver must feed back its own input (AoU-01, `docs/safety/item_definition.md`).
+
 ## TSR_RESET_001
 - **Description:** A reset must take effect at once, with or without a clock, and be released on a clock edge, with both cores released on the same edge. Actuators must be held safe, the CAN pin recessive and the UART pin at mark during a reset.
 - **ASIL Allocation:** ASIL-D (intent)
