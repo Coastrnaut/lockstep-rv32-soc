@@ -102,8 +102,11 @@ MUTANTS = [
      [(r"elsif \(bus_ok_i = '0'\) then\s+-- The byte waiting to go is discarded, so it cannot go when the gate opens\s+r_tx_valid <= '0';", "elsif (false) then\n        null;")]),
     ("uart: serializer ignores the gate", UART, [(r"if \(w_abort = '1'\) then\s+-- The byte on the wire", "if (rst_n_i = '0') then\n        -- The byte on the wire")]),
     ("uart: abort ignores the reset", UART, [(r"w_abort <= '1' when \(rst_n_i = '0' or bus_ok_i = '0'\) else", "w_abort <= '1' when (bus_ok_i = '0') else")]),
+    # A write with the gate closed is now stopped twice: by the branch that drops
+    # the waiting byte, and by the write's own gate term. Both have to go.
     ("uart: safety gate ignored on write", UART,
-     [(r"elsif \(bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel\(0\)",
+     [(r"elsif \(bus_ok_i = '0'\) then\s+-- The byte waiting to go is discarded, so it cannot go when the gate opens\s+r_tx_valid <= '0';\s+", ""),
+      (r"elsif \(bus_ok_i = '1' and bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel\(0\)",
        "elsif (bus_i.valid = '1' and bus_i.we = '1' and bus_i.sel(0)")]),
 
     # --- Address decode

@@ -170,6 +170,18 @@ begin
         wait until rising_edge(clk);
         bus_ok <= '1';
         check_quiet("neither byte comes out");
+      elsif run("one_clock_gate_drop_discards_the_byte_waiting_too") then
+        -- The shortest drop: the serializer is idle at the edge after it, and a
+        -- byte still waiting would start there unless the drop discarded it
+        send(x"55");
+        wait until uart_tx = '0' for c_bit_time;
+        send(x"AA");
+        wait for c_bit_time;
+        wait until rising_edge(clk);
+        bus_ok <= '0';
+        wait until rising_edge(clk);
+        bus_ok <= '1';
+        check_quiet("neither byte comes out after one clock");
       elsif run("reset_goes_to_mark_without_a_clock") then
         send(x"00");
         wait until uart_tx = '0' for c_bit_time;
