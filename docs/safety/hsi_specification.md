@@ -3,8 +3,12 @@
 # ============================================================================
 # ISO 26262 Part 4: Hardware Safety Requirements Specification
 # Document ID: HSI-LRS-001
-# Revision: 1.0
+# Revision: 1.1 (adds section 8, the bus and safe-output contract)
 # ============================================================================
+
+Sections 1 to 7 keep the revision 1.0 requirements. Where they disagree with
+section 8, section 8 is the implemented contract and the earlier text records
+intent.
 
 ## 1. SCOPE & APPLICABILITY
 
@@ -317,3 +321,71 @@ released. Nothing can turn the watchdog off, so software has to start kicking it
 | SG-03 | Detect memory corruption                 | D    |
 | SG-04 | Detect software lockup                   | D    |
 | SG-05 | Ensure fault-free communication          | D    |
+
+---
+
+## 8. BUS, RESPONSE AND SAFE-OUTPUT CONTRACT (REVISION 1.1)
+
+This section fixes the observable behaviour that milestone 1 of
+`docs/ROADMAP.md` implements and tests. It keeps every address constant, the
+CAN and UART wire formats, the two-clock core offset and the behaviour of every
+mapped register. The decisions marked **changed** differ from revision 1.0.
+
+### 8.1 Request and response
+
+Edges are rising edges of `clk_i`. "Core A's request" is core A's XBus request
+after the two-clock delay that aligns it with core B's at the comparator.
+
+| ID | Decision |
+|----|----------|
+| BUS-01 | **Acceptance edge.** A request is accepted at the edge where the gated system bus carries `valid = 1`. That needs core A's delayed request to equal core B's in address, data, byte enables, write enable and strobe, the comparator state to be `SYSTEM_OK`, no trip in that cycle (mismatch, fatal input or illegal state), and the warm reset `w_rst_n` released. |
+| BUS-02 | **Selected slave.** The fabric decodes the accepted address at the acceptance edge and registers it with the request. Targets are the RAM block (SRAM `0x20000000`–`0x2003FFFF` and the ECC register words `0x40000100`–`0x4000010C`), the watchdog (`0x40000200`–`0x40000208`), CAN (`0x40000300`–`0x4000032C`), the UART (`0x40000400`–`0x40000408`), or none. Register targets compare address bits 31:2 with a register's word address. |
+| BUS-03 | **Response edge.** The response is driven in the cycle after acceptance and sampled by core A at the next edge. It is one record of read data, ACK and ERR, taken from the selected target only, and replaces the OR of every slave's read data. Core B receives the same record two clocks later through the temporal-diversity delay line. |
+| BUS-04 | **ACK/ERR exclusivity.** Every accepted request gets exactly one response cycle, with exactly one of ACK or ERR. Read data is zero with ERR and for any store. |
+| BUS-05 | **Write commit.** CAN, UART and watchdog registers commit a store at the acceptance edge. The RAM reads the word at the acceptance edge and commits the merged word at the response edge, only if that word has no uncorrectable error, the comparator gate is still open and the warm reset is still released. |
+| BUS-06 | **Byte lanes.** Byte enables pass unchanged to the slaves. The RAM merges only the enabled lanes. The CAN registers take word stores only, so a byte or halfword store to one of them, including the byte store to TX_REQUEST in the smoke firmware, is acknowledged and does nothing. TX_DATA takes any store that enables byte 0. KICK takes only a word store of `0x0000DEAD`. Loads return the whole word and the core selects lanes. |
+| BUS-07 | **Register directions.** A mapped address is always acknowledged. Reading a write-only register (KICK, TX_REQUEST, TX_DATA) returns zero. Writing a read-only register (ECC registers, watchdog STATUS and RESET_SRC, CAN RX registers) does nothing. |
+| BUS-08 | **Address holes. Changed.** An accepted request to any other external address gets ERR in its response cycle and has no side effect. This covers the reserved comparator block `0x40000000`–`0x400000FF`, unused offsets in each block, the rest of the peripheral window, addresses next to the SRAM and aliases that differ from a mapped address in any of bits 31:2. Revision 1.0 answered these with ACK and zero. The pinned NEORV32 turns ERR into a load or store access fault (`mcause` 5 or 7) and does not write the destination register. |
+| BUS-09 | **Fatal RAM response.** A double-bit error in the response cycle of an accepted RAM load or store makes that response ERR with zero data, and the RAM writes nothing. The same cycle trips the comparator, so no later request is accepted. Single-bit errors return corrected data with ACK, as before. |
+| BUS-10 | **Denied requests.** A request that is not accepted reaches no slave and gets no response from the fabric. The core's own XBus timeout (2048 clocks in the pinned configuration) ends it with an access fault. Containment never depends on that. |
+| BUS-11 | **Warm reset.** A watchdog reset or a cold reset clears the transaction state, which is the pending response and the RAM's pending read-modify-write. A store whose commit edge falls in a reset is dropped and nothing answers it. The ECC counters, SYNDROME, STATUS and RESET_SRC are cleared only by a cold reset. |
+| BUS-12 | **CYC, CTI and TAG.** These are neither compared nor forwarded. With the A extension and the caches disabled, NEORV32 issues only single accesses, so the fabric treats every strobe as one. |
+
+### 8.2 Fault indication and interrupts
+
+| ID | Decision |
+|----|----------|
+| FLT-01 | **`nmi_fault_o` keeps its name.** It is the external fault indication pin, driven by hardware, and is not a RISC-V NMI. **Changed:** it now comes from the comparator's registered fault state, so comparator settling cannot glitch the pin. It rises at the first edge after a trip is detected, within the two clocks of HSR_LOCKSTEP_003. The self-test still checks the comparator's combinational trip in its own cycle. |
+| FLT-02 | **MEI is a maskable notification.** The same registered fault reaches both cores as the machine external interrupt, core B two clocks after core A. Software may mask it with `mstatus.MIE` or `mie.MEIE`. Bus isolation, `actuator_safe_o`, `nmi_fault_o` and the CAN and UART pins never depend on an interrupt being taken, a trap handler or any MMIO access. |
+| FLT-03 | **Illegal comparator state. Changed.** Any value of the comparator's state register other than `0x5A` (`SYSTEM_OK`) or `0xA5` (`FAULT_TRIPPED`) is a fault. The bus closes at once, the fault latches, and the next edge moves the state to `FAULT_TRIPPED`. Revision 1.0 closed the bus and later made the actuators safe without ever raising `nmi_fault_o`. |
+| FLT-04 | **Sticky until cold reset.** A latched fault survives a watchdog reset. Only a cold reset clears it, after which the startup self-test qualifies the comparator again before the cores start. |
+
+### 8.3 Safe outputs
+
+`actuator_safe_o` high, `can_tx_o` recessive and `uart_tx_o` at mark are the
+safe output levels.
+
+| Condition | `actuator_safe_o` | `nmi_fault_o` | `can_tx_o` | `uart_tx_o` | Cores and system bus | Ends with |
+|-----------|-------------------|---------------|------------|-------------|----------------------|-----------|
+| Cold reset pin low, with or without `clk_i` | 1 at once | 0 | Recessive at once | Mark at once | Cores in reset | Pin release, then the self-test |
+| Startup self-test running | 1 | 0 | Recessive | Mark | Cores in reset | Self-test pass |
+| Self-test failed | 1 | 1 | Recessive | Mark | Cores never start | Cold reset |
+| Normal operation | 0 | 0 | Traffic | Traffic | Open | |
+| Lockstep mismatch or double-bit error | 1 from the edge after detection | 1 from the same edge | Recessive from that edge. The mailbox clears and the frame cannot resume. | **Changed:** mark from that edge. The byte in progress and any pending byte are discarded. | Closed from the detection cycle. Later requests are denied. | Cold reset only |
+| Illegal comparator state | 1 at once | 1 from the next edge | Recessive at once | Mark at once, byte discarded | Closed at once | Cold reset only |
+| Watchdog reset | 1 during the 16-clock pulse and until the reset is released | Keeps a latched fault | Recessive | Mark, byte discarded | Cores reset, comparator kept | Pulse end. A latched fault stays. |
+
+A reset asserts asynchronously and holds the CAN and UART pins safe without a
+system clock. A lockstep trip needs system clock edges, because the comparator
+is synchronous. A stopped system clock is caught by the watchdog, which resets
+the SoC from `wd_clk_i` alone and keeps the outputs safe while the clock stays
+stopped.
+
+### 8.4 Watchdog window
+
+| ID | Decision |
+|----|----------|
+| WD-01 | **Inclusive window. Changed.** The counter counts watchdog clocks since the last accepted kick or watchdog restart. A kick is decided at the watchdog clock edge that samples the synchronised kick pulse, by the counter value at that edge. A kick sampled at a count from 40,000 to 50,000 inclusive is accepted and restarts the count. One sampled below 40,000 is early. With no kick, the count reaching 50,000 is the timeout. The counter and the supervisor take the same decision at the same edge. Revision 1.0 let the supervisor see a timeout at 50,000 while the counter accepted the kick. |
+| WD-02 | **Duplicate kicks.** A kick made while an earlier one is still crossing to the watchdog clock counts as the same kick. |
+| WD-03 | **Reset cause.** RESET_SRC is 1 after an early kick and 2 after a timeout. Its copy on the system side is valid before the 16-clock reset pulse ends, and only a cold reset clears it. |
+| WD-04 | **Absent watchdog clock. Open assumption.** If `wd_clk_i` never runs, the SoC still starts and runs, but has no watchdog. If it stops later, the watchdog stops and STATUS stops changing. Containment of a lost watchdog clock needs an independent supervisor on the board, which is a target requirement that is not met here. |
