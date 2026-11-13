@@ -34,10 +34,10 @@ is missing.
 | Safety Goal | Requirement | Evidence (simulation) | Status |
 |-------------|-------------|------------------------|--------|
 | SG-01: Prevent unintended motion | The comparator closes the bus and makes the actuators safe, independent of interrupts; CAN goes recessive and UART to mark | tb_lockstep_comparator, tb_lockstep_fault_inject, tb_lockstep_illegal_state, tb_soc_lockstep, tb_uart_abort, tb_soc_reset_network | Sim |
-| SG-02: Detect computational divergence | Dual-core lockstep, compared within 2 cycles of the comparator seeing it | tb_lockstep_comparator, tb_temporal_diversity, tb_soc_lockstep | Sim. Divergence that stays inside a core until a later access is not bounded (roadmap R2.2) |
-| SG-03: Detect memory corruption | SECDED ECC on the data RAM; an uncorrectable word ends the access with ERR and trips the comparator. The instruction memory has none: each core has its own copy, so the comparator catches an upset there once it reaches the bus | tb_ecc, tb_ecc_exhaustive, tb_ecc_fault_inject, tb_ecc_data_ram, tb_soc_bus_fabric, tb_soc_ecc | Sim |
+| SG-02: Detect computational divergence | Dual-core lockstep, compared within 2 cycles of the comparator seeing it | tb_lockstep_comparator, tb_temporal_diversity, tb_soc_lockstep | Sim. Divergence that stays inside a core until a later access is caught by the trace comparison in verification builds (`docs/verification/trace.md`); in the product it is found only when it reaches the bus |
+| SG-03: Detect memory corruption | SECDED ECC on the data RAM; an uncorrectable word ends the access with ERR and trips the comparator. The instruction memory has none: each core has its own copy, so the comparator catches an upset there once it reaches the bus | tb_ecc, tb_ecc_exhaustive, tb_ecc_fault_inject, tb_ecc_data_ram, tb_soc_bus_fabric, tb_soc_ecc, tb_telemetry_port. Stored single-bit errors are written back and patrolled, and the first fault is readable over a read-only port with the bus shut (`docs/verification/memory_protection.md`) | Sim |
 | SG-04: Detect software lockup | Windowed watchdog on its own clock, inclusive window | tb_watchdog, tb_watchdog_window, tb_watchdog_supervisor, tb_soc_watchdog | Sim. Watchdog clock loss is an open board requirement (HSI WD-04) |
-| SG-05: Ensure fault-free communication | Safety-gated CAN and parity UART | tb_can, tb_can_receive, tb_uart, tb_uart_abort | Sim. No bench interoperability yet (roadmap R4.2) |
+| SG-05: Ensure fault-free communication | Safety-gated CAN and parity UART | tb_can, tb_can_receive, tb_uart, tb_uart_abort | Sim. Supported subset in `docs/verification/can_support.md`; no bench interoperability yet (roadmap R4.2) |
 
 ---
 
@@ -113,12 +113,20 @@ the ASIL-B values. The FMEDA's own formulas do not reproduce its inputs either,
 as `docs/ROADMAP.md` records: its LFM ratio evaluates to 99.86%, and its PMHF
 expression to 1.525×10⁻¹¹/h. Section 7 lists what a real calculation needs.
 
+The replacement is `docs/safety/fmeda_inputs.csv`: 25 classified failure modes,
+each with its mechanism, diagnostic interval and evidence, checked by
+`sim/scripts/fmeda.py`. Its failure rates and coverages stay TBD until a target
+and a failure-rate source are chosen, and until then it computes no metric.
+
 ---
 
 ## 5. TRACEABILITY
 
 Bi-directional traceability from safety goals → FSR → TSR → RTL → test is
-maintained in `docs/safety/traceability_matrix.md`. All RTL files carry VHDL
+maintained in `docs/safety/traceability_matrix.md`, and from each requirement
+of the implemented contract to its test and result in
+`docs/safety/evidence_index.md`. CI checks that every test, property and file
+these documents cite exists (`sim/scripts/check_evidence.py`). All RTL files carry VHDL
 traceability attributes (`requirement_id`), and every ID they name is defined
 in `docs/requirements/tsr_safety_core.md`.
 
@@ -128,11 +136,12 @@ in `docs/requirements/tsr_safety_core.md`.
 
 | Residual Risk | Mitigation in RTL | Remaining work |
 |---------------|-------------------|----------------|
-| Common cause failure in lockstep | Core B 2 clocks behind core A; ECC on the shared RAM | Shared read data from peripherals, decode, clock, power and reset have no independent check (roadmap R2.3, milestone 5) |
+| Common cause failure in lockstep | Core B 2 clocks behind core A; ECC on the shared RAM | Shared read data from peripherals, decode, clock, power and reset have no independent check. Each is listed in `docs/safety/dependent_failure_analysis.md` |
 | Watchdog oscillator failure | None in the SoC | Independent board supervisor (HSI WD-04) |
-| Instruction fetch corruption | Lockstep detects it once it changes a bus access | No IMEM ECC; private CPU state needs trace comparison (roadmap R2.2) |
+| Instruction fetch corruption | Lockstep detects it once it changes a bus access | No IMEM ECC; private CPU state stays latent until used (trace comparison sees it in verification builds only) |
 | Latent comparator fault after startup | Startup self-test only | Periodic proof test or redundant permit path (roadmap R2.4) |
 | Power supply transient | Watchdog on its own clock | Target-specific analysis |
+| Faults after the comparator | None: CAN, UART and the actuator-safe pin have no read-back | Fault campaign: 9 of 9 effective output-register faults undetected; FMEDA FM-19, FM-20, FM-22 |
 
 ---
 

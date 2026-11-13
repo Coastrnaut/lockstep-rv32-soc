@@ -59,8 +59,8 @@ The board wrapper passes it on, and `fpga/arty_a7_100t/build.py
 
 | Test | What it shows |
 |------|---------------|
-| `tb_soc_fabric.ram_256k.probes_...` | The program's probes on the full RAM: 11 ERRs, and the last RAM word reads back |
-| `tb_soc_fabric.ram_32k.probes_...` | The same program on 32 KB: the last-word store and load answer ERR too, 13 ERRs, and the word does not read back |
+| `tb_soc_fabric.ram_256k.probes_get_one_response_each_and_unmapped_ones_change_nothing` | The program's probes on the full RAM: 11 ERRs, and the last RAM word reads back |
+| `tb_soc_fabric.ram_32k.probes_get_one_response_each_and_unmapped_ones_change_nothing` | The same program on 32 KB: the last-word store and load answer ERR too, 13 ERRs, and the word does not read back |
 | Every `tb_soc_fabric` test | No request answered ERR writes the RAM |
 | Mutant "profile: fabric keeps the full RAM decode" | Killed: a 32 KB RAM behind a full decode answers ACK past its end |
 | Mutant "profile: RAM keeps its full size" | Killed: a full RAM behind a 32 KB decode stores a write the fabric refused |

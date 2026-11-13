@@ -52,6 +52,15 @@ jobs:
         run: |
           python sim/scripts/mutate.py --check
 
+      - name: Documents cite only evidence that exists
+        run: |
+          python sim/scripts/check_evidence.py
+
+      - name: FMEDA input table is well formed
+        run: |
+          python sim/scripts/fmeda.py --selftest
+          python sim/scripts/fmeda.py --check
+
       - name: Semantic safety lint (ghdl -Wall, ghdl --synth)
         run: |
           cd sim && python run.py --lint

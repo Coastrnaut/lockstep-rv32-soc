@@ -87,6 +87,8 @@ python3 run.py "sim_lib.tb_soc_ecc.*"    # one bench
 ```bash
 python3 sim/scripts/check_fixtures.py                 # generated files match their generators
 python3 sim/scripts/register_map.py                   # regenerate the register constants, C header and table
+python3 sim/scripts/check_evidence.py                 # every bench, test, property and file the documents cite exists
+python3 sim/scripts/fmeda.py                          # check the FMEDA input table; metrics once it has rates
 python3 sim/scripts/ci_report.py manifest manifest.json
 python3 sim/scripts/ci_report.py summary sim/vunit_out/regression.xml
 ```
