@@ -197,6 +197,7 @@ begin
     alias b_rst_n   is << signal i_soc.i_cpu_checker.rstn_i : std_ulogic >>;
     alias b_rdata   is << signal i_soc.i_cpu_checker.xbus_dat_i : std_ulogic_vector(31 downto 0) >>;
     alias b_ack     is << signal i_soc.i_cpu_checker.xbus_ack_i : std_ulogic >>;
+    alias b_err     is << signal i_soc.i_cpu_checker.xbus_err_i : std_ulogic >>;
     alias b_msi     is << signal i_soc.i_cpu_checker.irq_msi_i : std_ulogic >>;
     alias b_mti     is << signal i_soc.i_cpu_checker.irq_mti_i : std_ulogic >>;
     alias b_mei     is << signal i_soc.i_cpu_checker.irq_mei_i : std_ulogic >>;
@@ -210,6 +211,7 @@ begin
     check(b_rst_n = v_two_ago.rst_n, "core B's reset is core A's two clocks ago");
     check(b_rdata = v_two_ago.rdata, "core B's read data is core A's two clocks ago");
     check(b_ack = v_two_ago.ack, "core B's acknowledge is core A's two clocks ago");
+    check(b_err = v_two_ago.err, "core B's bus error is core A's two clocks ago");
     check(b_msi = v_two_ago.msi, "core B's MSI is core A's two clocks ago");
     check(b_mti = v_two_ago.mti, "core B's MTI is core A's two clocks ago");
     check(b_mei = v_two_ago.mei, "core B's MEI is core A's two clocks ago");
@@ -231,12 +233,29 @@ begin
     alias core_a_rsp is << signal i_soc.i_cpu_master.xbus_rsp : bus_rsp_t >>;
     alias core_b_rsp is << signal i_soc.i_cpu_checker.xbus_rsp : bus_rsp_t >>;
 
-    alias can_busy         is << signal i_soc.w_can_busy : std_logic >>;
-    alias comparator_state is << signal i_soc.i_lockstep_gate.r_current_state : t_safe_state >>;
-    alias soc_bus_valid    is << signal i_soc.w_bus_valid : std_logic >>;
-    alias soc_rst_n        is << signal i_soc.w_rst_n : std_logic >>;
-    alias self_test_passed is << signal i_soc.w_self_test_passed : std_logic >>;
-    alias wd_counter       is << signal i_soc.i_watchdog_supervisor.i_watchdog.r_counter : unsigned(15 downto 0) >>;
+    alias can_busy is << signal i_soc.w_can_busy : std_logic >>;
+    alias ram_word is << signal i_soc.i_ecc_ram.r_word : std_logic_vector(71 downto 0) >>;
+    alias sys_bus  is << signal i_soc.w_safe_sys_bus : t_rv_bus >>;
+
+    -- Each core's interrupt logic: MEI pending, MEI pending and enabled (MEIE),
+    -- an interrupt being taken (which needs MIE), and trap entry with its cause
+    alias a_irq_pnd  is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias a_irq_buf  is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias a_irq_fire is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire : std_ulogic_vector(1 downto 0) >>;
+    alias a_enter    is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
+    alias a_cause    is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
+    alias b_irq_pnd  is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias b_irq_buf  is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias b_irq_fire is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire : std_ulogic_vector(1 downto 0) >>;
+    alias b_enter    is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
+    alias b_cause    is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
+
+    variable v_found          : boolean;
+    alias    comparator_state is << signal i_soc.i_lockstep_gate.r_current_state : t_safe_state >>;
+    alias    soc_bus_valid    is << signal i_soc.w_bus_valid : std_logic >>;
+    alias    soc_rst_n        is << signal i_soc.w_rst_n : std_logic >>;
+    alias    self_test_passed is << signal i_soc.w_self_test_passed : std_logic >>;
+    alias    wd_counter       is << signal i_soc.i_watchdog_supervisor.i_watchdog.r_counter : unsigned(15 downto 0) >>;
 
     procedure cold_reset is
     begin
@@ -391,6 +410,64 @@ begin
         wait until uart_tx = '0' for c_uart_bit_time * 24;
         check_equal(uart_tx, '1', "the UART stays at mark");
         check_equal(uart_starts, 1, "only the start bit before the trip");
+      elsif run("lockstep_trip_with_mie_and_meie_masked_is_contained_without_an_interrupt") then
+        -- HSI FLT-02. The program's RAM test runs before it sets MIE, and it never
+        -- sets MEIE. This spoils its byte store to the RAM at the comparator.
+        cold_reset;
+        wait until core_a_bus.valid = '1' and core_a_bus.we = '1' and core_a_bus.addr = x"20000009" for c_timeout;
+        check_equal(core_a_bus.sel, std_logic_vector'("0010"), "the byte store");
+        wait_clocks(2);
+        core_b_data <= force x"FFFFFFFF";
+        wait_clocks(1);
+        core_b_data <= release;
+        check_equal(sys_bus.valid, '0', "the store did not reach the RAM");
+        wait_clocks(1);
+        wait for 1 ns;
+        check_equal(nmi_fault, '1', "fault on the pin");
+        check_equal(actuator_safe, '1', "actuators safe");
+        check_equal(soc_bus_valid, '0', "bus closed");
+
+        -- MEI is up at both cores two clocks apart, and neither takes it
+        wait_clocks(2);
+
+        for dummy in 1 to 3000 loop
+
+          wait until rising_edge(clk);
+          check_equal(a_irq_pnd(irq_mei_irq_c), '1', "core A: MEI pending");
+          check_equal(a_irq_buf(irq_mei_irq_c), '0', "core A: MEIE masked");
+          check_equal(a_irq_fire, std_ulogic_vector'("00"), "core A: no interrupt taken");
+          check_equal(b_irq_pnd(irq_mei_irq_c), '1', "core B: MEI pending");
+          check_equal(b_irq_buf(irq_mei_irq_c), '0', "core B: MEIE masked");
+          check_equal(b_irq_fire, std_ulogic_vector'("00"), "core B: no interrupt taken");
+
+          if (a_enter = '1') then
+            check(a_cause(6) = '0', "core A: only exceptions");
+          end if;
+
+          if (b_enter = '1') then
+            check(b_cause(6) = '0', "core B: only exceptions");
+          end if;
+
+          check_equal(nmi_fault, '1', "fault still on the pin");
+          check_equal(actuator_safe, '1', "actuators still safe");
+          check_equal(sys_bus.valid, '0', "nothing reaches the system bus");
+
+        end loop;
+
+        -- After a cold reset, the first store to that word reads it first: the
+        -- word store before the trip is there, and the byte is not
+        cold_reset;
+        v_found := false;
+
+        while not v_found loop
+
+          wait until rising_edge(clk);
+          v_found := sys_bus.valid = '1' and sys_bus.we = '1' and sys_bus.addr = x"20000008";
+
+        end loop;
+
+        wait for 1 ns;
+        check_equal(ram_word(31 downto 0), std_logic_vector'(x"12345678"), "the spoiled byte store never landed");
       elsif run("lockstep_trip_in_a_can_frame_goes_recessive_and_drops_the_frame") then
         cold_reset;
         wait until can_tx = '0' for c_timeout;

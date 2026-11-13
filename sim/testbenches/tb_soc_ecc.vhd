@@ -15,7 +15,11 @@ library ieee;
 library vunit_lib;
   context vunit_lib.vunit_context;
 
+library neorv32;
+  use neorv32.neorv32_package.all;
+
 library lockstep;
+  use lockstep.package_soc_types.all;
 
 library work;
   use work.can_test_pkg.all;
@@ -137,6 +141,107 @@ begin
     alias sbe_count  is << signal i_soc.i_ecc_ram.r_sbe_count : unsigned(15 downto 0) >>;
     alias wd_counter is << signal i_soc.i_watchdog_supervisor.i_watchdog.r_counter : unsigned(15 downto 0) >>;
     alias soc_rst_n  is << signal i_soc.w_rst_n : std_logic >>;
+    alias sys_bus    is << signal i_soc.w_safe_sys_bus : t_rv_bus >>;
+
+    -- Each core's XBus response pins, and its trap entry and register writes
+    alias a_ack     is << signal i_soc.i_cpu_master.xbus_ack_i : std_ulogic >>;
+    alias a_err     is << signal i_soc.i_cpu_master.xbus_err_i : std_ulogic >>;
+    alias a_dat     is << signal i_soc.i_cpu_master.xbus_dat_i : std_ulogic_vector(31 downto 0) >>;
+    alias b_ack     is << signal i_soc.i_cpu_checker.xbus_ack_i : std_ulogic >>;
+    alias b_err     is << signal i_soc.i_cpu_checker.xbus_err_i : std_ulogic >>;
+    alias b_dat     is << signal i_soc.i_cpu_checker.xbus_dat_i : std_ulogic_vector(31 downto 0) >>;
+    alias a_enter   is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
+    alias a_cause   is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
+    alias b_enter   is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
+    alias b_cause   is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
+    alias a_rd_we   is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
+    alias a_rd_addr is << signal i_soc.i_cpu_master.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i : std_ulogic_vector(4 downto 0) >>;
+    alias b_rd_we   is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
+    alias b_rd_addr is << signal i_soc.i_cpu_checker.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i : std_ulogic_vector(4 downto 0) >>;
+
+    -- The load and the byte store in the program's RAM test, to the word at
+    -- 0x20000008, whose low half then holds 0x12345678 and 0x12345A78. Both have
+    -- 00 in bits 1:0, so forcing them to 11 is a double-bit error.
+    constant c_load_addr  : std_logic_vector(31 downto 0) := x"20000008";
+    constant c_store_addr : std_logic_vector(31 downto 0) := x"20000009";
+    constant c_t2         : std_ulogic_vector(4 downto 0) := "00111";
+
+    variable v_found : boolean;
+
+    -- Wait for the request to be accepted, then make its word uncorrectable for
+    -- the response cycle, and check both cores' XBus pins (HSI BUS-04, BUS-09).
+    -- Core B gets the response two clocks after core A.
+
+    procedure double_bit_error_on (
+      constant addr : in std_logic_vector(31 downto 0);
+      constant we   : in std_logic
+    ) is
+    begin
+
+      v_found := false;
+
+      while not v_found loop
+
+        wait until rising_edge(clk);
+        v_found := sys_bus.valid = '1' and sys_bus.we = we and sys_bus.addr = addr;
+
+      end loop;
+
+      wait for 1 ns;
+      ram_word(1 downto 0) <= force "11";
+      wait for 1 ns;
+      check_equal(ecc_fatal, '1', "uncorrectable word");
+      check_equal(a_err, '1', "core A: ERR");
+      check_equal(a_ack, '0', "core A: no ACK");
+      check_equal(a_dat, std_ulogic_vector'(x"00000000"), "core A: no data");
+      wait until rising_edge(clk);
+      ram_word(1 downto 0) <= release;
+      wait until rising_edge(clk);
+      wait for 1 ns;
+      check_equal(b_err, '1', "core B: ERR two clocks later");
+      check_equal(b_ack, '0', "core B: no ACK");
+      check_equal(b_dat, std_ulogic_vector'(x"00000000"), "core B: no data");
+
+    end procedure double_bit_error_on;
+
+    -- The trap each core takes, with no write to t2 on the way (HSI BUS-08)
+
+    procedure check_access_fault (
+      constant cause : in std_ulogic_vector(6 downto 0)
+    ) is
+
+      variable v_a_done : boolean;
+      variable v_b_done : boolean;
+
+    begin
+
+      v_a_done := false;
+      v_b_done := false;
+
+      for dummy in 1 to 100 loop
+
+        wait until rising_edge(clk);
+        check(not (a_rd_we = '1' and a_rd_addr = c_t2), "core A: no write to the load's register");
+        check(not (b_rd_we = '1' and b_rd_addr = c_t2), "core B: no write to the load's register");
+
+        if (a_enter = '1' and not v_a_done) then
+          check_equal(a_cause, cause, "core A: access fault");
+          v_a_done := true;
+        end if;
+
+        if (b_enter = '1' and not v_b_done) then
+          check_equal(b_cause, cause, "core B: access fault");
+          v_b_done := true;
+        end if;
+
+        exit when v_a_done and v_b_done;
+
+      end loop;
+
+      check(v_a_done, "core A took a trap");
+      check(v_b_done, "core B took a trap");
+
+    end procedure check_access_fault;
 
     procedure check_uart_byte (
       constant count    : in natural;
@@ -206,6 +311,32 @@ begin
         check_equal(actuator_safe, '1', "actuators still safe");
         check_equal(nmi_fault, '1', "NMI held");
         check_equal(rx_done, 0, "no CAN frame");
+      elsif run("double_bit_error_on_a_load_answers_err_and_traps_without_writeback") then
+        double_bit_error_on(c_load_addr, '0');
+        check_access_fault(trap_laf_c);
+        check_equal(nmi_fault, '1', "fault on the pin");
+        check_equal(actuator_safe, '1', "actuators safe");
+      elsif run("double_bit_error_on_a_byte_store_answers_err_and_leaves_the_word") then
+        double_bit_error_on(c_store_addr, '1');
+        check_access_fault(trap_saf_c);
+        check_equal(actuator_safe, '1', "actuators safe");
+
+        -- The program starts again, and its first store to the word reads it
+        -- first: it still holds the word store, without the byte
+        rst_n   <= '0';
+        wait for c_clk_period * 5;
+        rst_n   <= '1';
+        v_found := false;
+
+        while not v_found loop
+
+          wait until rising_edge(clk);
+          v_found := sys_bus.valid = '1' and sys_bus.we = '1' and sys_bus.addr = c_load_addr;
+
+        end loop;
+
+        wait for 1 ns;
+        check_equal(ram_word(31 downto 0), std_logic_vector'(x"12345678"), "the byte never landed");
       elsif run("error_counts_outlast_a_watchdog_reset") then
         ram_word(0) <= force '1';
         check_uart_byte(3, x"33");

@@ -9,7 +9,15 @@ package neorv32_imem_image is
 type rom_t is array (0 to 255) of std_ulogic_vector(31 downto 0);
 constant image_size_c : natural := 1024;
 constant image_data_c : rom_t := (
-x"0440006f", -- jal zero main
+x"0640006f", -- jal zero main
+x"34202e73", -- csrr t3 mcause
+x"01fe5e13", -- srli t3 t3 31
+x"000e1c63", -- bne t3 zero trap_irq
+x"001a8a93", -- addi s5 s5 1
+x"34102e73", -- csrr t3 mepc
+x"004e0e13", -- addi t3 t3 4
+x"341e1073", -- csrw mepc t3
+x"30200073", -- mret
 x"34202e73", -- csrr t3 mcause
 x"004e7e13", -- andi t3 t3 4
 x"020e1663", -- bne t3 zero trap_uart
@@ -29,14 +37,13 @@ x"30200073", -- mret
 x"40000437", -- lui s0 262144
 x"00000493", -- addi s1 zero 0
 x"00000913", -- addi s2 zero 0
+x"00000a93", -- addi s5 zero 0
 x"0000ea37", -- lui s4 14
 x"eada0a13", -- addi s4 s4 -339
 x"00400293", -- addi t0 zero 4
 x"30529073", -- csrw mtvec t0
 x"08800293", -- addi t0 zero 136
 x"30429073", -- csrw mie t0
-x"00800293", -- addi t0 zero 8
-x"3002a073", -- csrs mstatus t0
 x"00100293", -- addi t0 zero 1
 x"32542623", -- sw t0 812 s0
 x"20042023", -- sw zero 512 s0
@@ -44,20 +51,24 @@ x"20842983", -- lw s3 520 s0
 x"03098393", -- addi t2 s3 48
 x"40742023", -- sw t2 1024 s0
 x"40842303", -- lw t1 1032 s0
-x"00031c63", -- bne t1 zero parity_good
+x"02031063", -- bne t1 zero parity_good
+x"00800293", -- addi t0 zero 8
+x"3002a073", -- csrs mstatus t0
 x"00090063", -- beq s2 zero wait_irq
 x"0ee00293", -- addi t0 zero 238
 x"30542023", -- sw t0 768 s0
 x"30542a23", -- sw t0 788 s0
-x"1440006f", -- jal zero done
+x"1540006f", -- jal zero done
 x"40442303", -- lw t1 1028 s0
 x"00137313", -- andi t1 t1 1
 x"fe031ce3", -- bne t1 zero parity_good
-x"00098a63", -- beq s3 zero cold_start
+x"00098e63", -- beq s3 zero cold_start
+x"00300313", -- addi t1 zero 3
+x"14698063", -- beq s3 t1 fabric
 x"00200313", -- addi t1 zero 2
-x"12699663", -- bne s3 t1 done
+x"12699a63", -- bne s3 t1 done
 x"21442023", -- sw s4 512 s0
-x"1240006f", -- jal zero done
+x"12c0006f", -- jal zero done
 x"200002b7", -- lui t0 131072
 x"12345337", -- lui t1 74565
 x"67830313", -- addi t1 t1 1656
@@ -80,6 +91,8 @@ x"40742023", -- sw t2 1024 s0
 x"40442303", -- lw t1 1028 s0
 x"00137313", -- andi t1 t1 1
 x"fe031ce3", -- bne t1 zero wait_count
+x"00800293", -- addi t0 zero 8
+x"3002a073", -- csrs mstatus t0
 x"12300293", -- addi t0 zero 291
 x"30542023", -- sw t0 768 s0
 x"00200293", -- addi t0 zero 2
@@ -131,6 +144,39 @@ x"fe0290e3", -- bne t0 zero wait_window
 x"05700393", -- addi t2 zero 87
 x"40742023", -- sw t2 1024 s0
 x"0000006f", -- jal zero done
+x"05000513", -- addi a0 zero 80
+x"200002b7", -- lui t0 131072
+x"11111337", -- lui t1 69905
+x"11130313", -- addi t1 t1 273
+x"0062a023", -- sw t1 0 t0
+x"200403b7", -- lui t2 131136
+x"0003ae03", -- lw t3 0 t2
+x"0003a023", -- sw zero 0 t2
+x"ffc2ae03", -- lw t3 -4 t0
+x"fe63ae23", -- sw t1 -4 t2
+x"ffc3ae03", -- lw t3 -4 t2
+x"006e0463", -- beq t3 t1 probe_last
+x"04600513", -- addi a0 zero 70
+x"00042e03", -- lw t3 0 s0
+x"11042e03", -- lw t3 272 s0
+x"10c42e03", -- lw t3 268 s0
+x"33042e03", -- lw t3 816 s0
+x"40c42e03", -- lw t3 1036 s0
+x"50042e03", -- lw t3 1280 s0
+x"c00003b7", -- lui t2 786432
+x"4003ae03", -- lw t3 1024 t2
+x"3063aa23", -- sw t1 788 t2
+x"400013b7", -- lui t2 262145
+x"4063a023", -- sw t1 1024 t2
+x"406400a3", -- sb t1 1025 s0
+x"30641a23", -- sh t1 788 s0
+x"0002ae03", -- lw t3 0 t0
+x"006e0463", -- beq t3 t1 probe_report
+x"04600513", -- addi a0 zero 70
+x"041a8393", -- addi t2 s5 65
+x"40742023", -- sw t2 1024 s0
+x"40a42023", -- sw a0 1024 s0
+x"f7dff06f", -- jal zero done
 others => x"00000000"
 );
 
