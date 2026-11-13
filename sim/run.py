@@ -391,6 +391,23 @@ sim_lib = vu.add_library("sim_lib", vhdl_standard="2008")
 sim_lib.add_source_files(root / "sim" / "testbenches" / "*.vhd")
 sim_lib.add_source_files(root / "sim" / "generated" / "*.vhd")
 
+# Fault campaign (sim/scripts/fault_campaign.py): one configuration of
+# tb_fault_campaign per trial in the manifest that LOCKSTEP_CAMPAIGN names.
+# Without it the bench runs once, with no fault, as part of the regression.
+_campaign = os.environ.get("LOCKSTEP_CAMPAIGN")
+if _campaign:
+    import csv
+    _bench = sim_lib.test_bench("tb_fault_campaign")
+    # A fault can trip the RTL's own simulation assertions. They are evidence
+    # of a fault, not hardware, so they must not end the trial.
+    _bench.set_sim_option("vhdl_assert_stop_level", "failure")
+    with open(_campaign, newline="") as _fh:
+        for _row in csv.DictReader(_fh):
+            _bench.add_config(
+                name=f"trial_{int(_row['trial']):04d}",
+                generics={f"g_{key}": int(_row[key])
+                          for key in ("trial", "site", "bit", "kind", "duration", "inject_ns", "run_us")})
+
 # ---------------------------------------------------------------------------
 # GHDL options
 # ---------------------------------------------------------------------------

@@ -46,3 +46,6 @@ sim/formal/build/
 
 # FPGA build output (fpga/*/build.py, check_board.py)
 fpga/*/build/
+
+# Fault campaign output (sim/scripts/fault_campaign.py)
+sim/campaign/
