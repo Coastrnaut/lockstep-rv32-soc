@@ -47,6 +47,8 @@ architecture tb of tb_soc_lockstep is
   signal uart_tx       : std_logic;
   signal nmi_fault     : std_logic;
   signal actuator_safe : std_logic;
+  signal actuator_en   : std_logic;
+  signal actuator_fb   : std_logic;
   signal uart_starts   : natural;
 
   -- The CAN bus: the SoC and a receiver that acknowledges
@@ -95,6 +97,10 @@ begin
 
   test_runner_watchdog(20 ms);
 
+  -- The actuator's driver reads the first channel back as it is, unless a test
+  -- forces it
+  actuator_fb <= actuator_safe;
+
   i_soc : entity lockstep.top_automotive_soc
     generic map (
       g_boot_mode => 2
@@ -108,6 +114,8 @@ begin
       uart_tx_o       => uart_tx,
       nmi_fault_o     => nmi_fault,
       actuator_safe_o => actuator_safe,
+      actuator_en_o   => actuator_en,
+      actuator_fb_i   => actuator_fb,
       diag_cs_n_i     => '1',
       diag_sck_i      => '0',
       diag_sdo_o      => open
@@ -233,10 +241,11 @@ begin
     alias x_w_comparators_disagree is << signal i_soc.w_comparators_disagree : std_logic >>;
 
     -- Comparator B's own reset and its own copies of the buses (DF-15)
-    alias cold_a_rst_n is << signal i_soc.w_cold_rst_n : std_logic >>;
-    alias cold_b_rst_n is << signal i_soc.w_cold_b_rst_n : std_logic >>;
-    alias b_core_a_bus is << signal i_soc.w_core_a_bus_late_b : t_rv_bus >>;
-    alias b_core_b_bus is << signal i_soc.w_core_b_compared_b : t_rv_bus >>;
+    alias cold_a_rst_n   is << signal i_soc.w_cold_rst_n : std_logic >>;
+    alias cold_b_rst_n   is << signal i_soc.w_cold_b_rst_n : std_logic >>;
+    alias b_core_a_bus   is << signal i_soc.w_core_a_bus_late_b : t_rv_bus >>;
+    alias b_core_b_bus   is << signal i_soc.w_core_b_compared_b : t_rv_bus >>;
+    alias actuator_fault is << signal i_soc.w_actuator_fault : std_logic >>;
 
     alias core_a_data is << signal i_soc.w_core_a_xbus_data : std_logic_vector(31 downto 0) >>;
     alias core_b_data is << signal i_soc.w_core_b_xbus_data : std_logic_vector(31 downto 0) >>;
@@ -500,6 +509,45 @@ begin
         check_equal(self_test_passed, '1', "the self-test passed");
         check_equal(actuator_safe, '0', "the cores run");
         check_equal(nmi_fault, '0', "no fault");
+      elsif run("an_actuator_line_stuck_at_permit_is_found_and_the_second_channel_cuts_power") then
+        -- FMEDA FM-22: the first channel's line sticks at "permit" while the
+        -- program runs. On the next demand the read-back finds it, and the
+        -- second channel has already taken the actuator's power away.
+        cold_reset;
+        wait until core_a_bus.valid = '1' and core_a_bus.addr = c_uart_tx_data_addr for c_timeout;
+        check_equal(actuator_en, '1', "running: the second channel permits");
+        check_equal(actuator_safe, '0', "running: the first channel permits");
+        actuator_fb <= force '0';
+        wait_clocks(50);
+        check_equal(actuator_fault, '0', "latent while nothing is demanded");
+        trip_lockstep;
+        wait_clocks(1);
+        check_equal(actuator_en, '0', "the second channel cuts power at the trip");
+        wait_clocks(12);
+        check_equal(actuator_fault, '1', "the read-back finds the stuck line");
+        check_equal(nmi_fault, '1', "reported on the pin");
+        actuator_fb <= release;
+      elsif run("an_actuator_line_stuck_at_safe_is_found_when_the_cores_start") then
+        -- The line reads safe whatever the command: an open driver input, or
+        -- the board's pull-up with nothing wired
+        actuator_fb <= force '1';
+        cold_reset;
+        wait for c_boot;
+        check_equal(actuator_fault, '1', "found when the reset released the actuator");
+        check_equal(actuator_safe, '1', "the first channel commands safe");
+        check_equal(actuator_en, '0', "the second channel never permits");
+        check_equal(nmi_fault, '1', "reported on the pin");
+        actuator_fb <= release;
+      elsif run("an_actuator_line_stuck_at_permit_is_found_before_the_cores_start") then
+        -- The reset holds the command at safe, so the start checks the line
+        actuator_fb <= force '0';
+        cold_reset;
+        wait for c_boot;
+        check_equal(actuator_fault, '1', "found during the start");
+        check_equal(actuator_safe, '1', "the first channel commands safe");
+        check_equal(actuator_en, '0', "the second channel never permits");
+        check_equal(nmi_fault, '1', "reported on the pin");
+        actuator_fb <= release;
       elsif run("a_self_test_that_never_finishes_keeps_the_soc_safe_and_reports_it") then
         -- Roadmap R2.4: holding the lane at 0 makes the sequencer go round for ever
         self_test_lane <= force 0;

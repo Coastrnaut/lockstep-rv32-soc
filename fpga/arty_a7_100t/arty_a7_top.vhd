@@ -58,7 +58,12 @@ entity arty_a7_top is
     -- Read-only diagnostic SPI port, the ECC first-fault record (HSI ECC-08)
     diag_cs_n : in    std_logic;                    -- JB1
     diag_sck  : in    std_logic;                    -- JB2
-    diag_sdo  : out   std_logic                     -- JB3
+    diag_sdo  : out   std_logic;                    -- JB3
+
+    -- The second actuator channel, and the first channel read back: on a
+    -- bare board, a jumper from JA4 (probe_safe) to JB7
+    actuator_en : out   std_logic;                  -- JB4
+    actuator_fb : in    std_logic                   -- JB7, pulled up: safe
   );
 end entity arty_a7_top;
 
@@ -177,18 +182,21 @@ begin
   end process p_heartbeat;
 
   -- ========================================================================
-  -- 3. THE SOC, booting the board image (fpga/arty_a7_100t/board_firmware.py)
+  -- 3. THE SOC, booting the board image (sw/board, built by sw/build.py)
   -- ========================================================================
   i_soc : entity lockstep.top_automotive_soc
     generic map (
       g_boot_mode     => 2,
       g_ram_addr_bits => g_ram_addr_bits,
-      -- CFGMCLK (nominally 65 MHz) divided by 64. Its tolerance is wide, so the
-      -- clock monitor's is too: an assumption to check against the device
-      -- data sheet before the bench (docs/verification/diagnostics.md)
-      g_sys_clk_hz        => 50_000_000,
-      g_wd_clk_hz         => 1_015_625,
-      g_clk_tolerance_pct => 60
+      -- The watchdog clock is CFGMCLK divided by 64. DS181 v1.27, Table 66:
+      -- CFGMCLK is 65 MHz typical, +/-50 % at most, so the watchdog clock is
+      -- 0.51 to 1.52 MHz. The monitor's count goes with one over it: a right
+      -- system clock reads 0.67 to 2.0 times nominal. With margin: 40 % below,
+      -- 110 % above (docs/verification/clocks.md).
+      g_sys_clk_hz       => 50_000_000,
+      g_wd_clk_hz        => 1_015_625,
+      g_clk_tol_low_pct  => 40,
+      g_clk_tol_high_pct => 110
     )
     port map (
       clk_i           => w_clk50,
@@ -199,6 +207,8 @@ begin
       uart_tx_o       => w_uart_tx,
       nmi_fault_o     => w_nmi_fault,
       actuator_safe_o => w_actuator_safe,
+      actuator_en_o   => actuator_en,
+      actuator_fb_i   => actuator_fb,
       diag_cs_n_i     => diag_cs_n,
       diag_sck_i      => diag_sck,
       diag_sdo_o      => diag_sdo

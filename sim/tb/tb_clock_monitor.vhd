@@ -8,7 +8,9 @@
 -- rate is no fault; one stopped, or far too fast or too slow, is one within
 -- two windows; the first window after a reset is not judged; the fault holds
 -- through a recovered clock and a system reset, and only the cold reset in
--- the watchdog clock domain clears it.
+-- the watchdog clock domain clears it. A second monitor with the Arty
+-- board's tolerances (40 % below, 110 % above) accepts a watchdog clock
+-- anywhere in CFGMCLK's +/-50 % and still finds a stopped system clock.
 --
 -- Traces to:   TSR_CLOCK_001
 -- ============================================================================
@@ -37,6 +39,8 @@ architecture tb of tb_clock_monitor is
   signal rst_n      : std_logic;
   signal wd_rst_n   : std_logic;
   signal fault      : std_logic;
+  signal fault_arty : std_logic;
+  signal wd_period  : time;
   signal sys_period : time;
   signal sys_run    : boolean;
 
@@ -61,8 +65,13 @@ begin
   p_wd_clk : process is
   begin
 
-    wd_clk <= '0', '1' after c_wd_period / 2;
-    wait for c_wd_period;
+    if (wd_period <= 0 ns) then
+      wd_clk <= '0';
+      wait until wd_period > 0 ns;
+    end if;
+
+    wd_clk <= '0', '1' after wd_period / 2;
+    wait for wd_period;
 
   end process p_wd_clk;
 
@@ -70,10 +79,11 @@ begin
 
   i_dut : entity lockstep.clock_monitor
     generic map (
-      g_sys_clk_hz    => 50_000_000,
-      g_wd_clk_hz     => 1_000_000,
-      g_window        => c_window,
-      g_tolerance_pct => 25
+      g_sys_clk_hz         => 50_000_000,
+      g_wd_clk_hz          => 1_000_000,
+      g_window             => c_window,
+      g_tolerance_low_pct  => 25,
+      g_tolerance_high_pct => 25
     )
     port map (
       clk_i      => clk,
@@ -81,6 +91,23 @@ begin
       wd_clk_i   => wd_clk,
       wd_rst_n_i => wd_rst_n,
       fault_o    => fault
+    );
+
+  -- The Arty profile: the watchdog clock is CFGMCLK / 64, +/-50 %
+  i_arty : entity lockstep.clock_monitor
+    generic map (
+      g_sys_clk_hz         => 50_000_000,
+      g_wd_clk_hz          => 1_000_000,
+      g_window             => c_window,
+      g_tolerance_low_pct  => 40,
+      g_tolerance_high_pct => 110
+    )
+    port map (
+      clk_i      => clk,
+      rst_n_i    => rst_n,
+      wd_clk_i   => wd_clk,
+      wd_rst_n_i => wd_rst_n,
+      fault_o    => fault_arty
     );
 
   p_stim : process is
@@ -124,6 +151,7 @@ begin
   begin
 
     test_runner_setup(g_test);
+    wd_period  <= c_wd_period;
     sys_period <= 20 ns;
     sys_run    <= true;
 
@@ -155,6 +183,26 @@ begin
         wait_windows(3);
         sys_period <= 40 ns;
         check_fault_soon("25 MHz");
+      elsif run("the_arty_profile_accepts_cfgmclk_anywhere_in_its_range") then
+        -- CFGMCLK 50 % fast: the count falls to two thirds of nominal
+        wd_period <= c_wd_period * 2 / 3;
+        cold_reset;
+        wait for c_wd_period * 2 / 3 * c_window * 10;
+        check_equal(fault_arty, '0', "watchdog clock 50 % fast");
+        -- CFGMCLK 50 % slow: the count doubles
+        wd_period <= c_wd_period * 2;
+        cold_reset;
+        wait for c_wd_period * 2 * c_window * 10;
+        check_equal(fault_arty, '0', "watchdog clock 50 % slow");
+        info("the Arty profile takes CFGMCLK from -50 % to +50 %");
+      elsif run("the_arty_profile_still_finds_a_stopped_clock") then
+        wd_period <= c_wd_period * 2;
+        cold_reset;
+        wait for c_wd_period * 2 * c_window * 3;
+        check_equal(fault_arty, '0', "running, watchdog clock slow");
+        sys_run   <= false;
+        wait until fault_arty = '1' for c_wd_period * 2 * (2 * c_window + 3);
+        check_equal(fault_arty, '1', "a stopped clock, watchdog clock slow");
       elsif run("the_first_window_after_a_reset_is_not_judged") then
         -- The system clock domain leaves reset most of a window after the
         -- watchdog clock domain, so the first window sees few changes

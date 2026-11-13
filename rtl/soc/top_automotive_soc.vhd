@@ -35,9 +35,10 @@ entity top_automotive_soc is
     -- Nominal clock frequencies, for the system clock monitor, and how far the
     -- system clock may stray from its nominal rate, as measured against the
     -- watchdog clock, before it is a fault (TSR_CLOCK_001)
-    g_sys_clk_hz        : positive              := 50_000_000;
-    g_wd_clk_hz         : positive              := 1_000_000;
-    g_clk_tolerance_pct : natural range 1 to 90 := 25
+    g_sys_clk_hz       : positive               := 50_000_000;
+    g_wd_clk_hz        : positive               := 1_000_000;
+    g_clk_tol_low_pct  : natural range 1 to 90  := 25;
+    g_clk_tol_high_pct : natural range 1 to 200 := 25
   );
   port (
     -- --------------------------------------------------------------------
@@ -66,8 +67,14 @@ entity top_automotive_soc is
     -- --------------------------------------------------------------------
     -- Diagnostic non-maskable interrupt flag
     nmi_fault_o : out   std_logic;
-    -- Hardwired actuator lockdown control
+    -- Hardwired actuator lockdown control: the first channel, '1' safe
     actuator_safe_o : out   std_logic;
+    -- The second channel, of the opposite polarity: '1' the actuator may be
+    -- powered. The actuator needs both: actuator_en_o high and
+    -- actuator_safe_o low (TSR_ACTUATOR_001).
+    actuator_en_o : out   std_logic;
+    -- actuator_safe_o read back at the actuator's driver, '1' safe
+    actuator_fb_i : in    std_logic;
 
     -- --------------------------------------------------------------------
     -- Read-only diagnostic port: the ECC first-fault record over SPI, for an
@@ -113,6 +120,10 @@ architecture structural of top_automotive_soc is
 
   -- The system clock, as the watchdog clock sees it
   signal w_clock_fault : std_logic;
+
+  -- The first actuator channel, and its read-back (TSR_ACTUATOR_001)
+  signal w_actuator_safe  : std_logic;
+  signal w_actuator_fault : std_logic;
 
   -- Comparator B's copies are the same logic as comparator A's, which
   -- synthesis would merge into one (docs/verification/synthesis.md)
@@ -357,8 +368,10 @@ begin
       b_core_a_bus_i => w_core_a_bus_late_b,
       b_core_b_bus_i => w_core_b_compared_b,
 
-      -- Both cores read the same data from the RAM, so they cannot see a bad word
-      fatal_fault_i => w_ecc_fatal or w_test_fatal,
+      -- Both cores read the same data from the RAM, so they cannot see a bad
+      -- word; and an actuator line that does not follow its command is no
+      -- shutdown path
+      fatal_fault_i => w_ecc_fatal or w_test_fatal or w_actuator_fault,
 
       -- Safety Monitoring Outputs
       nmi_fault_o  => w_nmi,
@@ -438,9 +451,10 @@ begin
   -- ========================================================================
   i_clock_monitor : entity lockstep.clock_monitor
     generic map (
-      g_sys_clk_hz    => g_sys_clk_hz,
-      g_wd_clk_hz     => g_wd_clk_hz,
-      g_tolerance_pct => g_clk_tolerance_pct
+      g_sys_clk_hz         => g_sys_clk_hz,
+      g_wd_clk_hz          => g_wd_clk_hz,
+      g_tolerance_low_pct  => g_clk_tol_low_pct,
+      g_tolerance_high_pct => g_clk_tol_high_pct
     )
     port map (
       clk_i      => clk_i,
@@ -539,6 +553,26 @@ begin
   nmi_fault_o <= (w_fault and w_self_test_passed) or w_self_test_failed or w_clock_fault;
 
   -- Nothing supervises the actuators during a reset, so it holds them safe too
-  actuator_safe_o <= w_lockstep_safe or not w_rst_n;
+  w_actuator_safe <= w_lockstep_safe or not w_rst_n;
+  actuator_safe_o <= w_actuator_safe;
+
+  -- ========================================================================
+  -- 13. ACTUATOR READ-BACK AND SECOND CHANNEL
+  -- ========================================================================
+  -- actuator_safe_o is read back at the driver; a line that does not follow
+  -- its command trips the comparators. The second channel follows the
+  -- comparators' bus permission, through a register of its own.
+  -- ========================================================================
+  i_actuator_monitor : entity lockstep.actuator_monitor
+    port map (
+      clk_i       => clk_i,
+      rst_n_i     => w_cold_rst_n,
+      sys_rst_n_i => w_rst_n,
+      safe_cmd_i  => w_actuator_safe,
+      fb_i        => actuator_fb_i,
+      permit_i    => w_bus_valid,
+      enable_o    => actuator_en_o,
+      fault_o     => w_actuator_fault
+    );
 
 end architecture structural;

@@ -30,6 +30,11 @@ set_property -dict {PACKAGE_PIN E15 IOSTANDARD LVCMOS33 PULLUP TRUE} [get_ports 
 set_property -dict {PACKAGE_PIN E16 IOSTANDARD LVCMOS33 PULLDOWN TRUE} [get_ports diag_sck]
 set_property -dict {PACKAGE_PIN D15 IOSTANDARD LVCMOS33} [get_ports diag_sdo]
 
+## Second actuator channel on JB4; the actuator-safe read-back on JB7, pulled
+## up so that an open line reads safe (and disagrees with a permit command)
+set_property -dict {PACKAGE_PIN C15 IOSTANDARD LVCMOS33} [get_ports actuator_en]
+set_property -dict {PACKAGE_PIN J17 IOSTANDARD LVCMOS33 PULLUP TRUE} [get_ports actuator_fb]
+
 ## ----------------------------------------------------------------------------
 ## Watchdog clock: the configuration oscillator. UG470 gives CFGMCLK as about
 ## 65 MHz with a wide tolerance; timing is closed for 100 MHz, its upper end.

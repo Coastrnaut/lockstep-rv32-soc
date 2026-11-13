@@ -45,6 +45,7 @@ architecture tb of tb_soc_ecc is
   signal uart_tx       : std_logic;
   signal nmi_fault     : std_logic;
   signal actuator_safe : std_logic;
+  signal actuator_en   : std_logic;
 
   -- The diagnostic SPI port, as an external supervisor drives it
   signal diag_cs_n : std_logic;
@@ -99,6 +100,8 @@ begin
       uart_tx_o       => uart_tx,
       nmi_fault_o     => nmi_fault,
       actuator_safe_o => actuator_safe,
+      actuator_en_o   => actuator_en,
+      actuator_fb_i   => actuator_safe,
       diag_cs_n_i     => diag_cs_n,
       diag_sck_i      => diag_sck,
       diag_sdo_o      => diag_sdo

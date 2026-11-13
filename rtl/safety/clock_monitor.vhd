@@ -15,7 +15,10 @@
 --               bit toggles slowly enough for the watchdog clock to see every
 --               change. In the watchdog clock domain that bit is synchronised
 --               and its changes counted over each window. Outside the expected
---               count, plus or minus g_tolerance_pct, the fault latches. Only a
+--               count (g_tolerance_low_pct below it to g_tolerance_high_pct
+--               above it), the fault latches. The two differ when the watchdog
+--               clock is the less accurate one: the count scales with one over
+--               its frequency. Only a
 --               cold reset (wd_rst_n_i) clears it: a stopped system clock cannot
 --               clear anything. The first window after the reset is not judged,
 --               since the two clocks leave reset at different times.
@@ -41,8 +44,9 @@ entity clock_monitor is
     g_wd_clk_hz  : positive := 1_000_000;
     -- Watchdog clocks in each window
     g_window : positive := 256;
-    -- How far the count may be from the nominal one, in percent
-    g_tolerance_pct : natural range 1 to 90 := 25
+    -- How far the count may be below and above the nominal one, in percent
+    g_tolerance_low_pct  : natural range 1 to 90  := 25;
+    g_tolerance_high_pct : natural range 1 to 200 := 25
   );
   port (
     clk_i : in    std_logic;
@@ -95,8 +99,8 @@ architecture rtl of clock_monitor is
   -- Changes of the top bit in one window, nominal, and the accepted range
   constant c_nominal : real    := real(g_window) * real(g_sys_clk_hz) /
                                   (real(g_wd_clk_hz) * 2.0 ** (c_div_bits - 1));
-  constant c_min     : natural := integer(floor(c_nominal * real(100 - g_tolerance_pct) / 100.0));
-  constant c_max     : natural := integer(ceil(c_nominal * real(100 + g_tolerance_pct) / 100.0));
+  constant c_min     : natural := integer(floor(c_nominal * real(100 - g_tolerance_low_pct) / 100.0));
+  constant c_max     : natural := integer(ceil(c_nominal * real(100 + g_tolerance_high_pct) / 100.0));
 
   -- System clock domain
   signal r_div : unsigned(c_div_bits - 1 downto 0);

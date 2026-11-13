@@ -37,6 +37,7 @@ architecture tb of tb_board_firmware is
   signal uart_tx       : std_logic;
   signal nmi_fault     : std_logic;
   signal actuator_safe : std_logic;
+  signal actuator_en   : std_logic;
 
   type t_log is array (1 to 16) of character;
 
@@ -75,6 +76,8 @@ begin
       uart_tx_o       => uart_tx,
       nmi_fault_o     => nmi_fault,
       actuator_safe_o => actuator_safe,
+      actuator_en_o   => actuator_en,
+      actuator_fb_i   => actuator_safe,
       diag_cs_n_i     => '1',
       diag_sck_i      => '0',
       diag_sdo_o      => open

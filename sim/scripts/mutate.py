@@ -70,6 +70,7 @@ FAB = "rtl/safety/soc_bus_fabric.vhd"
 TEL = "rtl/safety/telemetry_port.vhd"
 DUAL = "rtl/safety/dual_comparator.vhd"
 CLOCK = "rtl/safety/clock_monitor.vhd"
+ACT = "rtl/safety/actuator_monitor.vhd"
 
 CLEAR = r"w_tx_clear <= '1' when \(rst_n_i = '0' or bus_ok_i = '0' or r_bus_off = '1'\) else"
 
@@ -250,9 +251,9 @@ MUTANTS = [
     ("reset: comparator on the raw reset", TOP, [(r"rst_n_i       => w_cold_rst_n,\s+flip_bus_o", "rst_n_i       => rst_n_i,\n      flip_bus_o")]),
     ("reset: CAN on the raw reset", TOP, [(r"(i_automotive_can.*?rst_n_i      => )w_rst_n", r"\g<1>rst_n_i")]),
     ("reset: UART on the raw reset", TOP, [(r"(i_safe_uart.*?rst_n_i      => )w_rst_n", r"\g<1>rst_n_i")]),
-    ("reset: actuators not held safe", TOP, [(r"actuator_safe_o <= w_lockstep_safe or not w_rst_n;", "actuator_safe_o <= w_lockstep_safe;")]),
-    ("reset: actuators held safe by the raw reset only", TOP, [(r"actuator_safe_o <= w_lockstep_safe or not w_rst_n;", "actuator_safe_o <= w_lockstep_safe or not rst_n_i;")]),
-    ("reset: lockstep fault does not reach the actuators", TOP, [(r"actuator_safe_o <= w_lockstep_safe or not w_rst_n;", "actuator_safe_o <= not w_rst_n;")]),
+    ("reset: actuators not held safe", TOP, [(r"w_actuator_safe <= w_lockstep_safe or not w_rst_n;", "w_actuator_safe <= w_lockstep_safe;")]),
+    ("reset: actuators held safe by the raw reset only", TOP, [(r"w_actuator_safe <= w_lockstep_safe or not w_rst_n;", "w_actuator_safe <= w_lockstep_safe or not rst_n_i;")]),
+    ("reset: lockstep fault does not reach the actuators", TOP, [(r"w_actuator_safe <= w_lockstep_safe or not w_rst_n;", "w_actuator_safe <= not w_rst_n;")]),
 
     # --- Watchdog in the SoC
     ("wd: kick ignores the key", SUP, [(r" and bus_i\.data = c_wd_kick_key\) else", ") else")]),
@@ -392,6 +393,13 @@ MUTANTS = [
     ("clock: the fault clears at the next window", CLOCK, [(r"          r_armed <= '1';\n", "          r_armed <= '1';\n          r_fault <= '0';\n")]),
     ("clock: a clock fault does not reach the fault pin", TOP, [(r"or w_self_test_failed or w_clock_fault;", "or w_self_test_failed;")]),
     ("clock: a clock fault does not hold the SoC in reset", TOP, [(r"and not w_wd_reset and not w_clock_fault;", "and not w_wd_reset;")]),
+    ("clock: one tolerance for both sides", CLOCK, [(r"real\(100 \+ g_tolerance_high_pct\)", "real(100 + g_tolerance_low_pct)")]),
+    # --- Actuator read-back and second channel (FMEDA FM-22, TSR_ACTUATOR_001)
+    ("actuator: the read-back never faults", ACT, [(r"          r_fault <= '1';", "          r_fault <= '0';")]),
+    ("actuator: no filter on the read-back", ACT, [(r"if \(r_count = g_filter_clocks\) then", "if (true) then")]),
+    ("actuator: the second channel ignores the reset", ACT, [(r"\(r_permit = '1' and sys_rst_n_i = '1' and r_fault /= '1'\)", "(r_permit = '1' and r_fault /= '1')")]),
+    ("actuator: the second channel ignores the permission", ACT, [(r"        r_permit <= permit_i;", "        r_permit <= '1';")]),
+    ("actuator: a read-back fault does not trip the comparators", TOP, [(r"w_test_fatal or w_actuator_fault,", "w_test_fatal,")]),
     # --- Repair, patrol and first-fault telemetry (roadmap R4.1)
     ("repair: a load does not write back its corrected word", RAM, [(r"w_repair <= \(r_read and w_sbe_found\) or w_scrub_sbe;", "w_repair <= w_scrub_sbe;")]),
     ("repair: the patrol does not write back", RAM, [(r"w_repair <= \(r_read and w_sbe_found\) or w_scrub_sbe;", "w_repair <= r_read and w_sbe_found;")]),
@@ -452,7 +460,7 @@ MUTANTS = [
     ("test: byte enable flips not wired", TOP, [(r"w_core_b_compared\.sel   <= w_core_b_bus\.sel xor w_test_flip\.sel;", "w_core_b_compared.sel   <= w_core_b_bus.sel;")]),
     ("test: write enable flip not wired", TOP, [(r"w_core_b_compared\.we    <= w_core_b_bus\.we xor w_test_flip\.we;", "w_core_b_compared.we    <= w_core_b_bus.we;")]),
     ("test: strobe flip not wired", TOP, [(r"w_core_b_compared\.valid <= w_core_b_bus\.valid xor w_test_flip\.valid;", "w_core_b_compared.valid <= w_core_b_bus.valid;")]),
-    ("test: fatal input not wired", TOP, [(r"fatal_fault_i => w_ecc_fatal or w_test_fatal,", "fatal_fault_i => w_ecc_fatal,")]),
+    ("test: fatal input not wired", TOP, [(r"fatal_fault_i => w_ecc_fatal or w_test_fatal or", "fatal_fault_i => w_ecc_fatal or")]),
     ("test: comparator on the cold reset alone", TOP, [(r"rst_a_n_i => w_comparator_rst_n,", "rst_a_n_i => w_cold_rst_n,"),
                                                      (r"w_comparator_b_rst_n <= w_cold_b_rst_n and not w_test_clear;", "w_comparator_b_rst_n <= w_cold_b_rst_n;")]),
     ("test: NMI pin shows the self-test", TOP, [(r"nmi_fault_o <= \(w_fault and w_self_test_passed\) or w_self_test_failed", "nmi_fault_o <= w_fault or w_self_test_failed")]),
