@@ -28,6 +28,14 @@
 - **Implemented In:** `rtl/safety/soc_bus_fabric.vhd`, `rtl/safety/ecc_data_ram.vhd`, `rtl/soc/top_automotive_soc.vhd`
 - **Verified by:** `tb_soc_bus_fabric`, `tb_soc_fabric`, `tb_soc_ecc`; formal proofs BUS-P1 to BUS-P6 (`docs/verification/formal.md`)
 
+## TSR_BUS_002
+- **Description:** A fault in the read data on its way from the fabric to either core must be detected and must trip the comparator, so that a fault both cores would receive alike cannot pass unseen.
+- **ASIL Allocation:** ASIL-D (intent)
+- **Mitigation:** Even parity taken from each slave's data before the selection, carried with the response and through core B's delay line, and checked at both cores' inputs in every clock; a mismatch is a fatal input to the comparators (HSI section 8.6).
+- **Verification Method:** Directed simulation, formal proof, fault campaign
+- **Implemented In:** `rtl/safety/soc_bus_fabric.vhd`, `rtl/soc/top_automotive_soc.vhd`, `rtl/pkg/package_soc_types.vhd`
+- **Verified by:** `tb_soc_bus_fabric.parity_comes_from_each_slave_before_the_selection`, `tb_soc_fabric.a_stuck_read_data_bit_trips_the_soc_while_the_bus_is_idle`, `tb_soc_fabric.a_fault_in_core_b_copy_of_the_read_data_trips_the_soc`; formal proof BUS-P7; fault campaign sites 7 and 18 (`docs/verification/fault_campaign.md`)
+
 ## TSR_ECC_001
 - **Description:** All memory bus transactions must be protected by SECDED Hamming code to correct single-bit errors and detect double-bit errors.
 - **ASIL Allocation:** ASIL-D (intent)

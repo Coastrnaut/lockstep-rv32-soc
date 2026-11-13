@@ -160,6 +160,9 @@ begin
       if (rsp.err = '1') then
         check_equal(rsp.rdata, std_logic_vector'(x"00000000"), "no data with ERR");
       end if;
+
+      -- Every response, and every clock without one, has even parity (HSI 8.6)
+      check_equal(rsp.rpar, xor rsp.rdata, "read data parity");
     end if;
 
     if (rsp.ack = '1') then
@@ -536,6 +539,48 @@ begin
         check_equal(errs, v_errs, "one ERR for each unmapped request");
         check_equal(acks + errs, accepted, "one response for each accepted request");
         check_equal(nmi_fault, '0', "no fault");
+      elsif run("parity_comes_from_each_slave_before_the_selection") then
+        -- A bit of the selected data flipped after the selection does not move
+        -- the parity, which was chosen from the slave's own data
+        monitor_on <= false;
+
+        loop_target : for lv_t in 0 to 3 loop
+
+          case lv_t is
+
+            when 0 =>
+
+              transfer(x"20000010", x"00000001", '1');
+              req <= (addr => x"20000010", data => x"00000000", sel => "1111", we => '0', valid => '1');
+
+            when 1 =>
+
+              req <= (addr => c_wd_status_addr, data => x"00000000", sel => "1111", we => '0', valid => '1');
+
+            when 2 =>
+
+              req <= (addr => c_can_id_addr, data => x"00000000", sel => "1111", we => '0', valid => '1');
+
+            when others =>
+
+              req <= (addr => c_uart_status_addr, data => x"00000000", sel => "1111", we => '0', valid => '1');
+
+          end case;
+
+          wait until rising_edge(clk);
+          req               <= c_bus_idle;
+          wait for 1 ns;
+          check_equal(rsp.ack, '1', "a load, target " & integer'image(lv_t));
+          check_equal(rsp.rpar, xor rsp.rdata, "parity as sent, target " & integer'image(lv_t));
+          f_rdata(lv_t * 7) <= force not f_rdata(lv_t * 7);
+          wait for 1 ns;
+          check(rsp.rpar /= (xor rsp.rdata), "a flip after the selection breaks the parity, target " &
+                integer'image(lv_t));
+          f_rdata(lv_t * 7) <= release;
+          wait until rising_edge(clk);
+
+        end loop loop_target;
+
       elsif run("assertion_a_response_with_no_request_is_reported") then
         monitor_on <= false;
         expect_assertion("FORMAL FAIL: response with no request accepted");

@@ -45,7 +45,7 @@ The top level went from 1,112 lines to about 400.
 | GHDL lint, VSG, board check | Pass | Pass |
 
 The campaign comparison is the strongest of these: it runs the firmware on both
-cores for 700 µs per trial, with faults at 15 sites, and compares outputs and
+cores for 700 µs per trial, with faults at 20 sites, and compares outputs and
 timings to the picosecond.
 
 ## RAM size profile

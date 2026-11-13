@@ -16,7 +16,12 @@
 --               A request the comparator stops never reaches this block, and
 --               gets no response from it: the core's own bus timeout ends it.
 --
--- Traces to:    TSR_BUS_001
+--               The response carries the read data's parity, taken from each
+--               slave's data before the selection and selected separately, so
+--               that a fault in the data's path from here to either core does
+--               not reach both cores unseen (HSI 8.6).
+--
+-- Traces to:    TSR_BUS_001, TSR_BUS_002
 -- ============================================================================
 
 library ieee;
@@ -57,7 +62,7 @@ architecture rtl of soc_bus_fabric is
 
   -- ISO 26262 Automated Traceability Attributes
   attribute requirement_id : string;
-  attribute requirement_id of rtl : architecture is "TSR_BUS_001";
+  attribute requirement_id of rtl : architecture is "TSR_BUS_001, TSR_BUS_002";
 
   -- One-hot target of the accepted request
 
@@ -171,6 +176,7 @@ architecture rtl of soc_bus_fabric is
   signal w_ack   : std_logic;
   signal w_err   : std_logic;
   signal w_rdata : std_logic_vector(c_data_width - 1 downto 0);
+  signal w_rpar  : std_logic;
 
 begin
 
@@ -230,7 +236,30 @@ begin
 
   end process p_select;
 
+  -- The same choice for the parity, made apart from the data's: each slave's
+  -- data is reduced to its parity before it is chosen, so that the data's
+  -- selection and everything after it are checked against this
+  p_parity : process (all) is
+  begin
+
+    w_rpar <= '0';
+
+    if (w_ack = '1' and r_we = '0') then
+      if (r_target(c_tgt_ram) = '1') then
+        w_rpar <= xor ram_rdata_i;
+      elsif (r_target(c_tgt_wd) = '1') then
+        w_rpar <= xor wd_rdata_i;
+      elsif (r_target(c_tgt_can) = '1') then
+        w_rpar <= xor can_rdata_i;
+      elsif (r_target(c_tgt_uart) = '1') then
+        w_rpar <= xor uart_rdata_i;
+      end if;
+    end if;
+
+  end process p_parity;
+
   rsp_o.rdata <= w_rdata;
+  rsp_o.rpar  <= w_rpar;
   rsp_o.ack   <= w_ack;
   rsp_o.err   <= w_err;
 

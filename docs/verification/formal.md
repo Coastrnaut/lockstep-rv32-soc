@@ -86,6 +86,11 @@ reusing the RTL's decode.
 | BUS-P4 | An accepted request gets exactly one of ACK and ERR in the next cycle, and nothing else gets either | HSI BUS-03, BUS-04, TSR_BUS_001 |
 | BUS-P5 | ERR exactly for an unmapped address, or a RAM block access with an uncorrectable word | HSI BUS-08, BUS-09 |
 | BUS-P6 | A load gets the addressed slave's data only, and a store gets none | HSI BUS-03, BUS-07 |
+| BUS-P7 | The parity is the addressed slave's own data's, and 0 with no data; with BUS-P6, the read data's parity is even in every cycle | HSI PAR-01, TSR_BUS_002 |
+
+BUS-P7 is stated per slave. Stated as "the parity of the selected data", the
+proof did not finish in ten minutes: parity through a multiplexer is a hard
+problem for a SAT solver, and the per-slave form is the same fact.
 
 Broken RTL: unmapped addresses acknowledged, as in revision 1.0. The proof
 fails on BUS-P5.

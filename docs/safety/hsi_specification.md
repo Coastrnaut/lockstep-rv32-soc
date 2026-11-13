@@ -425,3 +425,18 @@ Roadmap R4.1. Evidence: `docs/verification/memory_protection.md`.
 | ECC-06 | **Patrol.** In every clock without a RAM strobe, out of cold reset, the RAM reads the next word in turn and, if it holds a single-bit error, writes it back corrected in the next clock. It counts the error in SBE_COUNT. An uncorrectable word it finds sets PATROL bit 0 and the first-fault record, and is not reported on `dbe_fatal_o`: nothing has used it, and an access that does trips as in section 8.2. A pass over the 256 KB RAM takes 32,768 idle clocks, 0.66 ms at 50 MHz, and at most 65,536 clocks, 1.31 ms, under back-to-back core accesses, which leave every other clock idle. |
 | ECC-07 | **Arbitration.** A bus access always has the RAM's read port, so the patrol never delays an access or changes its response cycle. A patrol write can meet a bus read of the same word in one clock; both see a correctable word with the same corrected data. |
 | ECC-08 | **First-fault telemetry and diagnostic port.** The first error since cold reset is kept with its cause, word address, syndrome and time, and later errors do not replace it. A warm reset keeps it. A read-only SPI port on its own pins (`diag_cs_n_i`, `diag_sck_i`, `diag_sdo_o`; mode 0, at most a tenth of `clk_i`) shifts out FIRST_INFO, FIRST_ADDR, FIRST_TIME, PATROL and the two counts, 160 bits, most significant first, from a snapshot taken when chip select falls. It does not use the system bus and can write nothing, so it works with the bus shut by a fault without reopening it. |
+
+### 8.6 Read data parity (revision 1.3)
+
+Roadmap R2.3. Both cores read the same data, so a fault in it after the slave
+reaches both the same way and lockstep cannot see it. The fault campaign showed
+it: a bit of the shared response stuck from one response on corrupted the
+outputs, and nothing in the SoC noticed (`docs/verification/fault_campaign.md`).
+The RAM's ECC protects the RAM, not the path from it.
+
+| ID | Decision |
+|----|----------|
+| PAR-01 | **Parity with the data.** The response carries `rpar`, which makes its read data's parity even in every cycle. The fabric takes it from the addressed slave's own data before the selection, and selects it apart from the data, so the data's selection and everything after it are checked. With no read data, data and `rpar` are 0. |
+| PAR-02 | **Checked at each core.** Core A's read data, and core B's copy of it after the two-clock delay line, are each checked against the parity that came with them, in every clock, read or not, so a bit that sticks is found while the bus is idle. A mismatch trips the comparator through its fatal input, as an uncorrectable RAM word does (section 8.2): the bus closes, the fault pin rises at the next edge, and only a cold reset clears it. |
+| PAR-03 | **Not covered.** A fault inside a slave before its data reaches the fabric (the RAM has ECC; the register slaves have none), a fault in the fabric's target register, which selects data and parity alike, and an even number of flipped bits. |
+

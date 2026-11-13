@@ -91,6 +91,7 @@ begin
           (
             rst_n => v_flags(0),
             rdata => v_random.rand_slv(32),
+            rpar  => v_flags(6),
             ack   => v_flags(1),
             err   => v_flags(5),
             msi   => v_flags(2),

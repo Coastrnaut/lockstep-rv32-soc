@@ -125,6 +125,11 @@ architecture structural of top_automotive_soc is
   signal w_actuator_safe  : std_logic;
   signal w_actuator_fault : std_logic;
 
+  -- The read data's parity as each core receives it (TSR_BUS_002)
+  signal w_rsp_parity_a     : std_logic;
+  signal w_rsp_parity_b     : std_logic;
+  signal w_rsp_parity_fault : std_logic;
+
   -- Comparator B's copies are the same logic as comparator A's, which
   -- synthesis would merge into one (docs/verification/synthesis.md)
   attribute keep_hierarchy : string;
@@ -136,6 +141,10 @@ architecture structural of top_automotive_soc is
   attribute dont_touch of i_temporal_diversity_b     : label is "true";
   attribute keep_hierarchy of i_cold_reset_sync_b    : label is "yes";
   attribute dont_touch of i_cold_reset_sync_b        : label is "true";
+  -- Each check recomputes a parity that the fabric computed from the same
+  -- slave data, which synthesis could prove equal and remove
+  attribute dont_touch of w_rsp_parity_a : signal is "true";
+  attribute dont_touch of w_rsp_parity_b : signal is "true";
   signal w_self_test_passed : std_logic;
   signal w_self_test_failed : std_logic;
 
@@ -261,6 +270,7 @@ begin
   -- ========================================================================
   w_core_a_in.rst_n <= w_rst_n;
   w_core_a_in.rdata <= w_bus_rsp.rdata;
+  w_core_a_in.rpar  <= w_bus_rsp.rpar;
   w_core_a_in.ack   <= w_bus_rsp.ack;
   w_core_a_in.err   <= w_bus_rsp.err;
   w_core_a_in.msi   <= w_can_irq;
@@ -276,6 +286,17 @@ begin
       core_a_in_i  => w_core_a_in,
       core_b_in_o  => w_core_b_in
     );
+
+  -- Both cores get the same read data, so a fault in it after the slave reaches
+  -- both the same way, and lockstep cannot see it. Each core's copy is checked
+  -- against the parity the fabric sent with it, in every clock, read or not: a
+  -- stuck bit is found while the bus is idle (HSI 8.6, TSR_BUS_002). Core B's
+  -- copy has come through the delay line, which this checks as well.
+  w_rsp_parity_a <= (xor w_core_a_in.rdata) xor w_core_a_in.rpar;
+  w_rsp_parity_b <= (xor w_core_b_in.rdata) xor w_core_b_in.rpar;
+
+  w_rsp_parity_fault <= '1' when (w_rsp_parity_a = '1' or w_rsp_parity_b = '1') else
+                        '0';
 
   -- A core strobes its bus and then waits. The response comes in the cycle after
   -- the strobe reaches the system bus, from the slave addressed only, with ACK or
@@ -369,9 +390,9 @@ begin
       b_core_b_bus_i => w_core_b_compared_b,
 
       -- Both cores read the same data from the RAM, so they cannot see a bad
-      -- word; and an actuator line that does not follow its command is no
-      -- shutdown path
-      fatal_fault_i => w_ecc_fatal or w_test_fatal or w_actuator_fault,
+      -- word, nor a bad response on its way to them; and an actuator line that
+      -- does not follow its command is no shutdown path
+      fatal_fault_i => w_ecc_fatal or w_test_fatal or w_actuator_fault or w_rsp_parity_fault,
 
       -- Safety Monitoring Outputs
       nmi_fault_o  => w_nmi,

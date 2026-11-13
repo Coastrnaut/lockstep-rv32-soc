@@ -361,6 +361,12 @@ MUTANTS = [
     ("skew: acknowledge always high", TOP, [(r"w_core_a_in\.ack   <= w_bus_rsp\.ack;", "w_core_a_in.ack   <= w_bus_valid;")]),
     ("skew: acknowledge a clock late", FAB, [(r"rsp_o\.ack   <= w_ack;", "rsp_o.ack   <= r_ack_late;"), (r"r_pending <= bus_i\.valid;", "r_pending <= bus_i.valid; r_ack_late <= w_ack;"), (r"signal w_ack   : std_logic;", "signal w_ack   : std_logic; signal r_ack_late : std_logic;")]),
     # --- Bus responses (HSI section 8.1)
+    # Read data parity (HSI 8.6, TSR_BUS_002)
+    ("parity: taken from the selected data", FAB, [(r"w_rpar <= '0';\n\n    if \(w_ack = '1' and r_we = '0'\) then", "w_rpar <= xor w_rdata;\n\n    if (false) then")]),
+    ("parity: core A's copy not checked", TOP, [(r"w_rsp_parity_a <= \(xor w_core_a_in\.rdata\) xor w_core_a_in\.rpar;", "w_rsp_parity_a <= '0';")]),
+    ("parity: core B's copy not checked", TOP, [(r"w_rsp_parity_b <= \(xor w_core_b_in\.rdata\) xor w_core_b_in\.rpar;", "w_rsp_parity_b <= '0';")]),
+    ("parity: a mismatch is not fatal", TOP, [(r" or w_rsp_parity_fault,", ",")]),
+    ("parity: core B's copy checked against core A's parity", TOP, [(r"xor w_core_b_in\.rpar;", "xor w_core_a_in.rpar;")]),
     ("bus: holes acknowledged", FAB, [(r"\(r_target\(c_tgt_none\) = '1' or \(", "(false or (")]),
     ("bus: double-bit error acknowledged", FAB, [(r" or \(r_target\(c_tgt_ram\) = '1' and ram_fatal_i = '1'\)", "")]),
     ("bus: ACK with ERR", FAB, [(r"w_ack <= '1' when \(r_pending = '1' and rst_n_i = '1' and w_err = '0'\) else", "w_ack <= '1' when (r_pending = '1' and rst_n_i = '1') else")]),
@@ -400,7 +406,7 @@ MUTANTS = [
     ("actuator: no filter on the read-back", ACT, [(r"if \(r_count = g_filter_clocks\) then", "if (true) then")]),
     ("actuator: the second channel ignores the reset", ACT, [(r"\(r_permit = '1' and sys_rst_n_i = '1' and r_fault /= '1'\)", "(r_permit = '1' and r_fault /= '1')")]),
     ("actuator: the second channel ignores the permission", ACT, [(r"        r_permit <= permit_i;", "        r_permit <= '1';")]),
-    ("actuator: a read-back fault does not trip the comparators", TOP, [(r"w_test_fatal or w_actuator_fault,", "w_test_fatal,")]),
+    ("actuator: a read-back fault does not trip the comparators", TOP, [(r"w_test_fatal or w_actuator_fault or", "w_test_fatal or")]),
     # --- Repair, patrol and first-fault telemetry (roadmap R4.1)
     ("repair: a load does not write back its corrected word", RAM, [(r"w_repair <= \(r_read and w_sbe_found\) or w_scrub_sbe;", "w_repair <= w_scrub_sbe;")]),
     ("repair: the patrol does not write back", RAM, [(r"w_repair <= \(r_read and w_sbe_found\) or w_scrub_sbe;", "w_repair <= r_read and w_sbe_found;")]),

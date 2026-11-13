@@ -41,10 +41,12 @@ package package_soc_types is
   -- ------------------------------------------------------------------------
   -- The one response to an accepted request (HSI section 8.1): read data, and
   -- exactly one of ack and err, in the cycle after the request was accepted.
+  -- rpar makes the read data's parity even, in every cycle (HSI 8.6).
   -- ------------------------------------------------------------------------
 
   type t_bus_rsp is record
     rdata : std_logic_vector(C_DATA_WIDTH - 1 downto 0);
+    rpar  : std_logic;
     ack   : std_logic;
     err   : std_logic;
   end record t_bus_rsp;
@@ -60,11 +62,14 @@ package package_soc_types is
   type t_core_inputs is record
     rst_n : std_logic;
     rdata : std_logic_vector(C_DATA_WIDTH - 1 downto 0);
-    ack   : std_logic;
-    err   : std_logic;
-    msi   : std_logic;
-    mti   : std_logic;
-    mei   : std_logic;
+    -- Not a core input: the read data's parity, delayed with it so that core
+    -- B's copy can be checked too (HSI 8.6)
+    rpar : std_logic;
+    ack  : std_logic;
+    err  : std_logic;
+    msi  : std_logic;
+    mti  : std_logic;
+    mei  : std_logic;
   end record t_core_inputs;
 
   -- ------------------------------------------------------------------------

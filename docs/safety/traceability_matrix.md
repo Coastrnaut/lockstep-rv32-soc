@@ -59,6 +59,8 @@ but no document defined.
 | SG-03 | FSR_MEM_002    | TSR_BUS_001         | soc_bus_fabric            | tb_soc_bus_fabric, tb_soc_ecc.double_bit_error_on_a_load_answers_err_and_traps_without_writeback, tb_soc_ecc.double_bit_error_on_a_byte_store_answers_err_and_leaves_the_word | Sim |
 | SG-03 | FSR_MEM_002    | TSR_SAFETY_GATE_002 | top_automotive_soc        | tb_soc_ecc.two_stuck_bits_lock_the_soc_within_the_ftti | Sim |
 | SG-02 | FSR_DIV_001    | TSR_BUS_001         | soc_bus_fabric            | tb_soc_fabric, tb_soc_bus_fabric | Sim |
+| SG-03 | FSR_MEM_002    | TSR_BUS_002         | soc_bus_fabric            | HSI PAR-01: tb_soc_bus_fabric.parity_comes_from_each_slave_before_the_selection | Sim |
+| SG-03 | FSR_MEM_002    | TSR_BUS_002         | top_automotive_soc        | HSI PAR-02: tb_soc_fabric.a_stuck_read_data_bit_trips_the_soc_while_the_bus_is_idle, tb_soc_fabric.a_fault_in_core_b_copy_of_the_read_data_trips_the_soc | Sim |
 | SG-04 | FSR_LOCK_001   | TSR_WD_001          | hardware_watchdog         | tb_watchdog, tb_watchdog_window | Sim |
 | SG-04 | FSR_LOCK_001   | TSR_WD_001          | watchdog_supervisor       | tb_watchdog_supervisor | Sim |
 | SG-04 | FSR_LOCK_001   | TSR_WD_001          | top_automotive_soc        | tb_soc_watchdog | Sim |
@@ -73,6 +75,8 @@ but no document defined.
 | SG-01 | FSR_MOTION_001 | TSR_SAFETY_GATE_001 | lockstep_comparator       | fv_lockstep_comparator: CMP-04, CMP-05, CMP-06, CMP-08 to CMP-11 | Formal |
 | SG-03 | FSR_MEM_002    | TSR_SAFETY_GATE_002 | ecc_data_ram              | fv_store_commit: COM-01 to COM-04 | Formal |
 | SG-03 | FSR_MEM_002    | TSR_BUS_001         | soc_bus_fabric            | fv_soc_bus_fabric: BUS-P1 to BUS-P6 | Formal |
+| SG-03 | FSR_MEM_002    | TSR_BUS_002         | soc_bus_fabric            | fv_soc_bus_fabric: BUS-P7 | Formal |
+| SG-04 | FSR_LOCK_001   | TSR_WD_001          | watchdog_supervisor       | fv_watchdog_cdc: CDC-01 to CDC-06 | Formal |
 
 ---
 
@@ -84,12 +88,12 @@ or countable facts instead.
 | Evidence | Status | Notes |
 |----------|--------|-------|
 | RTL implementation | 18 first-party RTL files: 16 blocks, the core wrapper and the top level | Boot ROM ECC, Flash and the comparator register block are not built (HSI section 5) |
-| Testbenches | 49 benches, 321 tests, all passing on GHDL and on Vivado's xsim, with the same output | Plain VHDL-2008 on `sim/tb/lib/tb_pkg.vhd`. Tools and counts: `docs/verification/toolchain.md` |
-| Fault injection | Directed forces in the benches, and a seeded campaign at 15 RTL sites | `docs/verification/fault_campaign.md`. No netlist-level injection |
+| Testbenches | 49 benches, 324 tests, all passing on GHDL and on Vivado's xsim, with the same output | Plain VHDL-2008 on `sim/tb/lib/tb_pkg.vhd`. Tools and counts: `docs/verification/toolchain.md` |
+| Fault injection | Directed forces in the benches, and a seeded campaign at 20 RTL sites, with bursts and common-cause disturbances | `docs/verification/fault_campaign.md`. No netlist-level injection |
 | Structural coverage | 100 % of statement lines (1,212) and branch outcomes (855) of the first-party RTL, nothing waived; every assertion shown to fire | xsim code coverage over every test (`docs/verification/coverage.md`); MC/DC, FSM and toggle not measured |
-| Mutation | 458 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
+| Mutation | 463 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
 | Assertions | Clocked simulation assertions in the RTL | Checked in simulation |
-| Formal | 3 SymbiYosys jobs, 21 properties, all proved by k-induction, every cover reached, each job rejects a deliberately broken RTL | Comparator, bus fabric, and compare before the RAM commit. CDC, self-test and CPUs are not covered (`docs/verification/formal.md`) |
+| Formal | 4 SymbiYosys jobs, 28 properties, all proved by k-induction, every cover reached, each job rejects a deliberately broken RTL | Comparator, bus fabric with read data parity, compare before the RAM commit, and the watchdog clock-domain crossings. The self-test and the CPUs are not covered (`docs/verification/formal.md`) |
 | Traceability tags | Every first-party RTL file carries a `requirement_id` that this matrix resolves | |
 
 ---
@@ -121,7 +125,7 @@ traction inverter): all ASIL D, safe state no torque, FTTI 100 ms.
 ### Technical Safety Requirements
 Defined in `docs/requirements/tsr_safety_core.md`:
 `TSR_LOCKSTEP_001` (alias `TSR_LOCKSTEP_042`, retired), `TSR_LOCKSTEP_043`,
-`TSR_LOCKSTEP_044`, `TSR_LOCKSTEP_045`, `TSR_CLOCK_001`, `TSR_ACTUATOR_001`, `TSR_BUS_001`, `TSR_ECC_001`, `TSR_WD_001`,
+`TSR_LOCKSTEP_044`, `TSR_LOCKSTEP_045`, `TSR_CLOCK_001`, `TSR_ACTUATOR_001`, `TSR_BUS_001`, `TSR_BUS_002`, `TSR_ECC_001`, `TSR_WD_001`,
 `TSR_RESET_001`, `TSR_SAFETY_GATE_001`, `TSR_SAFETY_GATE_002`,
 `TSR_SAFETY_GATE_003`, `TSR_TYPES_001`, `TSR_UART_001`, `TSR_CAN_001`,
 `TSR_CAN_002`.

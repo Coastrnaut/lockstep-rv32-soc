@@ -139,10 +139,10 @@ a junction to the build's one.
 
 | Run | GHDL 6.0 (Windows) | xsim, Vivado 2026.1 |
 |-----|--------------------|---------------------|
-| Tests | 330 passed of 330 | 330 passed of 330 |
-| Comparison | | All 323 tests outside the framework check gave the same verdict and the same `TB` lines |
+| Tests | 333 passed of 333 | 333 passed of 333 |
+| Comparison | | All 326 tests outside the framework check gave the same verdict and the same `TB` lines |
 
-The 330 tests are 321 in the 49 benches in `sim/tb`, 7 in the framework check
+The 333 tests are 324 in the 49 benches in `sim/tb`, 7 in the framework check
 and the board test. CI runs the GHDL half with GHDL 4.1 on Ubuntu 24.04.
 
 ## Code coverage

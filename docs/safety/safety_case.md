@@ -16,7 +16,7 @@ systems. That claim is withdrawn. What exists today is:
 1. Hardware safety mechanisms in RTL: lockstep with a startup self-test,
    temporal diversity, ECC on the shared data RAM, a windowed watchdog, an
    explicit bus response contract and safety-gated CAN and UART pins
-2. Simulation evidence: 49 benches with 321 tests, each run on GHDL and
+2. Simulation evidence: 49 benches with 324 tests, each run on GHDL and
    on Vivado's xsim with identical output, directed fault
    injection by forcing named signals, clocked simulation assertions and a
    mutation harness
@@ -108,7 +108,7 @@ The twelve new ones (five `dual:` for the shared causes, seven `clock:`) and
 the nine whose patterns had to follow the RTL were run, and all 21 killed.
 
 After the actuator channels, the move to NEORV32 v1.13.7, the explicit UART
-state encoding and the assertion tests, there are 458 mutants; every one
+state encoding and the assertion tests, there are 463 mutants; every one
 still applies, and the UART, CAN, self-test, watchdog and clock monitor
 mutants, whose code changed, were all rerun and killed.
 

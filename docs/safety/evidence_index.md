@@ -61,6 +61,14 @@ reason. **Out of scope** outside the profile this release covers.
 | WD-02 Duplicate kicks | `tb_watchdog_supervisor.kick_made_while_one_is_crossing_counts_as_the_same_kick` | Passes | Sim |
 | WD-03 Reset cause | `tb_watchdog_supervisor.cold_reset_clears_reset_src`, `tb_soc_watchdog.program_kicks_in_the_window_then_times_out_then_kicks_early` | Passes | Sim |
 | WD-04 Watchdog clock loss | `tb_soc_watchdog.soc_still_runs_with_a_dead_oscillator` shows the SoC runs unsupervised | No containment | Pending: board supervisor (DFA DF-04) |
+| Kick and status crossings (Rule CD-02) | `fv_watchdog_cdc`: CDC-01 to CDC-06 | Proved with two free clocks, up to 3:1 in any phase; metastability not modelled | Formal |
+
+## Read data parity (HSI 8.6)
+
+| Req | Test | Result | Status |
+|-----|------|--------|--------|
+| PAR-01 Parity with the data | BUS-P7; `tb_soc_bus_fabric.parity_comes_from_each_slave_before_the_selection`; the parity check in `tb_soc_fabric`'s monitor on every clock | Proved; a flip after the selection breaks the parity for every slave | Formal, Sim |
+| PAR-02 Checked at each core | `tb_soc_fabric.a_stuck_read_data_bit_trips_the_soc_while_the_bus_is_idle`, `tb_soc_fabric.a_fault_in_core_b_copy_of_the_read_data_trips_the_soc`; fault campaign sites 7 and 18 | Tripped within two clocks, nothing after reaches the bus; every effective trial at both sites detected | Sim |
 
 ## ECC repair and telemetry (HSI 8.5)
 
@@ -77,14 +85,14 @@ reason. **Out of scope** outside the profile this release covers.
 |-------|----------|--------|--------|
 | Core B is core A two clocks late | `tb_soc_lockstep.core_b_is_core_a_two_clocks_ago_all_through_the_program`, `tb_soc_trace.core_b_retires_exactly_what_core_a_retired_all_through_the_program` | Every input and every retirement | Sim |
 | Every compared lane trips the comparator, in the cycle it differs; a matched request passes unchanged | `tb_lockstep_comparator`: `tb_random_pkg` coverage over all 70 lanes and read or write by matched or not | Covered in 136 vectors, every vector checked | Sim |
-| A second simulator agrees | `docs/verification/toolchain.md`: every bench on GHDL and Vivado's xsim, compared test by test | All 323 tests, forces included, with the same verdict and output on both | Sim (local; CI has no Vivado) |
+| A second simulator agrees | `docs/verification/toolchain.md`: every bench on GHDL and Vivado's xsim, compared test by test | All 326 tests, forces included, with the same verdict and output on both | Sim (local; CI has no Vivado) |
 | A common glitch in one cycle is caught | `tb_soc_lockstep.same_glitch_on_both_core_buses_is_caught`, `tb_soc_lockstep.same_glitch_on_both_cores_read_data_is_caught` | Passes | Sim |
 | Comparator latent faults are tested | `tb_comparator_self_test`, `tb_soc_lockstep.comparator_stuck_at_no_error_keeps_the_soc_safe`, `tb_soc_lockstep.comparator_b_stuck_at_no_error_also_fails_the_self_test` | Both comparators at startup | Sim |
 | A comparator that fails after startup cannot let a divergence out | `tb_dual_comparator`, `tb_dual_comparator_faults`, `tb_soc_lockstep.a_comparator_that_stops_comparing_after_startup_is_found_at_the_first_divergence` | Found at the first divergence, which stays off the bus; the disagreement holds until reset | Sim (R2.4, FMEDA FM-07) |
 | Every register answers ACK and every hole ERR | `tb_register_map` (generated from `tools/register_map.py`) | Every byte of every register; every other word in the peripheral window | Sim |
 | Register-only divergence | `tb_soc_trace.a_register_only_divergence_is_caught_by_the_trace_and_not_by_the_bus` | Caught by the trace, in verification builds only | Sim |
-| Fault campaign coverage | `docs/verification/fault_campaign.md`, seed 2026 | 67 of 88 effective faults detected in time; the rest are after the comparator or in the reset synchroniser | Sim; sample, not an FMEDA coverage figure |
-| Test strength | `sim/scripts/mutate.py`, 458 mutants | Every mutant of R4.1 and R4.3 killed; full campaign before a release | Sim |
+| Fault campaign coverage | `docs/verification/fault_campaign.md`, seed 2026, 20 sites with bursts and common-cause disturbances | 98 of 122 effective faults detected in time; the rest are after the comparator, in the reset synchroniser, a three-bit RAM burst, or one common disturbance that hit dependent instructions in both cores | Sim; sample, not an FMEDA coverage figure |
+| Test strength | `sim/scripts/mutate.py`, 463 mutants | Every mutant of R4.1 and R4.3 killed; full campaign before a release | Sim |
 | Every statement and branch of the RTL is exercised | `docs/verification/coverage.md` (`run.py --coverage`, xsim) | 100 % of 1,212 statement lines and 855 branch outcomes, nothing waived | Sim |
 | Every RTL assertion fires when its property is broken | The 32 `assertion_` tests, e.g. `tb_lockstep_illegal_state.assertion_a_trip_the_outputs_ignore_is_reported`, `tb_soc_bus_fabric.assertion_ack_and_err_together_are_reported` | All 34 assertions, each with exactly its message | Sim |
 | A comparator's own reset, delay line or injection point cannot fail unseen | `tb_soc_lockstep.a_reset_of_comparator_b_alone_is_found_and_held`, `tb_soc_lockstep.a_fault_on_comparator_b_copy_of_core_a_bus_is_found`, `tb_soc_lockstep.a_fault_on_comparator_b_copy_of_core_b_bus_is_found` | Each found and held | Sim |

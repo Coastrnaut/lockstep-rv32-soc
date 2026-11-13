@@ -23,7 +23,7 @@ module fv_soc_bus_fabric (
 );
 
   wire [31:0] rdata;
-  wire        ack, err;
+  wire        rpar, ack, err;
 
   soc_bus_fabric dut (
     .clk_i(clk_i), .rst_n_i(rst_n),
@@ -31,7 +31,7 @@ module fv_soc_bus_fabric (
     .bus_i_we(we), .bus_i_valid(valid),
     .ram_rdata_i(ram_rdata), .wd_rdata_i(wd_rdata), .can_rdata_i(can_rdata),
     .uart_rdata_i(uart_rdata), .ram_fatal_i(ram_fatal),
-    .rsp_o_rdata(rdata), .rsp_o_ack(ack), .rsp_o_err(err)
+    .rsp_o_rdata(rdata), .rsp_o_rpar(rpar), .rsp_o_ack(ack), .rsp_o_err(err)
   );
 
   // HSI BUS-02, from the address map: 0 unmapped, 1 RAM block, 2 watchdog,
@@ -86,6 +86,17 @@ module fv_soc_bus_fabric (
       if (tgt == 3'd2) assert (rdata == wd_rdata);
       if (tgt == 3'd3) assert (rdata == can_rdata);
       if (tgt == 3'd4) assert (rdata == uart_rdata);
+    end
+    // BUS-P7 (HSI 8.6, TSR_BUS_002): the parity is the addressed slave's own
+    // data's, and 0 with no data. With BUS-P6 this makes the parity of the read
+    // data even in every cycle. Stated per slave, because parity through a
+    // multiplexer is hard for a SAT solver and this is the same fact.
+    if (!(ack && !prev_we)) assert (!rpar);
+    if (ack && !prev_we) begin
+      if (tgt == 3'd1) assert (rpar == ^ram_rdata);
+      if (tgt == 3'd2) assert (rpar == ^wd_rdata);
+      if (tgt == 3'd3) assert (rpar == ^can_rdata);
+      if (tgt == 3'd4) assert (rpar == ^uart_rdata);
     end
   end
 

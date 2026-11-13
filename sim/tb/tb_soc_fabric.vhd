@@ -82,6 +82,9 @@ architecture tb of tb_soc_fabric is
   signal acks     : natural;
   signal errs     : natural;
 
+  -- Set while a test breaks the read data's parity on purpose
+  signal parity_off : boolean;
+
 begin
 
   p_clk : process is
@@ -193,6 +196,12 @@ begin
       check_equal(a_err, '0', "no ERR without an accepted request");
     end if;
 
+    -- The read data that core A receives always comes with its parity, read
+    -- or not (HSI 8.6)
+    if (not parity_off and soc_rst_n = '1') then
+      check_equal(x_w_core_a_in.rpar, xor x_w_core_a_in.rdata, "read data parity at core A");
+    end if;
+
     if (a_ack = '1') then
       acks <= acks + 1;
     end if;
@@ -222,8 +231,37 @@ begin
     alias x_w_core_a_in is << signal i_soc.w_core_a_in : t_core_inputs >>;
     alias a_ack         is x_w_core_a_in.ack;
     alias a_err         is x_w_core_a_in.err;
+    alias x_w_bus_rsp   is << signal i_soc.w_bus_rsp : t_bus_rsp >>;
+    alias x_w_core_b_in is << signal i_soc.w_core_b_in : t_core_inputs >>;
 
     variable v_found : boolean;
+
+    -- After a fault in the read data: the SoC trips within two clocks, and no
+    -- request reaches the system bus after it
+
+    procedure check_trip (
+      constant what : in string
+    ) is
+    begin
+
+      loop_i : for lv_i in 1 to 2 loop
+
+        wait until rising_edge(clk);
+
+      end loop loop_i;
+
+      wait for 1 ns;
+      check_equal(nmi_fault, '1', what & ": fault pin");
+      check_equal(actuator_safe, '1', what & ": actuators safe");
+
+      loop_i_2 : for lv_i in 1 to 200 loop
+
+        wait until rising_edge(clk);
+        check_equal(sys_bus.valid, '0', what & ": nothing reaches the system bus");
+
+      end loop loop_i_2;
+
+    end procedure check_trip;
 
     procedure wait_for_request (
       constant addr : in std_logic_vector(31 downto 0);
@@ -313,6 +351,30 @@ begin
         check_uart_byte(2, x"30");
         check_uart_byte(3, x"4D");
         check_equal(nmi_fault, '0', "a warm reset is not a fault");
+      elsif run("a_stuck_read_data_bit_trips_the_soc_while_the_bus_is_idle") then
+        -- After the program's first request has been answered, in a clock with
+        -- no response: the parity is 0 and so is every data bit, until one
+        -- sticks at 1 on its way from the fabric to the cores
+        wait_for_request(c_wd_reset_src_addr, '0');
+        wait until rising_edge(clk) and a_ack = '0' and a_err = '0';
+        wait for 1 ns;
+        check_equal(nmi_fault, '0', "no fault before");
+        parity_off           <= true;
+        x_w_bus_rsp.rdata(5) <= force '1';
+        check_trip("a stuck bit in the shared read data");
+        x_w_bus_rsp.rdata(5) <= release;
+      elsif run("a_fault_in_core_b_copy_of_the_read_data_trips_the_soc") then
+        -- Core B's copy comes through the delay line. A bit flipped there, for
+        -- one clock, reaches core B alone; the check on its copy finds it.
+        wait_for_request(c_wd_reset_src_addr, '0');
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        check_equal(nmi_fault, '0', "no fault before");
+        x_w_core_b_in.rdata(17) <= force not x_w_core_b_in.rdata(17);
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        x_w_core_b_in.rdata(17) <= release;
+        check_trip("a flipped bit in core B's read data");
       end if;
 
     end loop loop_while_2;

@@ -2,7 +2,7 @@
 
 Statement and branch coverage of every first-party RTL file (`rtl/pkg`,
 `rtl/safety`, `rtl/peripherals`, `rtl/soc`) over the whole regression,
-2026-11-13: 330 tests on Vivado 2026.1's xsim, all passing, on NEORV32 v1.13.7.
+2026-11-13: 333 tests on Vivado 2026.1's xsim, all passing, on NEORV32 v1.13.7.
 
     python sim/run.py --coverage          # every test, then the summary
     python sim/run.py --coverage-report   # the summary again, from the last run's databases
@@ -88,7 +88,7 @@ run every test.
 It shows that every statement and branch outcome of the first-party RTL is
 run by some passing test, and that every assertion in it fires when its
 property is broken. It does not show that each test checks the effect of
-every line it runs: the mutation harness (`sim/scripts/mutate.py`, 458
+every line it runs: the mutation harness (`sim/scripts/mutate.py`, 463
 mutants) is the measure of that.
 
 Not measured: condition coverage (MC/DC), FSM state and transition coverage,

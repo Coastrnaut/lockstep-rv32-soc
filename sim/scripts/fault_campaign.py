@@ -62,6 +62,13 @@ SITES = {
     13: ("reset synchroniser stage", "Reset", 2, [1]),
     14: ("self-test result register", "Self-test", 8, [1]),
     15: ("core B register write data, at a write", "CPU-private", 32, [1]),
+    # Added after the first published campaign, so that its seed still draws
+    # the same trials for sites 1 to 15
+    16: ("core A XBus write data, four-bit burst, at a store", "Burst", 32, [1]),
+    17: ("both cores' register write data, same bit at once", "Common cause", 32, [1]),
+    18: ("shared bus response data, stuck from a response on", "Shared response", 32, [0]),
+    19: ("ECC RAM word, three-bit burst, at an access", "Burst", 72, [1]),
+    20: ("both cores' instruction fetch data, same bit at once", "Common cause", 32, [1]),
 }
 FIELDS = ["trial", "site", "bit", "kind", "duration", "inject_ns", "run_us"]
 

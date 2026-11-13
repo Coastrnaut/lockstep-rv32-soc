@@ -222,6 +222,7 @@ begin
       << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).core_complex_inst.cpu_inst.rf_wdata
       : std_ulogic_vector(31 downto 0) >>;
     alias a_fetch      is << signal i_soc.i_cpu_master.i_neorv32.imem_rsp : bus_rsp_t >>;
+    alias b_fetch      is << signal i_soc.i_cpu_checker.i_neorv32.imem_rsp : bus_rsp_t >>;
     alias a_bus_data   is << signal i_soc.w_core_a_xbus_data : std_logic_vector(31 downto 0) >>;
     alias a_bus_addr   is << signal i_soc.w_core_a_xbus_addr : std_logic_vector(31 downto 0) >>;
     alias delayed_bus  is << signal i_soc.w_core_a_bus_late : t_rv_bus >>;
@@ -327,6 +328,26 @@ begin
 
           return b_wdata(g_bit mod 32);
 
+        when 16 =>
+
+          return a_bus_data(g_bit mod 32);
+
+        when 17 =>
+
+          return a_wdata(g_bit mod 32);
+
+        when 18 =>
+
+          return bus_rsp.rdata(g_bit mod 32);
+
+        when 19 =>
+
+          return ram_word(g_bit mod 72);
+
+        when 20 =>
+
+          return a_fetch.data(g_bit mod 32);
+
         when others =>
 
           return '-';
@@ -347,15 +368,15 @@ begin
 
       case g_site is
 
-        when 1 =>
+        when 1 | 17 =>
 
           wait until a_rd_we = '1' for c_patience;
 
-        when 2 =>
+        when 2 | 20 =>
 
           wait until a_fetch.ack = '1' for c_patience;
 
-        when 3 =>
+        when 3 | 16 =>
 
           wait until a_bus.valid = '1' and a_bus.we = '1' for c_patience;
 
@@ -363,11 +384,15 @@ begin
 
           wait until delayed_bus.valid = '1' and delayed_bus.we = '1' for c_patience;
 
-        when 7 =>
+        when 7 | 18 =>
 
+          -- The read data settles a delta cycle after ACK, from the selection
+          -- that ACK drives: take the bit's value once it has, or a flip of a
+          -- bit about to become 1 would force it to 1 and change nothing
           wait until bus_rsp.ack = '1' or bus_rsp.err = '1' for c_patience;
+          wait for 1 ns;
 
-        when 8 | 9 =>
+        when 8 | 9 | 19 =>
 
           wait until ram_read = '1' or ram_write = '1' for c_patience;
 
@@ -453,6 +478,44 @@ begin
 
           b_wdata(g_bit mod 32) <= force level(b_wdata(g_bit mod 32));
 
+        -- A burst: four neighbouring bits at once
+
+        when 16 =>
+
+          loop_burst : for lv_i in 0 to 3 loop
+
+            v_b             := (g_bit + lv_i) mod 32;
+            a_bus_data(v_b) <= force level(a_bus_data(v_b));
+
+          end loop loop_burst;
+
+        -- One disturbance in both cores at the same instant
+
+        when 17 =>
+
+          a_wdata(g_bit mod 32) <= force level(a_wdata(g_bit mod 32));
+          b_wdata(g_bit mod 32) <= force level(b_wdata(g_bit mod 32));
+
+        when 18 =>
+
+          bus_rsp.rdata(g_bit mod 32) <= force level(bus_rsp.rdata(g_bit mod 32));
+
+        -- Three neighbouring bits, beyond what SECDED corrects or detects
+
+        when 19 =>
+
+          loop_triple : for lv_i in 0 to 2 loop
+
+            v_b           := (g_bit + lv_i) mod 72;
+            ram_word(v_b) <= force level(ram_word(v_b));
+
+          end loop loop_triple;
+
+        when 20 =>
+
+          a_fetch.data(g_bit mod 32) <= force level(a_fetch.data(g_bit mod 32));
+          b_fetch.data(g_bit mod 32) <= force level(b_fetch.data(g_bit mod 32));
+
         when others =>
 
           null;
@@ -526,6 +589,36 @@ begin
         when 15 =>
 
           b_wdata(g_bit mod 32) <= release;
+
+        when 16 =>
+
+          loop_burst : for lv_i in 0 to 3 loop
+
+            a_bus_data((g_bit + lv_i) mod 32) <= release;
+
+          end loop loop_burst;
+
+        when 17 =>
+
+          a_wdata(g_bit mod 32) <= release;
+          b_wdata(g_bit mod 32) <= release;
+
+        when 18 =>
+
+          bus_rsp.rdata(g_bit mod 32) <= release;
+
+        when 19 =>
+
+          loop_triple : for lv_i in 0 to 2 loop
+
+            ram_word((g_bit + lv_i) mod 72) <= release;
+
+          end loop loop_triple;
+
+        when 20 =>
+
+          a_fetch.data(g_bit mod 32) <= release;
+          b_fetch.data(g_bit mod 32) <= release;
 
         when others =>
 
