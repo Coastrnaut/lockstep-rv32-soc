@@ -132,3 +132,29 @@ jobs:
             sim/formal/build/results.md
             sim/formal/build/*/sby.log
           if-no-files-found: warn
+
+  board:
+    # Roadmap R3.1 and R3.3: the Arty A7 wrapper synthesises in GHDL, and the
+    # board image runs on the SoC. The Vivado build itself needs a licence-free
+    # Vivado install with Artix-7 devices, which CI does not have.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install GHDL (mcode backend)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ghdl
+
+      - name: Check the board wrapper and the board image
+        run: |
+          python fpga/arty_a7_100t/check_board.py

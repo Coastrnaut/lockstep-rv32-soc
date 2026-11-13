@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Do the checked-in generated files still match their generators?
 
-Runs sim/scripts/soc_firmware.py and sim/scripts/can_frame_model.py on a copy
-of the tree and compares their output with the checked-in files, ignoring
+Runs each generator below on a copy of the tree and compares their output with the checked-in files, ignoring
 line endings only. Exit status 1 names each file that drifted. The working tree
 is left alone.
 
@@ -19,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = {
     "sim/scripts/soc_firmware.py": "sim/firmware/neorv32_imem_image.vhd",
     "sim/scripts/can_frame_model.py": "sim/generated/can_rx_frames_pkg.vhd",
+    "fpga/arty_a7_100t/board_firmware.py": "fpga/arty_a7_100t/board_imem_image.vhd",
 }
 
 

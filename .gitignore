@@ -43,3 +43,6 @@ xvlog.pb
 
 # Formal build output (sim/scripts/run_formal.py)
 sim/formal/build/
+
+# FPGA build output (fpga/*/build.py, check_board.py)
+fpga/*/build/
