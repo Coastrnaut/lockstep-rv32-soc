@@ -89,6 +89,12 @@ architecture rtl of comparator_self_test is
   -- turn a fail into a pass (Rule 3.1)
   signal r_result : t_safe_state;
 
+  -- Synthesis has to keep all eight bits of the result, as in the comparator
+  attribute fsm_encoding : string;
+  attribute dont_touch   : string;
+  attribute fsm_encoding of r_result : signal is "none";
+  attribute dont_touch of r_result   : signal is "true";
+
   signal w_inject  : std_logic_vector(c_fatal_lane downto 0);
   signal w_clean   : std_logic;
   signal w_tripped : std_logic;

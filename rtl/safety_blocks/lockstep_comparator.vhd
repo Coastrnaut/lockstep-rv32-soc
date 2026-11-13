@@ -73,6 +73,17 @@ architecture rtl of lockstep_comparator is
   signal w_fault_reg         : std_logic;
   signal w_bus_open          : std_logic;
 
+  -- The encoding is the protection, so synthesis has to keep every bit as
+  -- written. Without these, a 7-series flow re-encodes the state as an FSM, and
+  -- merges the bits that always hold equal or opposite values, down to two
+  -- flip-flops (docs/verification/synthesis.md). fsm_encoding and dont_touch
+  -- are Vivado's names; the FPGA build checks that all nine flip-flops remain.
+  attribute fsm_encoding : string;
+  attribute dont_touch   : string;
+  attribute fsm_encoding of r_current_state : signal is "none";
+  attribute dont_touch of r_current_state   : signal is "true";
+  attribute dont_touch of r_fault_latched   : signal is "true";
+
 begin
 
   -- ========================================================================
