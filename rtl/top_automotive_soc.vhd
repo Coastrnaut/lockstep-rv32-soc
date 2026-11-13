@@ -66,10 +66,10 @@ architecture structural of top_automotive_soc is
   -- Core A's bus once it has been held back to meet core B's
   signal w_core_a_bus_late : t_rv_bus;
 
-  -- What each core receives
+  -- What each core receives, and the one response to each accepted request
   signal w_core_a_in : t_core_inputs;
   signal w_core_b_in : t_core_inputs;
-  signal r_bus_ack   : std_logic;
+  signal w_bus_rsp   : t_bus_rsp;
 
   -- The comparator self-test
   signal w_test_flip        : t_rv_bus;
@@ -125,7 +125,6 @@ architecture structural of top_automotive_soc is
   signal w_wd_rdata            : std_logic_vector(31 downto 0);
   signal w_can_rdata           : std_logic_vector(31 downto 0);
   signal w_uart_rdata          : std_logic_vector(31 downto 0);
-  signal w_periph_rdata        : std_logic_vector(31 downto 0);
   signal w_uart_busy           : std_logic;
   signal w_uart_error          : std_logic;
   signal w_core_a_jtag_tdo     : std_ulogic;
@@ -255,8 +254,9 @@ begin
   -- comparator, and only goes on to the system bus from there.
   -- ========================================================================
   w_core_a_in.rst_n <= w_rst_n;
-  w_core_a_in.rdata <= w_periph_rdata;
-  w_core_a_in.ack   <= r_bus_ack;
+  w_core_a_in.rdata <= w_bus_rsp.rdata;
+  w_core_a_in.ack   <= w_bus_rsp.ack;
+  w_core_a_in.err   <= w_bus_rsp.err;
   w_core_a_in.msi   <= w_can_irq;
   w_core_a_in.mti   <= w_uart_irq;
   -- A maskable notification only (HSI FLT-02): containment does not need it
@@ -271,17 +271,22 @@ begin
       core_b_in_o  => w_core_b_in
     );
 
-  -- A core strobes its bus and then waits, and read data is ready in the cycle
-  -- after the strobe reaches the system bus. A strobe the gate stops is never
-  -- answered, and the core times out as it does on any dead address.
-  p_bus_ack : process (clk_i) is
-  begin
-
-    if rising_edge(clk_i) then
-      r_bus_ack <= w_safe_sys_bus.valid;
-    end if;
-
-  end process p_bus_ack;
+  -- A core strobes its bus and then waits. The response comes in the cycle after
+  -- the strobe reaches the system bus, from the slave addressed only, with ACK or
+  -- ERR (HSI section 8.1). A strobe the gate stops is never answered, and the
+  -- core's own bus timeout ends it.
+  i_bus_fabric : entity lockstep.soc_bus_fabric
+    port map (
+      clk_i        => clk_i,
+      rst_n_i      => w_rst_n,
+      bus_i        => w_safe_sys_bus,
+      ram_rdata_i  => w_ram_rdata,
+      wd_rdata_i   => w_wd_rdata,
+      can_rdata_i  => w_can_rdata,
+      uart_rdata_i => w_uart_rdata,
+      ram_fatal_i  => w_ecc_fatal,
+      rsp_o        => w_bus_rsp
+    );
 
   -- ========================================================================
   -- 4. INSTANCE: MASTER CPU (CORE A)
@@ -485,7 +490,7 @@ begin
       xbus_cyc_o => w_core_a_xbus_cyc,
       xbus_dat_i => w_core_a_in.rdata,
       xbus_ack_i => w_core_a_in.ack,
-      xbus_err_i => '0',
+      xbus_err_i => w_core_a_in.err,
 
       -- SLINK (disabled)
       slink_rx_dat_i => (others => '0'),
@@ -762,7 +767,7 @@ begin
       xbus_cyc_o => w_core_b_xbus_cyc,
       xbus_dat_i => w_core_b_in.rdata,
       xbus_ack_i => w_core_b_in.ack,
-      xbus_err_i => '0',
+      xbus_err_i => w_core_b_in.err,
 
       -- SLINK (disabled)
       slink_rx_dat_i => (others => '0'),
@@ -948,6 +953,7 @@ begin
     port map (
       clk_i       => clk_i,
       rst_n_i     => w_cold_rst_n,
+      bus_rst_n_i => w_rst_n,
       bus_i       => w_safe_sys_bus,
       bus_ok_i    => w_bus_valid,
       rdata_o     => w_ram_rdata,
@@ -961,10 +967,6 @@ begin
 
   -- Nothing supervises the actuators during a reset, so it holds them safe too
   actuator_safe_o <= w_lockstep_safe or not w_rst_n;
-
-  -- Both cores read the same data, or they would leave lockstep. Each peripheral
-  -- drives zero unless it is being read.
-  w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata or w_ram_rdata;
 
   -- ========================================================================
   -- 12. DIAGNOSTIC MONITOR — reads reset, trace, and peripheral status signals

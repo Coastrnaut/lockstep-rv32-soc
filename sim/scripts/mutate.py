@@ -66,6 +66,7 @@ SKEW = "rtl/safety_blocks/temporal_diversity.vhd"
 TEST = "rtl/safety_blocks/comparator_self_test.vhd"
 RX = "rtl/peripherals/can_receiver.vhd"
 SUP = "rtl/safety_blocks/watchdog_supervisor.vhd"
+FAB = "rtl/safety_blocks/soc_bus_fabric.vhd"
 
 CLEAR = r"w_tx_clear <= '1' when \(rst_n_i = '0' or bus_ok_i = '0' or r_bus_off = '1'\) else"
 
@@ -178,8 +179,8 @@ MUTANTS = [
     ("top: NMI pin follows the unregistered compare", TOP, [(r"nmi_fault_o <= \(w_fault and w_self_test_passed\)", "nmi_fault_o <= (w_nmi and w_self_test_passed)")]),
     ("top: core A gets no read data", TOP, [(r"xbus_dat_i => w_core_a_in\.rdata", "xbus_dat_i => (others => '0')")]),
     ("top: core B gets no read data", TOP, [(r"xbus_dat_i => w_core_b_in\.rdata", "xbus_dat_i => (others => '0')")]),
-    ("top: UART read data dropped", TOP, [(r"w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata or w_ram_rdata;", "w_periph_rdata <= w_can_rdata or w_wd_rdata or w_ram_rdata;")]),
-    ("top: CAN read data dropped", TOP, [(r"w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata or w_ram_rdata;", "w_periph_rdata <= w_uart_rdata or w_wd_rdata or w_ram_rdata;")]),
+    ("top: UART read data dropped", FAB, [(r"w_rdata <= uart_rdata_i;", "w_rdata <= (others => '0');")]),
+    ("top: CAN read data dropped", FAB, [(r"w_rdata <= can_rdata_i;", "w_rdata <= (others => '0');")]),
     ("top: checker core boots elsewhere", TOP, [(r"(boot_mode_select => g_boot_mode.*?)boot_mode_select => g_boot_mode", r"\1boot_mode_select => 0")]),
 
     # --- Byte enables, and each field the comparator checks
@@ -275,7 +276,7 @@ MUTANTS = [
     ("wd: oscillator side cleared by its own reset", TOP, [(r"(i_wd_reset_sync.*?rst_n_i     => )rst_n_i", r"\g<1>w_rst_n_request")]),
     ("wd: runs from the system clock", TOP, [(r"(i_watchdog_supervisor.*?wd_clk_i    => )wd_clk_i", r"\g<1>clk_i")]),
     ("wd: reset synchroniser runs from the system clock", TOP, [(r"(i_wd_reset_sync.*?clk_i       => )wd_clk_i", r"\g<1>clk_i")]),
-    ("wd: status does not reach the cores", TOP, [(r"w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata or w_ram_rdata;", "w_periph_rdata <= w_can_rdata or w_uart_rdata or w_ram_rdata;")]),
+    ("wd: status does not reach the cores", FAB, [(r"w_rdata <= wd_rdata_i;", "w_rdata <= (others => '0');")]),
     ("wd: wrong key", PKG, [(r'x"0000DEAD"', 'x"0000DEAE"')]),
 
     # --- ECC code
@@ -295,8 +296,8 @@ MUTANTS = [
     ("ram: top address bit ignored", RAM, [(r"bus_i\.addr\(c_addr_width - 1 downto g_addr_bits \+ 3\) =\s+c_ram_base_addr\(c_addr_width - 1 downto g_addr_bits \+ 3\)", "bus_i.addr(c_addr_width - 2 downto g_addr_bits + 3) = c_ram_base_addr(c_addr_width - 2 downto g_addr_bits + 3)")]),
     ("ram: lowest decoded address bit ignored", RAM, [(r"bus_i\.addr\(c_addr_width - 1 downto g_addr_bits \+ 3\) =\s+c_ram_base_addr\(c_addr_width - 1 downto g_addr_bits \+ 3\)", "bus_i.addr(c_addr_width - 1 downto g_addr_bits + 4) = c_ram_base_addr(c_addr_width - 1 downto g_addr_bits + 4)")]),
     ("ram: access ignores the gate", RAM, [(r"w_selected <= '1' when \(bus_ok_i = '1' and ", "w_selected <= '1' when (")]),
-    ("ram: store lands when the gate closes", RAM, [(r"if \(r_write = '1' and bus_ok_i = '1' and w_dbe = '0'\) then", "if (r_write = '1' and w_dbe = '0') then")]),
-    ("ram: store writes over an uncorrectable word", RAM, [(r"if \(r_write = '1' and bus_ok_i = '1' and w_dbe = '0'\) then", "if (r_write = '1' and bus_ok_i = '1') then")]),
+    ("ram: store lands when the gate closes", RAM, [(r"w_commit <= '1' when \(r_write = '1' and bus_ok_i = '1' and w_dbe = '0'", "w_commit <= '1' when (r_write = '1' and w_dbe = '0'")]),
+    ("ram: store writes over an uncorrectable word", RAM, [(r"w_commit <= '1' when \(r_write = '1' and bus_ok_i = '1' and w_dbe = '0'", "w_commit <= '1' when (r_write = '1' and bus_ok_i = '1'")]),
     ("ram: byte enables ignored", RAM, [(r"if \(r_sel\(i\) = '1'\) then", "if (true) then")]),
     ("ram: stores go to the wrong half", RAM, [(r"if \(r_upper = '1'\) then\s+v_low := v_low \+ 32;", "if (r_upper = '0') then\n        v_low := v_low + 32;")]),
     ("ram: loads come from the wrong half", RAM, [(r"w_corrected\(63 downto 32\) when \(r_upper = '1'\) else", "w_corrected(63 downto 32) when (r_upper = '0') else")]),
@@ -321,7 +322,7 @@ MUTANTS = [
     ("ram: DBE_COUNT and SBE_COUNT swapped", RAM, [(r"r_reg_rdata\(15 downto 0\) <= std_logic_vector\(r_dbe_count\);", "r_reg_rdata(15 downto 0) <= std_logic_vector(r_sbe_count);")]),
     ("ram: errors cleared by a watchdog reset", TOP, [(r"(i_ecc_ram.*?rst_n_i     => )w_cold_rst_n", r"\g<1>w_rst_n")]),
     ("ram: DBE does not reach the comparator", TOP, [(r"fatal_fault_i => w_ecc_fatal or w_test_fatal", "fatal_fault_i => w_test_fatal")]),
-    ("ram: read data does not reach the cores", TOP, [(r"w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata or w_ram_rdata;", "w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata;")]),
+    ("ram: read data does not reach the cores", FAB, [(r"w_rdata <= ram_rdata_i;", "w_rdata <= (others => '0');")]),
     ("ram: at the wrong address", PKG, [(r'c_ram_base_addr       : std_logic_vector\(c_addr_width - 1 downto 0\) := x"20000000"', 'c_ram_base_addr       : std_logic_vector(c_addr_width - 1 downto 0) := x"30000000"')]),
     ("ram: fatal fault does not trip the comparator", LOCK, [(r"w_trip <= w_mismatch_detected or fatal_fault_i;", "w_trip <= w_mismatch_detected;")]),
     ("ram: fatal fault not latched for the NMI", LOCK, [(r"(if \(w_fault_now = '1'\) then\s+)r_fault_latched <= '1';", r"\1null;")]),
@@ -344,9 +345,25 @@ MUTANTS = [
     ("skew: core B MSI not delayed", TOP, [(r"irq_msi_i => w_core_b_in\.msi", "irq_msi_i => w_core_a_in.msi")]),
     ("skew: core B MTI not delayed", TOP, [(r"irq_mti_i => w_core_b_in\.mti", "irq_mti_i => w_core_a_in.mti")]),
     ("skew: core B MEI not delayed", TOP, [(r"irq_mei_i => w_core_b_in\.mei", "irq_mei_i => w_core_a_in.mei")]),
-    ("skew: acknowledge with the strobe", TOP, [(r"w_core_a_in\.ack   <= r_bus_ack;", "w_core_a_in.ack   <= w_safe_sys_bus.valid;")]),
-    ("skew: acknowledge always high", TOP, [(r"w_core_a_in\.ack   <= r_bus_ack;", "w_core_a_in.ack   <= w_bus_valid;")]),
-    ("skew: acknowledge a clock late", TOP, [(r"w_core_a_in\.ack   <= r_bus_ack;", "w_core_a_in.ack   <= r_bus_ack_late;"), (r"r_bus_ack <= w_safe_sys_bus\.valid;", "r_bus_ack <= w_safe_sys_bus.valid; r_bus_ack_late <= r_bus_ack;"), (r"signal r_bus_ack   : std_logic;", "signal r_bus_ack   : std_logic; signal r_bus_ack_late : std_logic;")]),
+    ("skew: acknowledge with the strobe", TOP, [(r"w_core_a_in\.ack   <= w_bus_rsp\.ack;", "w_core_a_in.ack   <= w_safe_sys_bus.valid;")]),
+    ("skew: acknowledge always high", TOP, [(r"w_core_a_in\.ack   <= w_bus_rsp\.ack;", "w_core_a_in.ack   <= w_bus_valid;")]),
+    ("skew: acknowledge a clock late", FAB, [(r"rsp_o\.ack   <= w_ack;", "rsp_o.ack   <= r_ack_late;"), (r"r_pending <= bus_i\.valid;", "r_pending <= bus_i.valid; r_ack_late <= w_ack;"), (r"signal w_ack   : std_logic;", "signal w_ack   : std_logic; signal r_ack_late : std_logic;")]),
+    # --- Bus responses (HSI section 8.1)
+    ("bus: holes acknowledged", FAB, [(r"\(r_target\(c_tgt_none\) = '1' or \(", "(false or (")]),
+    ("bus: double-bit error acknowledged", FAB, [(r" or \(r_target\(c_tgt_ram\) = '1' and ram_fatal_i = '1'\)", "")]),
+    ("bus: ACK with ERR", FAB, [(r"w_ack <= '1' when \(r_pending = '1' and rst_n_i = '1' and w_err = '0'\) else", "w_ack <= '1' when (r_pending = '1' and rst_n_i = '1') else")]),
+    ("bus: read data from every slave", FAB, [(r"w_rdata <= \(others => '0'\);\n\n    if \(w_ack = '1' and r_we = '0'\) then", "w_rdata <= ram_rdata_i or wd_rdata_i or can_rdata_i or uart_rdata_i;\n\n    if (false) then")]),
+    ("bus: a reset does not stop the response", FAB, [(r"w_ack <= '1' when \(r_pending = '1' and rst_n_i = '1' and", "w_ack <= '1' when (r_pending = '1' and")]),
+    ("bus: decode ignores the top address bit", FAB, [(r"addr\(c_addr_width - 1 downto 2\) = regs\(i\)\(c_addr_width - 1 downto 2\)", "addr(c_addr_width - 2 downto 2) = regs(i)(c_addr_width - 2 downto 2)")]),
+    ("bus: decode ignores bits above the window", FAB, [(r"addr\(c_addr_width - 1 downto 2\) = regs\(i\)\(c_addr_width - 1 downto 2\)", "addr(11 downto 2) = regs(i)(11 downto 2)")]),
+    ("bus: RAM decoded half size", FAB, [(r"addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\) =\s+c_ram_base_addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\)", "addr(c_addr_width - 1 downto g_ram_addr_bits + 2) = c_ram_base_addr(c_addr_width - 1 downto g_ram_addr_bits + 2)")]),
+    ("bus: RAM decoded double size", FAB, [(r"addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\) =\s+c_ram_base_addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\)", "addr(c_addr_width - 1 downto g_ram_addr_bits + 4) = c_ram_base_addr(c_addr_width - 1 downto g_ram_addr_bits + 4)")]),
+    ("bus: target not captured with the request", FAB, [(r"r_target  <= decode\(bus_i\.addr\);", "null;")]),
+    ("ram: warm reset does not drop the store", RAM, [(r" and bus_rst_n_i = '1'\) else", ") else")]),
+    ("ram: RAM transaction kept through a warm reset", TOP, [(r"bus_rst_n_i => w_rst_n,", "bus_rst_n_i => '1',")]),
+    ("top: ERR does not reach core A", TOP, [(r"xbus_err_i => w_core_a_in\.err", "xbus_err_i => '0'")]),
+    ("top: ERR does not reach core B", TOP, [(r"xbus_err_i => w_core_b_in\.err", "xbus_err_i => '0'")]),
+    ("skew: core B ERR not delayed", TOP, [(r"xbus_err_i => w_core_b_in\.err", "xbus_err_i => w_core_a_in.err")]),
     ("gate: a bad cycle reaches the system bus", LOCK, [(r"w_bus_open <= '1' when \(r_current_state = ST_SYSTEM_OK and w_trip = '0'\) else", "w_bus_open <= '1' when (r_current_state = ST_SYSTEM_OK) else")]),
     ("gate: state ignored", LOCK, [(r"w_bus_open <= '1' when \(r_current_state = ST_SYSTEM_OK and w_trip = '0'\) else", "w_bus_open <= '1' when (w_trip = '0') else")]),
     ("gate: address passes a bad cycle", LOCK, [(r"sys_bus_o\.addr  <= core_a_bus_i\.addr when \(w_bus_open = '1'\) else\s+\(others => '0'\);", "sys_bus_o.addr  <= core_a_bus_i.addr;")]),

@@ -45,6 +45,7 @@ architecture tb of tb_ecc_data_ram is
 
   signal clk       : std_logic;
   signal rst_n     : std_logic;
+  signal bus_rst_n : std_logic;
   signal bus_i     : t_rv_bus;
   signal bus_ok    : std_logic;
   signal rdata     : std_logic_vector(31 downto 0);
@@ -67,6 +68,7 @@ begin
     port map (
       clk_i       => clk,
       rst_n_i     => rst_n,
+      bus_rst_n_i => bus_rst_n,
       bus_i       => bus_i,
       bus_ok_i    => bus_ok,
       rdata_o     => rdata,
@@ -181,8 +183,9 @@ begin
 
     while test_suite loop
 
-      bus_i  <= c_bus_idle;
-      bus_ok <= '1';
+      bus_i     <= c_bus_idle;
+      bus_ok    <= '1';
+      bus_rst_n <= '1';
       cold_reset;
 
       if run("memory_starts_as_zeros_with_no_errors") then

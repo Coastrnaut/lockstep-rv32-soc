@@ -94,6 +94,7 @@ begin
             rst_n => v_flags(0),
             rdata => v_random.RandSlv(32),
             ack   => v_flags(1),
+            err   => v_flags(5),
             msi   => v_flags(2),
             mti   => v_flags(3),
             mei   => v_flags(4)

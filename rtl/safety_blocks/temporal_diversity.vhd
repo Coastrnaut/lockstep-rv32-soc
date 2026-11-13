@@ -9,6 +9,9 @@
 --               different points in the program, and cannot do the same thing to
 --               both, which is what lets the comparator see it.
 --
+--               Every field of t_core_inputs is delayed, so a field added to that
+--               record, such as the bus error, reaches core B with the rest.
+--
 --               Core A's bus is held back by the same amount, so that it reaches
 --               the comparator together with core B's. It goes no further until
 --               it has been compared, so nothing that the cores disagree on can

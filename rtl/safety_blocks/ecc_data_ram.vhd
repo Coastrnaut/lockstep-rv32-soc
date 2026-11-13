@@ -17,7 +17,13 @@
 --               also repairs any single-bit error in the word on the way past.
 --
 --               A word that cannot be corrected is never returned or written
---               back. dbe_fatal_o trips the comparator, which locks the SoC.
+--               back. dbe_fatal_o trips the comparator, which locks the SoC, and
+--               soc_bus_fabric answers that access with ERR (HSI BUS-09).
+--
+--               The error counters are cold-reset telemetry. The access held
+--               between the strobe and the write is transaction state, which a
+--               warm reset clears as well, so a store whose write would land in a
+--               reset is dropped (HSI BUS-11).
 --
 -- Traces to:    TSR_ECC_001, TSR_SAFETY_GATE_002
 -- ============================================================================
@@ -35,8 +41,9 @@ entity ecc_data_ram is
     g_addr_bits : positive range 4 to 15 := 15
   );
   port (
-    clk_i   : in    std_logic;
-    rst_n_i : in    std_logic; -- Cold reset, so the error counts outlast a watchdog reset
+    clk_i       : in    std_logic;
+    rst_n_i     : in    std_logic; -- Cold reset, so the error counts outlast a watchdog reset
+    bus_rst_n_i : in    std_logic; -- Warm reset: drops an access in progress
 
     -- Internal bus from lockstep comparator
     bus_i    : in    t_rv_bus;
@@ -75,6 +82,7 @@ architecture rtl of ecc_data_ram is
   signal r_upper    : std_logic;
   signal r_read     : std_logic;
   signal r_write    : std_logic;
+  signal w_commit   : std_logic;
   signal r_data     : std_logic_vector(c_data_width - 1 downto 0);
   signal r_sel      : std_logic_vector(3 downto 0);
 
@@ -115,7 +123,7 @@ begin
   begin
 
     if rising_edge(clk_i) then
-      if (rst_n_i = '0') then
+      if (rst_n_i = '0' or bus_rst_n_i = '0') then
         r_read  <= '0';
         r_write <= '0';
       else
@@ -149,8 +157,7 @@ begin
   begin
 
     if rising_edge(clk_i) then
-      -- bus_ok_i falls the clock after a store that the cores disagree on
-      if (r_write = '1' and bus_ok_i = '1' and w_dbe = '0') then
+      if (w_commit = '1') then
         v_memory(to_integer(r_index)) := w_merged_ecc & w_merged;
       end if;
 
@@ -188,6 +195,12 @@ begin
       ecc_rd_i  => x"00",
       ecc_o     => w_merged_ecc
     );
+
+  -- The write-commit edge of a store (HSI BUS-05): the word could be corrected,
+  -- the gate is still open, and no reset has arrived since the strobe. bus_ok_i
+  -- falls the clock after a store that the cores disagree on.
+  w_commit <= '1' when (r_write = '1' and bus_ok_i = '1' and w_dbe = '0' and bus_rst_n_i = '1') else
+              '0';
 
   -- r_word is only a word from the RAM the clock after an access
   w_sbe <= w_sbe_found and (r_read or r_write);

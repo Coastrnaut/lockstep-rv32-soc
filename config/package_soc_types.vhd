@@ -36,16 +36,31 @@ package package_soc_types is
   end record t_rv_bus;
 
   -- ------------------------------------------------------------------------
+  -- Bus Response Record
+  -- ------------------------------------------------------------------------
+  -- The one response to an accepted request (HSI section 8.1): read data, and
+  -- exactly one of ack and err, in the cycle after the request was accepted.
+  -- ------------------------------------------------------------------------
+
+  type t_bus_rsp is record
+    rdata : std_logic_vector(C_DATA_WIDTH - 1 downto 0);
+    ack   : std_logic;
+    err   : std_logic;
+  end record t_bus_rsp;
+
+  -- ------------------------------------------------------------------------
   -- Core Input Record
   -- ------------------------------------------------------------------------
   -- Everything that changes on a core's inputs. Core B has to receive all of it
-  -- late, or it stops being a copy of core A.
+  -- late, or it stops being a copy of core A. A field added here reaches core B
+  -- through temporal_diversity with the rest.
   -- ------------------------------------------------------------------------
 
   type t_core_inputs is record
     rst_n : std_logic;
     rdata : std_logic_vector(C_DATA_WIDTH - 1 downto 0);
     ack   : std_logic;
+    err   : std_logic;
     msi   : std_logic;
     mti   : std_logic;
     mei   : std_logic;
