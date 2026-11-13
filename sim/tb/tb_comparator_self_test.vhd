@@ -137,6 +137,7 @@ begin
       flip_bus_o    => flip_bus,
       fatal_fault_o => test_fatal,
       rst_n_o       => test_rst_n,
+      clear_o       => open,
       nmi_fault_i   => nmi_seen,
       fault_i       => fault_seen,
       safe_state_i  => safe_seen,

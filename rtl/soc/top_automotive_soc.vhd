@@ -31,7 +31,13 @@ entity top_automotive_soc is
     g_trace_en : boolean := false;
     -- RAM size profile, in 64-bit words: 15 is the 256 KB of HSI section 5, and
     -- a board too small for it takes fewer. The window above the RAM answers ERR.
-    g_ram_addr_bits : positive range 4 to 15 := 15
+    g_ram_addr_bits : positive range 4 to 15 := 15;
+    -- Nominal clock frequencies, for the system clock monitor, and how far the
+    -- system clock may stray from its nominal rate, as measured against the
+    -- watchdog clock, before it is a fault (TSR_CLOCK_001)
+    g_sys_clk_hz        : positive              := 50_000_000;
+    g_wd_clk_hz         : positive              := 1_000_000;
+    g_clk_tolerance_pct : natural range 1 to 90 := 25
   );
   port (
     -- --------------------------------------------------------------------
@@ -97,6 +103,28 @@ architecture structural of top_automotive_soc is
   signal w_test_fatal       : std_logic;
   signal w_core_b_compared  : t_rv_bus;
   signal w_comparator_rst_n : std_logic;
+  signal w_test_clear       : std_logic;
+
+  -- Comparator B's own reset and its own copies of both buses (DF-15)
+  signal w_cold_b_rst_n       : std_logic;
+  signal w_comparator_b_rst_n : std_logic;
+  signal w_core_a_bus_late_b  : t_rv_bus;
+  signal w_core_b_compared_b  : t_rv_bus;
+
+  -- The system clock, as the watchdog clock sees it
+  signal w_clock_fault : std_logic;
+
+  -- Comparator B's copies are the same logic as comparator A's, which
+  -- synthesis would merge into one (docs/verification/synthesis.md)
+  attribute keep_hierarchy : string;
+  attribute dont_touch     : string;
+  attribute dont_touch of w_cold_b_rst_n             : signal is "true";
+  attribute dont_touch of w_core_a_bus_late_b        : signal is "true";
+  attribute dont_touch of w_core_b_compared_b        : signal is "true";
+  attribute keep_hierarchy of i_temporal_diversity_b : label is "yes";
+  attribute dont_touch of i_temporal_diversity_b     : label is "true";
+  attribute keep_hierarchy of i_cold_reset_sync_b    : label is "yes";
+  attribute dont_touch of i_cold_reset_sync_b        : label is "true";
   signal w_self_test_passed : std_logic;
   signal w_self_test_failed : std_logic;
 
@@ -168,6 +196,15 @@ begin
       rst_n_syn_o => w_cold_rst_n
     );
 
+  -- Comparator B's reset comes through a synchroniser of its own, so that a
+  -- fault in one chain resets one comparator, which the other one sees
+  i_cold_reset_sync_b : entity lockstep.reset_synchronizer
+    port map (
+      clk_i       => clk_i,
+      rst_n_i     => rst_n_i,
+      rst_n_syn_o => w_cold_b_rst_n
+    );
+
   i_wd_reset_sync : entity lockstep.reset_synchronizer
     port map (
       clk_i       => wd_clk_i,
@@ -175,7 +212,10 @@ begin
       rst_n_syn_o => w_wd_rst_n
     );
 
-  w_rst_n_request <= w_cold_rst_n and w_self_test_passed and not w_wd_reset;
+  -- A system clock fault holds the SoC in reset too, which, unlike anything
+  -- else, takes effect without the system clock: the CAN pin recessive, the
+  -- UART at mark, the cores stopped
+  w_rst_n_request <= w_cold_rst_n and w_self_test_passed and not w_wd_reset and not w_clock_fault;
 
   i_reset_sync : entity lockstep.reset_synchronizer
     port map (
@@ -307,12 +347,15 @@ begin
   -- ========================================================================
   i_lockstep_gate : entity lockstep.dual_comparator
     port map (
-      clk_i       => clk_i,
-      rst_n_syn_i => w_comparator_rst_n,
+      clk_i     => clk_i,
+      rst_a_n_i => w_comparator_rst_n,
+      rst_b_n_i => w_comparator_b_rst_n,
 
-      -- Core Feeders
-      core_a_bus_i => w_core_a_bus_late,
-      core_b_bus_i => w_core_b_compared,
+      -- Core Feeders: each comparator its own copies
+      a_core_a_bus_i => w_core_a_bus_late,
+      a_core_b_bus_i => w_core_b_compared,
+      b_core_a_bus_i => w_core_a_bus_late_b,
+      b_core_b_bus_i => w_core_b_compared_b,
 
       -- Both cores read the same data from the RAM, so they cannot see a bad word
       fatal_fault_i => w_ecc_fatal or w_test_fatal,
@@ -349,6 +392,7 @@ begin
       flip_bus_o    => w_test_flip,
       fatal_fault_o => w_test_fatal,
       rst_n_o       => w_comparator_rst_n,
+      clear_o       => w_test_clear,
       nmi_fault_i   => w_test_nmi,
       fault_i       => w_test_fault,
       safe_state_i  => w_test_safe,
@@ -362,6 +406,49 @@ begin
   w_core_b_compared.sel   <= w_core_b_bus.sel xor w_test_flip.sel;
   w_core_b_compared.we    <= w_core_b_bus.we xor w_test_flip.we;
   w_core_b_compared.valid <= w_core_b_bus.valid xor w_test_flip.valid;
+
+  -- Comparator B's copies: core A's bus through a delay line of its own, core
+  -- B's through an injection point of its own, and a reset from its own
+  -- synchroniser with the test's clears. The self-test sees a lane only when
+  -- both comparators trip on it, so it tests both copies.
+  i_temporal_diversity_b : entity lockstep.temporal_diversity
+    port map (
+      clk_i        => clk_i,
+      core_a_bus_i => w_core_a_bus,
+      core_a_bus_o => w_core_a_bus_late_b,
+      core_a_in_i  => w_core_a_in,
+      core_b_in_o  => open
+    );
+
+  w_core_b_compared_b.addr  <= w_core_b_bus.addr xor w_test_flip.addr;
+  w_core_b_compared_b.data  <= w_core_b_bus.data xor w_test_flip.data;
+  w_core_b_compared_b.sel   <= w_core_b_bus.sel xor w_test_flip.sel;
+  w_core_b_compared_b.we    <= w_core_b_bus.we xor w_test_flip.we;
+  w_core_b_compared_b.valid <= w_core_b_bus.valid xor w_test_flip.valid;
+
+  w_comparator_b_rst_n <= w_cold_b_rst_n and not w_test_clear;
+
+  -- ========================================================================
+  -- 7a. SYSTEM CLOCK MONITOR
+  -- ========================================================================
+  -- Both comparators, both cores and the reaction to a fault share the system
+  -- clock. The watchdog clock, from its own oscillator, checks its rate. A
+  -- fault raises the fault pin and holds the SoC in reset (section 1), both
+  -- without needing the system clock, until a cold reset.
+  -- ========================================================================
+  i_clock_monitor : entity lockstep.clock_monitor
+    generic map (
+      g_sys_clk_hz    => g_sys_clk_hz,
+      g_wd_clk_hz     => g_wd_clk_hz,
+      g_tolerance_pct => g_clk_tolerance_pct
+    )
+    port map (
+      clk_i      => clk_i,
+      rst_n_i    => w_cold_rst_n,
+      wd_clk_i   => wd_clk_i,
+      wd_rst_n_i => w_wd_rst_n,
+      fault_o    => w_clock_fault
+    );
 
   -- ========================================================================
   -- 8. AUTOMOTIVE BUS CONTROLLER INTEGRATION
@@ -449,7 +536,7 @@ begin
   -- The self-test trips the comparator on purpose, which is nobody else's business.
   -- The pin keeps its name, but it is the registered fault indication, not a RISC-V
   -- NMI (HSI FLT-01).
-  nmi_fault_o <= (w_fault and w_self_test_passed) or w_self_test_failed;
+  nmi_fault_o <= (w_fault and w_self_test_passed) or w_self_test_failed or w_clock_fault;
 
   -- Nothing supervises the actuators during a reset, so it holds them safe too
   actuator_safe_o <= w_lockstep_safe or not w_rst_n;

@@ -65,11 +65,20 @@
 ## TSR_LOCKSTEP_045
 - **Description:** A lockstep comparator that fails after its startup self-test must not let a divergent request reach a slave. Two comparators must check the same buses; the bus may carry a request only while both pass it and their decisions agree, either one's trip is a fault, and a disagreement between them is a fault that holds until a reset.
 - **ASIL Allocation:** ASIL-D (intent)
-- **Mitigation:** `dual_comparator` instantiates two `lockstep_comparator`s with their own state, compares their outputs every clock, latches a disagreement, and feeds it back to both as a fatal fault. The startup self-test sees a trip only when both comparators trip, so it tests each of them.
+- **Mitigation:** `dual_comparator` instantiates two `lockstep_comparator`s with their own state, compares their outputs every clock, latches a disagreement, and feeds it back to both as a fatal fault. The startup self-test sees a trip only when both comparators trip, so it tests each of them. Comparator B has its own reset synchroniser, its own delay line for core A's bus and its own self-test injection point for core B's; the two resets are compared, and the disagreement latch clears only when both comparators are in reset. The self-test holds both in reset through its settle time, so two synchronisers that release a clock apart still start the pair together.
 - **Verification Method:** Comparator Fault Injection
 - **Implemented In:** `rtl/safety/dual_comparator.vhd`, `rtl/soc/top_automotive_soc.vhd`
-- **Verified by:** `tb_dual_comparator`, `tb_dual_comparator_faults`, `tb_soc_lockstep.comparator_b_stuck_at_no_error_also_fails_the_self_test`, `tb_soc_lockstep.comparator_b_stuck_tripped_fails_the_self_test`, `tb_soc_lockstep.a_comparator_that_stops_comparing_after_startup_is_found_at_the_first_divergence`
-- **Open:** both comparators share the clock, the reset and the inputs (DFA DF-15).
+- **Verified by:** `tb_dual_comparator`, `tb_dual_comparator_faults`, `tb_soc_lockstep.comparator_b_stuck_at_no_error_also_fails_the_self_test`, `tb_soc_lockstep.comparator_b_stuck_tripped_fails_the_self_test`, `tb_soc_lockstep.a_comparator_that_stops_comparing_after_startup_is_found_at_the_first_divergence`, `tb_soc_lockstep.a_reset_of_comparator_b_alone_is_found_and_held`, `tb_soc_lockstep.a_fault_on_comparator_b_copy_of_core_a_bus_is_found`, `tb_soc_lockstep.a_fault_on_comparator_b_copy_of_core_b_bus_is_found`, `tb_soc_lockstep.comparator_b_reset_released_a_clock_late_still_starts_the_pair_together`
+- **Open:** both comparators still share the `rst_n_i` pin, the cores' buses before the copies split, and the clock, which TSR_CLOCK_001 monitors (DFA DF-15).
+
+## TSR_CLOCK_001
+- **Description:** A system clock that stops, or runs more than the configured tolerance (25 % by default) away from its nominal rate as measured against the independent watchdog clock, must be detected within two monitor windows, must raise the fault pin, and must hold the SoC in reset until a cold reset, without depending on the system clock.
+- **ASIL Allocation:** ASIL-D (intent)
+- **Mitigation:** `clock_monitor` divides the system clock, counts the divider's changes in the watchdog clock domain over each window of 256 watchdog clocks, and latches a fault outside the accepted range. The first window after a reset is not judged. The fault drives `nmi_fault_o` directly and the SoC reset request, whose synchroniser asserts without a clock, so the actuators go safe, the CAN pin recessive and the UART to mark.
+- **Verification Method:** Clock Fault Injection
+- **Implemented In:** `rtl/safety/clock_monitor.vhd`, `rtl/soc/top_automotive_soc.vhd`
+- **Verified by:** `tb_clock_monitor`, `tb_soc_watchdog.a_stopped_system_clock_is_reported_within_two_monitor_windows`
+- **Open:** the nominal frequencies and the tolerance are generics the integrator sets; on the Arty board the watchdog clock is CFGMCLK, whose own tolerance is wide (`fpga/arty_a7_100t/arty_a7_top.vhd`). A watchdog clock that stops leaves the monitor unable to judge (HSI WD-04).
 
 ## TSR_RESET_001
 - **Description:** A reset must take effect at once, with or without a clock, and be released on a clock edge, with both cores released on the same edge. Actuators must be held safe, the CAN pin recessive and the UART pin at mark during a reset.

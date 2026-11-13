@@ -10,7 +10,7 @@ Vivado. This folder has everything for a build and a bench run. A build has
 | `arty_a7_100t.xdc` | Pins, clocks and clock-domain-crossing constraints |
 | `build.tcl` | Vivado non-project build, with checks that stop it if the safety structure is lost or timing is missed |
 | `build.py` | Runs `build.tcl`, hashes the bitstream, writes `build/manifest.json` |
-| `board_firmware.py` | Generates `board_imem_image.vhd`, the board's boot image |
+| `board_imem_image.vhd` | The board's boot image: `sw/board/` (C, with startup code and a linker script) built by `sw/build.py` with the pinned xPack GCC 15.2.0-1 |
 | `check_board.py` | Checks the wrapper and the image with GHDL alone; CI runs it |
 | `sim/` | A stand-in for the UNISIM primitives, and the board image testbench (run by `sim/run.py` on GHDL and xsim) |
 
@@ -21,7 +21,7 @@ Vivado. This folder has everything for a build and a bench run. A build has
 | System clock | 100 MHz oscillator, MMCM to 50 MHz, the frequency the UART and CAN dividers assume |
 | Watchdog clock | The FPGA's internal configuration oscillator (STARTUPE2 CFGMCLK, nominally 65 MHz) divided by 64, about 1 MHz. It shares no source with the board oscillator, so a stopped system clock does not stop the watchdog |
 | Reset | The reset button, held until the MMCM locks |
-| Boot | Boot mode 2: the IMEM image from `board_firmware.py`, in both cores |
+| Boot | Boot mode 2: the IMEM image built from `sw/board/`, in both cores |
 | Memory | The 256 KB ECC RAM in block RAM: 2,304 Kib of the device's 4,860 Kib. `build.py --ram-addr-bits 12` builds a 32 KB profile instead (`docs/verification/integration.md`) |
 
 | Signal | Board connection |
@@ -86,4 +86,4 @@ analyser's resolution.
 | Vivado simulation | **Runs.** `sim/run.py` runs the board image bench, and every bench in `sim/tb`, on xsim as well as GHDL and compares the two (`docs/verification/toolchain.md`) |
 | Timing, utilisation, mapped-design checks | Waiting for the build |
 | Bench (R3.2) | Needs the board and a logic analyser |
-| Compiled firmware with a pinned toolchain (R3.3) | No RISC-V compiler on the development machine. The assembled board image is the first boot profile until one is chosen |
+| Compiled firmware with a pinned toolchain (R3.3) | **Done for the first program.** `sw/board/` (startup and trap code in `start.S`, the program in `main.c` on the generated register header, `link.ld`) built by `sw/build.py` with xPack GCC 15.2.0-1 into `board_imem_image.vhd`, with `sw/build/board.map`; CI installs the same compiler and checks the image is a build of the sources. The program uses the UART, the watchdog and, for its stack, the ECC RAM; CAN is not in it yet |

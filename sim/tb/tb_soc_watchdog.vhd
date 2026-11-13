@@ -102,7 +102,8 @@ begin
 
   i_soc : entity lockstep.top_automotive_soc
     generic map (
-      g_boot_mode => 2
+      g_boot_mode => 2,
+      g_wd_clk_hz => 43_478_261
     )
     port map (
       clk_i           => clk,
@@ -162,6 +163,8 @@ begin
     alias x_w_core_b_xbus_data is << signal i_soc.w_core_b_xbus_data : std_logic_vector(31 downto 0) >>;
     alias x_w_rst_n            is << signal i_soc.w_rst_n : std_logic >>;
     alias x_w_wd_reset         is << signal i_soc.w_wd_reset : std_logic >>;
+
+    variable v_start : time;
 
     procedure cold_reset is
     begin
@@ -251,6 +254,26 @@ begin
         wait for c_wd_clk_period * 100;
         check_equal(actuator_safe, '1', "actuators still safe");
         check_equal(can_tx, '1', "CAN pin still recessive");
+      elsif run("a_stopped_system_clock_is_reported_within_two_monitor_windows") then
+        -- The clock monitor checks the system clock against the watchdog clock
+        -- in windows of 256 watchdog clocks (5.9 us here), so a stopped clock is
+        -- a fault within two of them, far inside the watchdog's window
+        cold_reset;
+        wait until can_tx = '0' for c_timeout;
+        check_equal(can_tx, '0', "frame started");
+        clk_stopped <= true;
+        v_start     := now;
+        wait until nmi_fault = '1' for c_wd_clk_period * (2 * 256 + 8);
+        v_start     := now - v_start;
+        -- The reset that holds the outputs safe follows the fault in delta cycles
+        wait for 1 ns;
+        check_equal(nmi_fault, '1', "the fault pin reports it");
+        check_equal(actuator_safe, '1', "actuators safe");
+        check_equal(can_tx, '1', "CAN pin recessive");
+        info("a stopped system clock reported after " & integer'image(v_start / 1 ns) & " ns");
+        wait for c_wd_clk_period * 1000;
+        check_equal(nmi_fault, '1', "still reported");
+        check_equal(actuator_safe, '1', "still safe");
       elsif run("watchdog_runs_with_no_system_clock_at_all") then
         clk_stopped <= true;
         cold_reset;

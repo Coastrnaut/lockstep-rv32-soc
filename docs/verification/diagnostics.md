@@ -92,7 +92,22 @@ comparators as a fatal fault and clears only on reset (TSR_LOCKSTEP_045).
 | Self-test: bus valid | Either open, or a disagreement | The gate passes the test only if both close it |
 
 So the startup test proves each comparator, and the SoC's view needs only
-one of them to act. A comparator stuck at "no error" after startup is found
+one of them to act.
+
+### What the two comparators do not share
+
+| Cause | Kept apart by | Test |
+|-------|---------------|------|
+| Reset | Comparator B's own synchroniser on the `rst_n_i` pin. The two resets are part of the cross-check, and the disagreement latch clears only when both are in reset, so a reset of one alone is reported and held | `tb_dual_comparator_faults.a_reset_of_comparator_b_alone_is_a_disagreement_it_cannot_clear`, `tb_soc_lockstep.a_reset_of_comparator_b_alone_is_found_and_held` |
+| Reset release | Two synchronisers can release a clock apart. The self-test holds both comparators in reset for all but the last clock of its settle time, so they leave reset together | `tb_soc_lockstep.comparator_b_reset_released_a_clock_late_still_starts_the_pair_together` |
+| Core A's bus | Comparator B's own delay line (`i_temporal_diversity_b`) | `tb_dual_comparator_faults.a_fault_on_comparator_b_copy_of_core_a_bus_is_a_disagreement`, `tb_soc_lockstep.a_fault_on_comparator_b_copy_of_core_a_bus_is_found` |
+| Core B's bus | Comparator B's own self-test injection point | `tb_soc_lockstep.a_fault_on_comparator_b_copy_of_core_b_bus_is_found` |
+| System clock | Not duplicated: `clock_monitor` checks it against the independent watchdog clock (TSR_CLOCK_001) | `tb_clock_monitor`, `tb_soc_watchdog.a_stopped_system_clock_is_reported_within_two_monitor_windows` |
+
+The copies are identical logic, which synthesis would merge; the top level
+marks comparator B's synchroniser, delay line and copied nets `dont_touch`
+(and the instances `keep_hierarchy`). The pin, and the cores' buses before
+the copies split, stay shared. A comparator stuck at "no error" after startup is found
 at the first divergence: the other trips, the two disagree, and the request
 does not leave. A comparator stuck tripped is found at once, with no
 divergence needed. A dangerous failure now needs both comparators to fail
@@ -107,9 +122,11 @@ the same way; their shared clock, reset and inputs are listed as DF-15.
 | Only a reset clears a disagreement | `tb_dual_comparator_faults.only_a_reset_clears_a_disagreement` |
 | In the SoC: the self-test fails on either comparator stuck, and a comparator that stops comparing after startup is found at the first divergence | `tb_soc_lockstep.comparator_b_stuck_at_no_error_also_fails_the_self_test`, `tb_soc_lockstep.comparator_b_stuck_tripped_fails_the_self_test`, `tb_soc_lockstep.a_comparator_that_stops_comparing_after_startup_is_found_at_the_first_divergence` |
 
-Seven `dual:` mutants in `sim/scripts/mutate.py` (no cross-check, the bus
+Twelve `dual:` mutants in `sim/scripts/mutate.py` (no cross-check, the bus
 taken from comparator A alone, the disagreement not latched or not fed back,
-and the combinations of each view) are all killed. The formal harnesses still
+the combinations of each view, the resets not compared, a reset of one
+clearing the disagreement, and comparator B on comparator A's reset or
+copies) are all killed, with the `clock:` mutants for the clock monitor. The formal harnesses still
 prove one comparator; the pair is checked in simulation.
 
 ## Not covered

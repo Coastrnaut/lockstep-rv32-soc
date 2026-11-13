@@ -16,7 +16,7 @@ systems. That claim is withdrawn. What exists today is:
 1. Hardware safety mechanisms in RTL: lockstep with a startup self-test,
    temporal diversity, ECC on the shared data RAM, a windowed watchdog, an
    explicit bus response contract and safety-gated CAN and UART pins
-2. Simulation evidence: 46 benches with 263 tests, each run on GHDL and
+2. Simulation evidence: 47 benches with 277 tests, each run on GHDL and
    on Vivado's xsim with identical output, directed fault
    injection by forcing named signals, clocked simulation assertions and a
    mutation harness
@@ -98,6 +98,11 @@ comparator was built, there are 439 mutants. Every new one (seven `dual:`
 and two `regmap:`) was run and killed, and a
 one-tenth sample of all of them (`mutate.py --shard 1/10`, 44 mutants)
 killed all 44.
+
+Later on 2026-11-13, comparator B was given its own reset, delay line and
+injection point, and the system clock a monitor (TSR_CLOCK_001): 451 mutants.
+The twelve new ones (five `dual:` for the shared causes, seven `clock:`) and
+the nine whose patterns had to follow the RTL were run, and all 21 killed.
 
 ---
 

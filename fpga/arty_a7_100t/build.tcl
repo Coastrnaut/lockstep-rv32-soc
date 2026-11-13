@@ -71,6 +71,13 @@ foreach side {a b} {
 }
 require {[flops {*i_lockstep_gate/r_differ_reg*}] == 1} \
   "the comparators' cross-check latch is kept"
+# Comparator B's own copies (DF-15): the same logic as comparator A's, kept apart
+require {[flops {*i_temporal_diversity_b/r_bus_reg*}] >= 2 * 70} \
+  "comparator B keeps its own delay line for core A's bus"
+require {[flops {*i_cold_reset_sync_b/r_stages_reg*}] == 2} \
+  "comparator B keeps its own reset synchroniser"
+require {[flops {*i_clock_monitor/r_fault_reg*}] == 1} \
+  "the system clock monitor's fault latch is kept"
 require {[flops {*i_comparator_self_test/r_result_reg*}] == 8} \
   "the self-test result keeps all 8 flip-flops of its encoding"
 require {[llength [get_cells -hier -quiet -filter {NAME =~ *i_cpu_master/*}]] > 0} \
@@ -116,6 +123,8 @@ require {[flops {*i_lockstep_gate/i_comparator_*/r_current_state_reg*}] == 16} \
   "after routing, both comparators' states still have 8 flip-flops each"
 require {[flops {*i_comparator_self_test/r_result_reg*}] == 8} \
   "after routing, the self-test result still has 8 flip-flops"
+require {[flops {*i_temporal_diversity_b/r_bus_reg*}] >= 2 * 70} \
+  "after routing, comparator B still has its own delay line"
 
 write_bitstream -force $out/arty_a7_lockstep.bit
 puts "BUILD DONE"

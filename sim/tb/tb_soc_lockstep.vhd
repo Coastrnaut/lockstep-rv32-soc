@@ -232,6 +232,12 @@ begin
     alias x_w_self_test_failed     is << signal i_soc.w_self_test_failed : std_logic >>;
     alias x_w_comparators_disagree is << signal i_soc.w_comparators_disagree : std_logic >>;
 
+    -- Comparator B's own reset and its own copies of the buses (DF-15)
+    alias cold_a_rst_n is << signal i_soc.w_cold_rst_n : std_logic >>;
+    alias cold_b_rst_n is << signal i_soc.w_cold_b_rst_n : std_logic >>;
+    alias b_core_a_bus is << signal i_soc.w_core_a_bus_late_b : t_rv_bus >>;
+    alias b_core_b_bus is << signal i_soc.w_core_b_compared_b : t_rv_bus >>;
+
     alias core_a_data is << signal i_soc.w_core_a_xbus_data : std_logic_vector(31 downto 0) >>;
     alias core_b_data is << signal i_soc.w_core_b_xbus_data : std_logic_vector(31 downto 0) >>;
     alias core_a_bus  is << signal i_soc.w_core_a_bus : t_rv_bus >>;
@@ -444,6 +450,56 @@ begin
         check_equal(x_w_comparators_disagree, '1', "the disagreement is latched");
         wait for c_uart_bit_time * 2;
         check_equal(uart_starts, 0, "the byte never reached the UART");
+      elsif run("a_reset_of_comparator_b_alone_is_found_and_held") then
+        -- A glitch or a fault in comparator B's own reset synchroniser resets
+        -- comparator B and nothing else. The pair disagrees, and the trip holds
+        -- after comparator B is out of reset again.
+        cold_reset;
+        wait until core_a_bus.valid = '1' and core_a_bus.addr = c_uart_tx_data_addr for c_timeout;
+        cold_b_rst_n <= force '0';
+        wait_clocks(1);
+        cold_b_rst_n <= release;
+        check_tripped("a reset of comparator B alone");
+        check_equal(x_w_comparators_disagree, '1', "the disagreement is latched");
+        wait_clocks(50);
+        check_equal(nmi_fault, '1', "still reported 50 clocks later");
+        check_equal(actuator_safe, '1', "still safe 50 clocks later");
+      elsif run("a_fault_on_comparator_b_copy_of_core_a_bus_is_found") then
+        -- Comparator B's own delay line delivers one address bit wrong for a
+        -- clock; comparator A's copy is right
+        cold_reset;
+        wait until core_a_bus.valid = '1' and core_a_bus.addr = c_uart_tx_data_addr for c_timeout;
+        b_core_a_bus.addr(2) <= force not b_core_a_bus.addr(2);
+        wait_clocks(1);
+        b_core_a_bus.addr(2) <= release;
+        check_tripped("a fault on comparator B's copy of core A's bus");
+        check_equal(x_w_comparators_disagree, '1', "the disagreement is latched");
+        wait for c_uart_bit_time * 2;
+        check_equal(uart_starts, 0, "the byte never reached the UART");
+      elsif run("a_fault_on_comparator_b_copy_of_core_b_bus_is_found") then
+        -- Comparator B's own injection point for core B's bus delivers one data
+        -- bit wrong for a clock
+        cold_reset;
+        wait until core_a_bus.valid = '1' and core_a_bus.addr = c_uart_tx_data_addr for c_timeout;
+        b_core_b_bus.data(0) <= force not b_core_b_bus.data(0);
+        wait_clocks(1);
+        b_core_b_bus.data(0) <= release;
+        check_tripped("a fault on comparator B's copy of core B's bus");
+        check_equal(x_w_comparators_disagree, '1', "the disagreement is latched");
+      elsif run("comparator_b_reset_released_a_clock_late_still_starts_the_pair_together") then
+        -- Two reset synchronisers can release a clock apart. The self-test holds
+        -- both comparators in reset through its settle time, so they still
+        -- leave it together, and the pair never disagrees.
+        cold_b_rst_n <= force '0';
+        cold_reset;
+        wait until cold_a_rst_n = '1' for c_timeout;
+        wait_clocks(1);
+        cold_b_rst_n <= release;
+        wait for c_boot;
+        check_equal(x_w_comparators_disagree, '0', "the pair never disagreed");
+        check_equal(self_test_passed, '1', "the self-test passed");
+        check_equal(actuator_safe, '0', "the cores run");
+        check_equal(nmi_fault, '0', "no fault");
       elsif run("a_self_test_that_never_finishes_keeps_the_soc_safe_and_reports_it") then
         -- Roadmap R2.4: holding the lane at 0 makes the sequencer go round for ever
         self_test_lane <= force 0;

@@ -16,11 +16,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 # Each generator and what it writes. A generator that edits a file in place,
-# like register_map.py with the package, gets that file copied in first.
+# like register_map.py with the package, gets that file copied in first. The
+# board image needs the pinned RISC-V compiler, so sw/build.py --check checks
+# it on its own (in CI, in the board job).
 FIXTURES = {
     "sim/scripts/soc_firmware.py": ["sim/firmware/neorv32_imem_image.vhd"],
     "sim/scripts/can_frame_model.py": ["sim/generated/can_rx_frames_pkg.vhd"],
-    "fpga/arty_a7_100t/board_firmware.py": ["fpga/arty_a7_100t/board_imem_image.vhd"],
     "tools/register_map.py": ["rtl/pkg/package_soc_types.vhd", "sw/include/lockstep_soc_regs.h",
                                     "docs/safety/register_map.md", "sim/generated/register_map_pkg.vhd"],
     "tools/vsg_config.py": ["sim/vsg_config.yaml", "sim/vsg_testbench.yaml"],

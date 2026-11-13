@@ -63,7 +63,8 @@ begin
 
   i_soc : entity lockstep.top_automotive_soc
     generic map (
-      g_boot_mode => 2
+      g_boot_mode => 2,
+      g_wd_clk_hz => 25_000_000
     )
     port map (
       clk_i           => clk,

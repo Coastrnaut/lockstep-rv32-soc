@@ -167,3 +167,18 @@ jobs:
       - name: Check the board wrapper and the board image
         run: |
           python fpga/arty_a7_100t/check_board.py
+
+      - name: Install the pinned RISC-V compiler (xPack GCC 15.2.0-1)
+        run: |
+          v=15.2.0-1
+          f=xpack-riscv-none-elf-gcc-$v-linux-x64.tar.gz
+          url=https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v$v
+          curl -fsSL -o "$f" "$url/$f"
+          curl -fsSL -o "$f.sha" "$url/$f.sha"
+          sha256sum -c "$f.sha"
+          tar -xzf "$f" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xpack-riscv-none-elf-gcc-$v/bin" >> "$GITHUB_PATH"
+
+      - name: The board image is a build of sw/board with the pinned compiler
+        run: |
+          python sw/build.py --check

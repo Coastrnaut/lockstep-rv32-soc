@@ -60,6 +60,11 @@ architecture tb of tb_dual_comparator_faults is
   signal test_nmi   : std_logic;
   signal disagree   : std_logic;
 
+  -- Comparator B's own reset and its own copy of core A's bus, which follow
+  -- the shared ones unless a test forces them
+  signal rst_b_n      : std_logic;
+  signal core_a_bus_b : t_rv_bus;
+
 begin
 
   p_clk : process is
@@ -73,12 +78,18 @@ begin
 
   test_runner_watchdog(1 ms);
 
+  rst_b_n      <= rst_n;
+  core_a_bus_b <= core_a_bus;
+
   i_dut : entity lockstep.dual_comparator
     port map (
       clk_i             => clk,
-      rst_n_syn_i       => rst_n,
-      core_a_bus_i      => core_a_bus,
-      core_b_bus_i      => core_b_bus,
+      rst_a_n_i         => rst_n,
+      rst_b_n_i         => rst_b_n,
+      a_core_a_bus_i    => core_a_bus,
+      a_core_b_bus_i    => core_b_bus,
+      b_core_a_bus_i    => core_a_bus_b,
+      b_core_b_bus_i    => core_b_bus,
       fatal_fault_i     => '0',
       nmi_fault_o       => nmi_fault,
       fault_o           => fault,
@@ -221,6 +232,36 @@ begin
         wait_clocks(1);
         check_held_safe("two clocks after");
         mismatch_a <= release;
+      elsif run("a_reset_of_comparator_b_alone_is_a_disagreement_it_cannot_clear") then
+        -- A glitch or a stuck synchroniser on comparator B's reset alone
+        rst_b_n <= force '0';
+        wait_clocks(1);
+        check_equal(nmi_fault, '1', "fault while only comparator B is in reset");
+        check_equal(bus_valid, '0', "bus closed while only comparator B is in reset");
+        rst_b_n <= release;
+        wait_clocks(2);
+        check_held_safe("comparator B out of reset again");
+        wait_clocks(20);
+        check_held_safe("20 clocks later");
+        reset;
+        check_equal(disagree, '0', "a reset of both clears it");
+        check_equal(bus_valid, '1', "and opens the bus");
+      elsif run("a_fault_on_comparator_b_copy_of_core_a_bus_is_a_disagreement") then
+        -- Comparator B's own delay line for core A's bus delivers one bit
+        -- wrong. Comparator A's copy is right, so A passes the request and B
+        -- trips: they disagree, and nothing goes out.
+        core_a_bus        <= c_request;
+        core_b_bus        <= c_request;
+        wait_clocks(1);
+        check_equal(sys_bus.valid, '1', "matched requests pass first");
+        core_a_bus_b.addr <= force c_request.addr xor x"00000100";
+        wait for 1 ns;
+        check_equal(sys_bus.valid, '0', "the request does not leave");
+        check_equal(nmi_fault, '1', "fault in the same cycle");
+        wait_clocks(1);
+        core_a_bus_b.addr <= release;
+        wait_clocks(1);
+        check_held_safe("after the fault on the copy");
       elsif run("only_a_reset_clears_a_disagreement") then
         mismatch_b <= force '0';
         diverge;

@@ -46,8 +46,10 @@ entity comparator_self_test is
     -- Bits to flip in core B's bus
     flip_bus_o    : out   t_rv_bus;
     fatal_fault_o : out   std_logic;
-    -- The comparator's reset
+    -- The comparator's reset: the cold reset, and the test's own clears
     rst_n_o : out   std_logic;
+    -- The test's clears alone, for a comparator on a reset of its own
+    clear_o : out   std_logic;
 
     -- What the comparator does about it
     nmi_fault_i : in    std_logic;
@@ -100,6 +102,7 @@ architecture rtl of comparator_self_test is
   attribute dont_touch of r_result   : signal is "true";
 
   signal w_inject  : std_logic_vector(c_fatal_lane downto 0);
+  signal w_clear   : std_logic;
   signal w_clean   : std_logic;
   signal w_tripped : std_logic;
 
@@ -216,8 +219,15 @@ begin
   flip_bus_o.valid <= w_inject(c_addr_width + c_data_width + 5);
   fatal_fault_o    <= w_inject(c_fatal_lane);
 
-  rst_n_o <= '0' when (rst_n_i = '0' or r_step = step_clear) else
+  -- The comparators stay in reset for all but the last clock of the settle
+  -- time, too. Each has its own reset synchroniser, and two synchronisers can
+  -- release a clock apart; held here, they leave reset on the same edge.
+  w_clear <= '1' when (r_step = step_clear or (r_step = step_settle and r_settle /= c_settle_clocks - 1)) else
+             '0';
+
+  rst_n_o <= '0' when (rst_n_i = '0' or w_clear = '1') else
              '1';
+  clear_o <= w_clear;
 
   -- ========================================================================
   -- 4. THE RESULT

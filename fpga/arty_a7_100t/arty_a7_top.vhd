@@ -182,7 +182,13 @@ begin
   i_soc : entity lockstep.top_automotive_soc
     generic map (
       g_boot_mode     => 2,
-      g_ram_addr_bits => g_ram_addr_bits
+      g_ram_addr_bits => g_ram_addr_bits,
+      -- CFGMCLK (nominally 65 MHz) divided by 64. Its tolerance is wide, so the
+      -- clock monitor's is too: an assumption to check against the device
+      -- data sheet before the bench (docs/verification/diagnostics.md)
+      g_sys_clk_hz        => 50_000_000,
+      g_wd_clk_hz         => 1_015_625,
+      g_clk_tolerance_pct => 60
     )
     port map (
       clk_i           => w_clk50,

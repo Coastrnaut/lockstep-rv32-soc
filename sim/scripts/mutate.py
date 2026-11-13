@@ -69,6 +69,7 @@ SUP = "rtl/safety/watchdog_supervisor.vhd"
 FAB = "rtl/safety/soc_bus_fabric.vhd"
 TEL = "rtl/safety/telemetry_port.vhd"
 DUAL = "rtl/safety/dual_comparator.vhd"
+CLOCK = "rtl/safety/clock_monitor.vhd"
 
 CLEAR = r"w_tx_clear <= '1' when \(rst_n_i = '0' or bus_ok_i = '0' or r_bus_off = '1'\) else"
 
@@ -180,7 +181,7 @@ MUTANTS = [
     ("read: UART parity bit lost", UART, [(r"r_rdata\(0\) <= w_parity_ok;", "null;")]),
 
     # --- Top-level wiring, which only the firmware bench reaches
-    ("top: NMI pin not driven", TOP, [(r"  nmi_fault_o <= \(w_fault and w_self_test_passed\) or w_self_test_failed;\n", "  nmi_fault_o <= '0';\n")]),
+    ("top: NMI pin not driven", TOP, [(r"  nmi_fault_o <= \(w_fault and w_self_test_passed\) or w_self_test_failed or w_clock_fault;\n", "  nmi_fault_o <= '0';\n")]),
     ("top: NMI pin follows the unregistered compare", TOP, [(r"nmi_fault_o <= \(w_fault and w_self_test_passed\)", "nmi_fault_o <= (w_nmi and w_self_test_passed)")]),
     ("top: core A gets no read data", TOP, [(r"xbus_dat_i => w_core_a_in\.rdata", "xbus_dat_i => (others => '0')")]),
     ("top: core B gets no read data", TOP, [(r"xbus_dat_i => w_core_b_in\.rdata", "xbus_dat_i => (others => '0')")]),
@@ -275,8 +276,9 @@ MUTANTS = [
     ("wd: status read ignores the top address bits", SUP, [(r"if \(bus_i\.addr = c_wd_status_addr\) then", "if (bus_i.addr(11 downto 0) = c_wd_status_addr(11 downto 0)) then")]),
     ("wd: writes read back", SUP, [(r"bus_i\.valid = '1' and bus_i\.we = '0'\) then", "bus_i.valid = '1') then")]),
     ("wd: unknown level on a dead oscillator", SUP, [(r"sys_reset_o <= r_reset and wd_rst_n_i;", "sys_reset_o <= r_reset;")]),
-    ("wd: comparator cleared by a watchdog reset", TOP, [(r"rst_n_syn_i => w_comparator_rst_n", "rst_n_syn_i => w_rst_n")]),
-    ("wd: watchdog does not reset the SoC", TOP, [(r"w_rst_n_request <= w_cold_rst_n and w_self_test_passed and not w_wd_reset;", "w_rst_n_request <= w_cold_rst_n and w_self_test_passed;")]),
+    ("wd: comparator cleared by a watchdog reset", TOP, [(r"rst_a_n_i => w_comparator_rst_n,", "rst_a_n_i => w_rst_n,"),
+                                                       (r"w_comparator_b_rst_n <= w_cold_b_rst_n and not w_test_clear;", "w_comparator_b_rst_n <= w_rst_n;")]),
+    ("wd: watchdog does not reset the SoC", TOP, [(r"w_rst_n_request <= w_cold_rst_n and w_self_test_passed and not w_wd_reset and", "w_rst_n_request <= w_cold_rst_n and w_self_test_passed and")]),
     ("wd: supervisor cleared by its own reset", TOP, [(r"(i_watchdog_supervisor.*?rst_n_i     => )w_cold_rst_n", r"\g<1>w_rst_n")]),
     ("wd: oscillator side cleared by its own reset", TOP, [(r"(i_wd_reset_sync.*?rst_n_i     => )rst_n_i", r"\g<1>w_rst_n_request")]),
     ("wd: runs from the system clock", TOP, [(r"(i_watchdog_supervisor.*?wd_clk_i    => )wd_clk_i", r"\g<1>clk_i")]),
@@ -378,6 +380,18 @@ MUTANTS = [
     ("dual: a disagreement does not trip the comparators", DUAL, [(r"w_fatal <= fatal_fault_i or r_differ;", "w_fatal <= fatal_fault_i;")]),
     ("dual: the self-test sees either comparator", DUAL, [(r"test_nmi_fault_o  <= w_nmi_a and w_nmi_b;", "test_nmi_fault_o  <= w_nmi_a or w_nmi_b;")]),
     ("dual: the bus is open if comparator A opens it", DUAL, [(r"bus_valid_o  <= w_valid_a and w_valid_b and not r_differ;", "bus_valid_o  <= w_valid_a and not r_differ;")]),
+    # --- Causes the two comparators could share (DFA DF-15)
+    ("dual: the two resets are not compared", DUAL, [(r"w_safe_a /= w_safe_b or rst_a_n_i /= rst_b_n_i\) else", "w_safe_a /= w_safe_b) else")]),
+    ("dual: a reset of one comparator clears the disagreement", DUAL, [(r"if \(rst_a_n_i = '0' and rst_b_n_i = '0'\) then", "if (rst_a_n_i = '0' or rst_b_n_i = '0') then")]),
+    ("dual: comparator B on comparator A's reset", TOP, [(r"rst_b_n_i => w_comparator_b_rst_n,", "rst_b_n_i => w_comparator_rst_n,")]),
+    ("dual: comparator B on comparator A's copy of core A's bus", TOP, [(r"b_core_a_bus_i => w_core_a_bus_late_b,", "b_core_a_bus_i => w_core_a_bus_late,")]),
+    ("dual: comparator B on comparator A's copy of core B's bus", TOP, [(r"b_core_b_bus_i => w_core_b_compared_b,", "b_core_b_bus_i => w_core_b_compared,")]),
+    ("clock: a fast clock is no fault", CLOCK, [(r"\(r_count < c_min or r_count > c_max\)", "(r_count < c_min)")]),
+    ("clock: a slow or stopped clock is no fault", CLOCK, [(r"\(r_count < c_min or r_count > c_max\)", "(r_count > c_max)")]),
+    ("clock: the first window is judged", CLOCK, [(r"r_armed <= '0';", "r_armed <= '1';")]),
+    ("clock: the fault clears at the next window", CLOCK, [(r"          r_armed <= '1';\n", "          r_armed <= '1';\n          r_fault <= '0';\n")]),
+    ("clock: a clock fault does not reach the fault pin", TOP, [(r"or w_self_test_failed or w_clock_fault;", "or w_self_test_failed;")]),
+    ("clock: a clock fault does not hold the SoC in reset", TOP, [(r"and not w_wd_reset and not w_clock_fault;", "and not w_wd_reset;")]),
     # --- Repair, patrol and first-fault telemetry (roadmap R4.1)
     ("repair: a load does not write back its corrected word", RAM, [(r"w_repair <= \(r_read and w_sbe_found\) or w_scrub_sbe;", "w_repair <= w_scrub_sbe;")]),
     ("repair: the patrol does not write back", RAM, [(r"w_repair <= \(r_read and w_sbe_found\) or w_scrub_sbe;", "w_repair <= r_read and w_sbe_found;")]),
@@ -424,13 +438,14 @@ MUTANTS = [
     ("test: tripped ignores the NMI", TEST, [(r"w_tripped <= '1' when \(nmi_fault_i = '1' and fault_i", "w_tripped <= '1' when (fault_i")]),
     ("test: tripped ignores the safe state", TEST, [(r"fault_i = '1' and safe_state_i = '1' and bus_valid_i = '0'\)", "fault_i = '1' and bus_valid_i = '0')")]),
     ("test: tripped ignores the bus gate", TEST, [(r"safe_state_i = '1' and bus_valid_i = '0'\) else", "safe_state_i = '1') else")]),
-    ("test: comparator not reset between lines", TEST, [(r"rst_n_o <= '0' when \(rst_n_i = '0' or r_step = step_clear\) else", "rst_n_o <= '0' when (rst_n_i = '0') else")]),
-    ("test: comparator held in reset", TEST, [(r"rst_n_o <= '0' when \(rst_n_i = '0' or r_step = step_clear\) else", "rst_n_o <= '0' when (rst_n_i = '0' or r_step = step_done) else")]),
+    ("test: comparator not reset between lines", TEST, [(r"w_clear <= '1' when \(r_step = step_clear or ", "w_clear <= '1' when (")]),
+    ("test: comparator held in reset", TEST, [(r"w_clear <= '1' when \(r_step = step_clear or ", "w_clear <= '1' when (r_step = step_clear or r_step = step_done or ")]),
+    ("test: comparators not held through the settle time", TEST, [(r"w_clear <= '1' when \(r_step = step_clear or \(r_step = step_settle and r_settle /= c_settle_clocks - 1\)\) else", "w_clear <= '1' when (r_step = step_clear) else")]),
     ("test: injects nothing", TEST, [(r"w_inject\(r_lane\) <= '1';", "null;")]),
     ("test: injects every line at once", TEST, [(r"w_inject\(r_lane\) <= '1';", "w_inject <= (others => '1');")]),
     ("test: failure not reported", TEST, [(r"failed_o <= '1' when \(r_step = step_done and r_result /= st_system_ok\) else", "failed_o <= '1' when (false) else")]),
     ("test: reports failure while running", TEST, [(r"failed_o <= '1' when \(r_step = step_done and r_result /= st_system_ok\) else", "failed_o <= '1' when (r_result /= st_system_ok) else")]),
-    ("test: cores start without it", TOP, [(r"w_rst_n_request <= w_cold_rst_n and w_self_test_passed and not w_wd_reset;", "w_rst_n_request <= w_cold_rst_n and not w_wd_reset;")]),
+    ("test: cores start without it", TOP, [(r"w_rst_n_request <= w_cold_rst_n and w_self_test_passed and", "w_rst_n_request <= w_cold_rst_n and")]),
     ("test: runs after a watchdog reset", TOP, [(r"(i_comparator_self_test.*?rst_n_i       => )w_cold_rst_n", r"\g<1>w_rst_n")]),
     ("test: address flips not wired", TOP, [(r"w_core_b_compared\.addr  <= w_core_b_bus\.addr xor w_test_flip\.addr;", "w_core_b_compared.addr  <= w_core_b_bus.addr;")]),
     ("test: data flips not wired", TOP, [(r"w_core_b_compared\.data  <= w_core_b_bus\.data xor w_test_flip\.data;", "w_core_b_compared.data  <= w_core_b_bus.data;")]),
@@ -438,9 +453,10 @@ MUTANTS = [
     ("test: write enable flip not wired", TOP, [(r"w_core_b_compared\.we    <= w_core_b_bus\.we xor w_test_flip\.we;", "w_core_b_compared.we    <= w_core_b_bus.we;")]),
     ("test: strobe flip not wired", TOP, [(r"w_core_b_compared\.valid <= w_core_b_bus\.valid xor w_test_flip\.valid;", "w_core_b_compared.valid <= w_core_b_bus.valid;")]),
     ("test: fatal input not wired", TOP, [(r"fatal_fault_i => w_ecc_fatal or w_test_fatal,", "fatal_fault_i => w_ecc_fatal,")]),
-    ("test: comparator on the cold reset alone", TOP, [(r"rst_n_syn_i => w_comparator_rst_n", "rst_n_syn_i => w_cold_rst_n")]),
-    ("test: NMI pin shows the self-test", TOP, [(r"nmi_fault_o <= \(w_fault and w_self_test_passed\) or w_self_test_failed;", "nmi_fault_o <= w_fault or w_self_test_failed;")]),
-    ("test: NMI pin misses a failure", TOP, [(r"nmi_fault_o <= \(w_fault and w_self_test_passed\) or w_self_test_failed;", "nmi_fault_o <= w_fault and w_self_test_passed;")]),
+    ("test: comparator on the cold reset alone", TOP, [(r"rst_a_n_i => w_comparator_rst_n,", "rst_a_n_i => w_cold_rst_n,"),
+                                                     (r"w_comparator_b_rst_n <= w_cold_b_rst_n and not w_test_clear;", "w_comparator_b_rst_n <= w_cold_b_rst_n;")]),
+    ("test: NMI pin shows the self-test", TOP, [(r"nmi_fault_o <= \(w_fault and w_self_test_passed\) or w_self_test_failed", "nmi_fault_o <= w_fault or w_self_test_failed")]),
+    ("test: NMI pin misses a failure", TOP, [(r"nmi_fault_o <= \(w_fault and w_self_test_passed\) or w_self_test_failed or", "nmi_fault_o <= (w_fault and w_self_test_passed) or")]),
 
     # --- CAN reception
     ("rx: stuff bit after 4", RX, [(r"c_stuff_run : unsigned\(2 downto 0\)  := to_unsigned\(5, 3\)", "c_stuff_run : unsigned(2 downto 0)  := to_unsigned(4, 3)")]),

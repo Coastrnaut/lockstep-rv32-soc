@@ -18,7 +18,21 @@
 --                   once, and the SoC is held safe until a cold reset.
 --
 --               So a dangerous failure needs both comparators to fail the same
---               way, in the same clock.
+--               way, in the same clock. Causes they could share are kept apart
+--               (docs/safety/dependent_failure_analysis.md, DF-15):
+--
+--                 - Reset: each comparator has its own reset, from its own
+--                   synchroniser at the top level. The two resets are compared
+--                   too, and the disagreement latch clears only when both are
+--                   in reset, so a reset that reaches one comparator alone
+--                   (a glitch, a stuck synchroniser) cannot clear a trip
+--                   unseen.
+--                 - Inputs: comparator B takes its own copies of both buses,
+--                   through its own delay line for core A and its own
+--                   self-test injection for core B. A fault on one copy makes
+--                   the comparators disagree.
+--                 - Clock: clock_monitor checks the shared system clock against
+--                   the independent watchdog clock.
 --
 --               The startup self-test sees the pair through test_*_o: there a
 --               trip counts only when both comparators trip, and the bus counts
@@ -31,7 +45,7 @@
 --               synthesis cannot merge them into one (docs/verification/
 --               synthesis.md).
 --
--- Traces to:    TSR_LOCKSTEP_001, TSR_LOCKSTEP_044, TSR_SAFETY_GATE_001
+-- Traces to:    TSR_LOCKSTEP_001, TSR_LOCKSTEP_044, TSR_LOCKSTEP_045, TSR_SAFETY_GATE_001
 -- ============================================================================
 
 library ieee;
@@ -42,12 +56,17 @@ library lockstep;
 
 entity dual_comparator is
   port (
-    clk_i       : in    std_logic;
-    rst_n_syn_i : in    std_logic;
+    clk_i : in    std_logic;
+    -- Each comparator's reset, synchronous to clk_i, from its own synchroniser
+    rst_a_n_i : in    std_logic;
+    rst_b_n_i : in    std_logic;
 
-    -- Both cores' buses, to both comparators
-    core_a_bus_i : in    t_rv_bus;
-    core_b_bus_i : in    t_rv_bus;
+    -- Both cores' buses, as comparator A sees them
+    a_core_a_bus_i : in    t_rv_bus;
+    a_core_b_bus_i : in    t_rv_bus;
+    -- Both cores' buses, as comparator B sees them: its own copies
+    b_core_a_bus_i : in    t_rv_bus;
+    b_core_b_bus_i : in    t_rv_bus;
 
     -- A fault the cores cannot see for themselves
     fatal_fault_i : in    std_logic;
@@ -74,7 +93,8 @@ architecture rtl of dual_comparator is
 
   -- ISO 26262 Automated Traceability Attributes
   attribute requirement_id : string;
-  attribute requirement_id of rtl : architecture is "TSR_LOCKSTEP_001, TSR_LOCKSTEP_044, TSR_SAFETY_GATE_001";
+  attribute requirement_id of rtl : architecture is
+    "TSR_LOCKSTEP_001, TSR_LOCKSTEP_044, TSR_LOCKSTEP_045, TSR_SAFETY_GATE_001";
 
   constant c_quiet_bus : t_rv_bus :=
   (
@@ -118,9 +138,9 @@ begin
   i_comparator_a : entity lockstep.lockstep_comparator
     port map (
       clk_i         => clk_i,
-      rst_n_syn_i   => rst_n_syn_i,
-      core_a_bus_i  => core_a_bus_i,
-      core_b_bus_i  => core_b_bus_i,
+      rst_n_syn_i   => rst_a_n_i,
+      core_a_bus_i  => a_core_a_bus_i,
+      core_b_bus_i  => a_core_b_bus_i,
       fatal_fault_i => w_fatal,
       nmi_fault_o   => w_nmi_a,
       fault_o       => w_fault_a,
@@ -132,9 +152,9 @@ begin
   i_comparator_b : entity lockstep.lockstep_comparator
     port map (
       clk_i         => clk_i,
-      rst_n_syn_i   => rst_n_syn_i,
-      core_a_bus_i  => core_a_bus_i,
-      core_b_bus_i  => core_b_bus_i,
+      rst_n_syn_i   => rst_b_n_i,
+      core_a_bus_i  => b_core_a_bus_i,
+      core_b_bus_i  => b_core_b_bus_i,
       fatal_fault_i => w_fatal,
       nmi_fault_o   => w_nmi_b,
       fault_o       => w_fault_b,
@@ -146,16 +166,19 @@ begin
   -- ========================================================================
   -- 1. CROSS-CHECK: the two decisions, every clock
   -- ========================================================================
+  -- The two resets are part of the decision: one comparator in reset and the
+  -- other running is a disagreement
   w_differ <= '1' when (w_bus_a /= w_bus_b or w_valid_a /= w_valid_b or w_fault_a /= w_fault_b or
-                         w_safe_a /= w_safe_b) else
+                         w_safe_a /= w_safe_b or rst_a_n_i /= rst_b_n_i) else
               '0';
 
-  -- Held until the reset, like a comparator's own fault latch
+  -- Held until both comparators are reset, like a comparator's own fault
+  -- latch: a reset of one alone does not clear it
   p_differ : process (clk_i) is
   begin
 
     if rising_edge(clk_i) then
-      if (rst_n_syn_i = '0') then
+      if (rst_a_n_i = '0' and rst_b_n_i = '0') then
         r_differ <= '0';
       elsif (w_differ = '1') then
         r_differ <= '1';
@@ -196,7 +219,7 @@ begin
   begin
 
     if rising_edge(clk_i) then
-      if (rst_n_syn_i = '1' and sys_bus_o.valid = '1') then
+      if (rst_a_n_i = '1' and rst_b_n_i = '1' and sys_bus_o.valid = '1') then
         assert w_bus_a = w_bus_b and w_bus_a.valid = '1'
           report "FORMAL FAIL: a request left that one comparator did not pass"
           severity error;

@@ -20,12 +20,12 @@ current flow is in `docs/verification/toolchain.md`.
 | R0.1–R0.3 | Done | `docs/verification/milestone_0_1.md` |
 | R1.1–R1.4 | Done | `docs/verification/milestone_0_1.md`, HSI section 8 |
 | R2.1 | Done: comparator, fabric and store commit proved, with covers and broken-RTL checks; CDC not modelled | `docs/verification/formal.md` |
-| R2.2 | Partial: trace comparison of both cores, with a register-only divergence caught. Sail/Spike pilot and ACT4 blocked: no RISC-V compiler or reference model installed | `docs/verification/trace.md` |
+| R2.2 | Partial: trace comparison of both cores, with a register-only divergence caught. Sail/Spike pilot and ACT4 still blocked on a reference model; the pinned compiler (R3.3) is now in place | `docs/verification/trace.md` |
 | R2.3 | Done for single RTL faults at 15 sites; no burst or netlist faults | `docs/verification/fault_campaign.md` |
-| R2.4 | Done as an evaluation: maximum diagnostic interval set, a latent compare failure and a reporting-path failure shown, a stuck sequencer reported. The redundant comparator it recommends is built: two comparators cross-checked every clock, with a latched disagreement (`rtl/safety/dual_comparator.vhd`) | `docs/verification/diagnostics.md` |
+| R2.4 | Done as an evaluation: maximum diagnostic interval set, a latent compare failure and a reporting-path failure shown, a stuck sequencer reported. The redundant comparator it recommends is built: two comparators cross-checked every clock, with a latched disagreement (`rtl/safety/dual_comparator.vhd`); comparator B has its own reset, delay line and injection point, and the shared system clock is monitored against the watchdog clock (`rtl/safety/clock_monitor.vhd`, TSR_CLOCK_001) | `docs/verification/diagnostics.md` |
 | R3.1 | Partial: board wrapper, constraints, build script with safety-structure checks, GHDL check in CI, and every bench run on Vivado's xsim as well as GHDL, with the two compared test by test. No build: the Artix-7 devices are installed, but Vivado reports an Alveo licence and `get_parts` then lists no parts (`docs/verification/toolchain.md`) | `fpga/arty_a7_100t/README.md`, `docs/verification/synthesis.md` |
 | R3.2 | Blocked: needs the board and a bench | |
-| R3.3 | Partial: a generated board image (Python) checked in simulation; no pinned compiler or ELF flow | `fpga/arty_a7_100t/README.md` |
+| R3.3 | Partial: the board program is C with startup and trap code and a linker script, built by `sw/build.py` with the pinned xPack GCC 15.2.0-1 into the IMEM image, which CI checks is a build of the sources; it runs on GHDL and xsim. UART, watchdog and RAM only; CAN and ECC exercises not yet in it | `fpga/arty_a7_100t/README.md` |
 | R4.1 | Done in simulation: protection map, writeback, patrol with a measured bound, first-fault telemetry on an independent read-only port | `docs/verification/memory_protection.md`, HSI 8.5 |
 | R4.2 | Partial: support matrix with simulation evidence; bench validation blocked on hardware | `docs/verification/can_support.md` |
 | R4.3 | Done, but for area and timing per profile, which need a Vivado build | `docs/verification/integration.md` |

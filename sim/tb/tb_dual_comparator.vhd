@@ -100,9 +100,12 @@ begin
   i_dut : entity lockstep.dual_comparator
     port map (
       clk_i             => clk,
-      rst_n_syn_i       => rst_n,
-      core_a_bus_i      => core_a_bus,
-      core_b_bus_i      => core_b_bus,
+      rst_a_n_i         => rst_n,
+      rst_b_n_i         => rst_n,
+      a_core_a_bus_i    => core_a_bus,
+      a_core_b_bus_i    => core_b_bus,
+      b_core_a_bus_i    => core_a_bus,
+      b_core_b_bus_i    => core_b_bus,
       fatal_fault_i     => fatal,
       nmi_fault_o       => nmi_fault,
       fault_o           => fault,

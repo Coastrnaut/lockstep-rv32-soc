@@ -41,6 +41,9 @@ but no document defined.
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_044    | comparator_self_test      | tb_comparator_self_test | Sim |
 | SG-01 | FSR_MOTION_001 | TSR_LOCKSTEP_045    | dual_comparator           | tb_dual_comparator, tb_dual_comparator_faults | Sim |
 | SG-01 | FSR_MOTION_001 | TSR_LOCKSTEP_045    | top_automotive_soc        | tb_soc_lockstep.comparator_b_stuck_at_no_error_also_fails_the_self_test, tb_soc_lockstep.a_comparator_that_stops_comparing_after_startup_is_found_at_the_first_divergence | Sim |
+| SG-01 | FSR_MOTION_001 | TSR_LOCKSTEP_045    | top_automotive_soc        | tb_soc_lockstep.a_reset_of_comparator_b_alone_is_found_and_held, tb_soc_lockstep.a_fault_on_comparator_b_copy_of_core_a_bus_is_found, tb_soc_lockstep.a_fault_on_comparator_b_copy_of_core_b_bus_is_found, tb_soc_lockstep.comparator_b_reset_released_a_clock_late_still_starts_the_pair_together | Sim |
+| SG-01 | FSR_MOTION_002 | TSR_CLOCK_001       | clock_monitor             | tb_clock_monitor | Sim |
+| SG-01 | FSR_MOTION_002 | TSR_CLOCK_001       | top_automotive_soc        | tb_soc_watchdog.a_stopped_system_clock_is_reported_within_two_monitor_windows | Sim |
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_043    | temporal_diversity        | tb_temporal_diversity | Sim |
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_043    | top_automotive_soc        | tb_soc_lockstep | Sim |
 | SG-02 | FSR_DIV_001    | TSR_LOCKSTEP_001    | top_automotive_soc        | tb_soc_trace.a_register_only_divergence_is_caught_by_the_trace_and_not_by_the_bus (diagnostic, verification build only) | Sim |
@@ -78,11 +81,11 @@ or countable facts instead.
 
 | Evidence | Status | Notes |
 |----------|--------|-------|
-| RTL implementation | 16 first-party RTL files: 14 blocks, the core wrapper and the top level | Boot ROM ECC, Flash and the comparator register block are not built (HSI section 5) |
-| Testbenches | 46 benches, 263 tests, all passing on GHDL and on Vivado's xsim, with the same output | Plain VHDL-2008 on `sim/tb/lib/tb_pkg.vhd`. Tools and counts: `docs/verification/toolchain.md` |
+| RTL implementation | 17 first-party RTL files: 15 blocks, the core wrapper and the top level | Boot ROM ECC, Flash and the comparator register block are not built (HSI section 5) |
+| Testbenches | 47 benches, 277 tests, all passing on GHDL and on Vivado's xsim, with the same output | Plain VHDL-2008 on `sim/tb/lib/tb_pkg.vhd`. Tools and counts: `docs/verification/toolchain.md` |
 | Fault injection | Directed forces in the benches, and a seeded campaign at 15 RTL sites | `docs/verification/fault_campaign.md`. No netlist-level injection |
 | Structural coverage | Not measured | GHDL in this flow does not report statement, branch or toggle coverage |
-| Mutation | 439 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
+| Mutation | 451 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
 | Assertions | Clocked simulation assertions in the RTL | Checked in simulation |
 | Formal | 3 SymbiYosys jobs, 21 properties, all proved by k-induction, every cover reached, each job rejects a deliberately broken RTL | Comparator, bus fabric, and compare before the RAM commit. CDC, self-test and CPUs are not covered (`docs/verification/formal.md`) |
 | Traceability tags | Every first-party RTL file carries a `requirement_id` that this matrix resolves | |
@@ -112,7 +115,7 @@ or countable facts instead.
 ### Technical Safety Requirements
 Defined in `docs/requirements/tsr_safety_core.md`:
 `TSR_LOCKSTEP_001` (alias `TSR_LOCKSTEP_042`, retired), `TSR_LOCKSTEP_043`,
-`TSR_LOCKSTEP_044`, `TSR_LOCKSTEP_045`, `TSR_BUS_001`, `TSR_ECC_001`, `TSR_WD_001`,
+`TSR_LOCKSTEP_044`, `TSR_LOCKSTEP_045`, `TSR_CLOCK_001`, `TSR_BUS_001`, `TSR_ECC_001`, `TSR_WD_001`,
 `TSR_RESET_001`, `TSR_SAFETY_GATE_001`, `TSR_SAFETY_GATE_002`,
 `TSR_SAFETY_GATE_003`, `TSR_TYPES_001`, `TSR_UART_001`, `TSR_CAN_001`,
 `TSR_CAN_002`.

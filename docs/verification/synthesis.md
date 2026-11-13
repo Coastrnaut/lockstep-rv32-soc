@@ -42,6 +42,11 @@ equivalent-register removal.
   inputs, which equivalent-register removal would merge into one. Their
   instances carry `keep_hierarchy` and `dont_touch`, and the build checks that
   both still have their own state after routing (16 flip-flops).
+- Comparator B's own delay line, reset synchroniser and copied nets are the
+  same logic as comparator A's, and carry `dont_touch` (the instances also
+  `keep_hierarchy`). The build checks that the delay line (at least 140
+  flip-flops) and the synchroniser (2) are still there, and the clock
+  monitor's fault latch.
 
 ## Status and limits
 
