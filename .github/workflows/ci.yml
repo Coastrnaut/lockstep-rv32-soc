@@ -65,7 +65,7 @@ jobs:
         run: |
           cd sim && python run.py --lint
 
-      - name: Style lint (vsg)
+      - name: Style lint (vsg, every rule)
         run: |
           cd sim && python run.py --vsg
 
@@ -144,8 +144,8 @@ jobs:
 
   board:
     # Roadmap R3.1 and R3.3: the Arty A7 wrapper synthesises in GHDL, and the
-    # board image runs on the SoC. The Vivado build itself needs a licence-free
-    # Vivado install with Artix-7 devices, which CI does not have.
+    # board image runs on the SoC. The Vivado build and the Vivado stage of
+    # run.py need a Vivado install, which CI does not have.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

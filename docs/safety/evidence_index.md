@@ -76,12 +76,14 @@ reason. **Out of scope** outside the profile this release covers.
 | Claim | Evidence | Result | Status |
 |-------|----------|--------|--------|
 | Core B is core A two clocks late | `tb_soc_lockstep.core_b_is_core_a_two_clocks_ago_all_through_the_program`, `tb_soc_trace.core_b_retires_exactly_what_core_a_retired_all_through_the_program` | Every input and every retirement | Sim |
+| Every compared lane trips the comparator, in the cycle it differs; a matched request passes unchanged | `tb_lockstep_comparator`: OSVVM coverage over all 70 lanes and read or write by matched or not | Covered in 136 vectors, every vector checked | Sim |
+| A second simulator agrees | `docs/verification/toolchain.md`: every file analysed and the SoC elaborated by Vivado; `tb_soc_smoke` and `tb_board_firmware` on xsim and GHDL | Same results on both | Sim (local; CI has no Vivado) |
 | A common glitch in one cycle is caught | `tb_soc_lockstep.same_glitch_on_both_core_buses_is_caught`, `tb_soc_lockstep.same_glitch_on_both_cores_read_data_is_caught` | Passes | Sim |
 | Comparator latent faults are tested | `tb_comparator_self_test`, `tb_soc_lockstep.comparator_stuck_at_no_error_keeps_the_soc_safe` | At startup only | Sim; periodic test Pending (R2.4, FMEDA FM-07) |
 | Register-only divergence | `tb_soc_trace.a_register_only_divergence_is_caught_by_the_trace_and_not_by_the_bus` | Caught by the trace, in verification builds only | Sim |
 | Fault campaign coverage | `docs/verification/fault_campaign.md`, seed 2026 | 67 of 88 effective faults detected in time; the rest are after the comparator or in the reset synchroniser | Sim; sample, not an FMEDA coverage figure |
 | Test strength | `sim/scripts/mutate.py`, 430 mutants | Every mutant of R4.1 and R4.3 killed; full campaign before a release | Sim |
-| Synthesis keeps the safety encodings | `docs/verification/synthesis.md`, `fpga/arty_a7_100t/build.tcl` | Checks written | Pending: no Vivado build has run |
+| Synthesis keeps the safety encodings | `docs/verification/synthesis.md`, `fpga/arty_a7_100t/build.tcl` | Checks written | Pending: no Vivado build has run; the installed licence offers no parts |
 
 ## Safety analysis
 

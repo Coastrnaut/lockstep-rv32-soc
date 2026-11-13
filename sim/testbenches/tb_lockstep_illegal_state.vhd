@@ -100,42 +100,42 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       core_bus   <= c_store;
       core_b_bus <= c_store;
 
       if run("every_one_bit_corruption_of_the_healthy_state_is_a_held_fault") then
 
-        for bit_index in 0 to 7 loop
+        loop_bit_index : for lv_bit_index in 0 to 7 loop
 
           reset_dut;
 
           -- One clock with a single bit of 0x5A flipped, and the buses agreeing
-          state <= force st_system_ok xor std_logic_vector(shift_left(to_unsigned(1, 8), bit_index));
+          state <= force st_system_ok xor std_logic_vector(shift_left(to_unsigned(1, 8), lv_bit_index));
           wait for 1 ns;
-          check_equal(sys_bus.valid, '0', "bit " & integer'image(bit_index) & ": store stopped at once");
-          check_equal(bus_valid, '0', "bit " & integer'image(bit_index) & ": gate closed at once");
-          check_equal(nmi_fault, '1', "bit " & integer'image(bit_index) & ": fault reported at once");
-          check_equal(fault, '1', "bit " & integer'image(bit_index) & ": registered fault at once");
-          check_equal(safe_state, '1', "bit " & integer'image(bit_index) & ": safe state at once");
+          check_equal(sys_bus.valid, '0', "bit " & integer'image(lv_bit_index) & ": store stopped at once");
+          check_equal(bus_valid, '0', "bit " & integer'image(lv_bit_index) & ": gate closed at once");
+          check_equal(nmi_fault, '1', "bit " & integer'image(lv_bit_index) & ": fault reported at once");
+          check_equal(fault, '1', "bit " & integer'image(lv_bit_index) & ": registered fault at once");
+          check_equal(safe_state, '1', "bit " & integer'image(lv_bit_index) & ": safe state at once");
           wait until rising_edge(clk);
           state <= release;
 
           -- The cause is gone and the buses still agree, but it stays
-          for dummy in 1 to 5 loop
+          loop_dummy : for lv_dummy in 1 to 5 loop
 
             wait until falling_edge(clk);
-            check_equal(state, st_fault_tripped, "bit " & integer'image(bit_index) & ": tripped");
-            check_equal(nmi_fault, '1', "bit " & integer'image(bit_index) & ": fault held");
-            check_equal(fault, '1', "bit " & integer'image(bit_index) & ": registered fault held");
-            check_equal(safe_state, '1', "bit " & integer'image(bit_index) & ": safe state held");
-            check_equal(bus_valid, '0', "bit " & integer'image(bit_index) & ": gate held closed");
-            check_equal(sys_bus.valid, '0', "bit " & integer'image(bit_index) & ": bus held closed");
+            check_equal(state, st_fault_tripped, "bit " & integer'image(lv_bit_index) & ": tripped");
+            check_equal(nmi_fault, '1', "bit " & integer'image(lv_bit_index) & ": fault held");
+            check_equal(fault, '1', "bit " & integer'image(lv_bit_index) & ": registered fault held");
+            check_equal(safe_state, '1', "bit " & integer'image(lv_bit_index) & ": safe state held");
+            check_equal(bus_valid, '0', "bit " & integer'image(lv_bit_index) & ": gate held closed");
+            check_equal(sys_bus.valid, '0', "bit " & integer'image(lv_bit_index) & ": bus held closed");
 
-          end loop;
+          end loop loop_dummy;
 
-        end loop;
+        end loop loop_bit_index;
 
         -- Only a reset clears it
         reset_dut;
@@ -157,12 +157,12 @@ begin
         wait for 1 ns;
         check_equal(fault, '1', "registered at the edge");
 
-        for dummy in 1 to 3 loop
+        loop_dummy_2 : for lv_dummy in 1 to 3 loop
 
           wait until falling_edge(clk);
           check_equal(fault, '1', "and held");
 
-        end loop;
+        end loop loop_dummy_2;
 
       elsif run("an_upset_that_clears_the_latch_while_tripped_hides_nothing") then
         -- Found by the formal proof (R2.1): the latch and the state each report
@@ -196,7 +196,7 @@ begin
         check_equal(sys_bus.valid, '0', "nothing passes");
       elsif run("one_bit_corruption_of_the_tripped_state_stays_tripped") then
 
-        for bit_index in 0 to 7 loop
+        loop_bit_index_2 : for lv_bit_index in 0 to 7 loop
 
           reset_dut;
           core_b_bus.data <= x"00000000";
@@ -204,21 +204,21 @@ begin
           core_b_bus.data <= c_store.data;
           wait until falling_edge(clk);
           check_equal(state, st_fault_tripped, "tripped by a forced mismatch");
-          state           <= force st_fault_tripped xor std_logic_vector(shift_left(to_unsigned(1, 8), bit_index));
+          state           <= force st_fault_tripped xor std_logic_vector(shift_left(to_unsigned(1, 8), lv_bit_index));
           wait until rising_edge(clk);
           state           <= release;
           wait until falling_edge(clk);
-          check_equal(state, st_fault_tripped, "bit " & integer'image(bit_index) & ": still tripped");
-          check_equal(nmi_fault, '1', "bit " & integer'image(bit_index) & ": fault still reported");
-          check_equal(fault, '1', "bit " & integer'image(bit_index) & ": registered fault still reported");
-          check_equal(safe_state, '1', "bit " & integer'image(bit_index) & ": still safe");
-          check_equal(bus_valid, '0', "bit " & integer'image(bit_index) & ": gate still closed");
+          check_equal(state, st_fault_tripped, "bit " & integer'image(lv_bit_index) & ": still tripped");
+          check_equal(nmi_fault, '1', "bit " & integer'image(lv_bit_index) & ": fault still reported");
+          check_equal(fault, '1', "bit " & integer'image(lv_bit_index) & ": registered fault still reported");
+          check_equal(safe_state, '1', "bit " & integer'image(lv_bit_index) & ": still safe");
+          check_equal(bus_valid, '0', "bit " & integer'image(lv_bit_index) & ": gate still closed");
 
-        end loop;
+        end loop loop_bit_index_2;
 
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

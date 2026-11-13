@@ -20,22 +20,23 @@ end entity tb_lockstep_fault_inject;
 
 architecture rtl of tb_lockstep_fault_inject is
 
-  constant clk_period : time := 20 ns;
-  signal   tb_clk     : std_logic;
-  signal   tb_rst_n   : std_logic;
-  signal   core_a_bus : t_rv_bus;
-  signal   core_b_bus : t_rv_bus;
-  signal   nmi_fault  : std_logic;
-  signal   safe_state : std_logic;
-  signal   bus_valid  : std_logic;
-  signal   sys_bus    : t_rv_bus;begin
+  constant c_clk_period : time := 20 ns;
+
+  signal tb_clk     : std_logic;
+  signal tb_rst_n   : std_logic;
+  signal core_a_bus : t_rv_bus;
+  signal core_b_bus : t_rv_bus;
+  signal nmi_fault  : std_logic;
+  signal safe_state : std_logic;
+  signal bus_valid  : std_logic;
+  signal sys_bus    : t_rv_bus;begin
 
   p_clk : process is
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    tb_clk <= '0', '1' after clk_period / 2;
-    wait for clk_period;
+    tb_clk <= '0', '1' after c_clk_period / 2;
+    wait for c_clk_period;
 
   end process p_clk;
 
@@ -67,19 +68,19 @@ architecture rtl of tb_lockstep_fault_inject is
     test_runner_setup(runner, runner_cfg);
     tb_rst_n <= '0';
 
-    for dummy in 1 to 10 loop
+    loop_dummy : for lv_dummy in 1 to 10 loop
 
       wait until rising_edge(tb_clk);
 
-    end loop;
+    end loop loop_dummy;
 
     tb_rst_n <= '1';
 
-    for dummy in 1 to 10 loop
+    loop_dummy_2 : for lv_dummy in 1 to 10 loop
 
       wait until rising_edge(tb_clk);
 
-    end loop;
+    end loop loop_dummy_2;
 
     -- --- Fault 1: Address mismatch ---
     core_a_bus <=
@@ -99,11 +100,11 @@ architecture rtl of tb_lockstep_fault_inject is
       sel   => "1111"
     );
 
-    for dummy in 1 to 3 loop
+    loop_dummy_3 : for lv_dummy in 1 to 3 loop
 
       wait until rising_edge(tb_clk);
 
-    end loop;
+    end loop loop_dummy_3;
 
     check(nmi_fault = '1', "NMI on addr mismatch");
     check(bus_valid = '0', "bus isolated on addr mismatch");
@@ -126,11 +127,11 @@ architecture rtl of tb_lockstep_fault_inject is
       sel   => "1111"
     );
 
-    for dummy in 1 to 3 loop
+    loop_dummy_4 : for lv_dummy in 1 to 3 loop
 
       wait until rising_edge(tb_clk);
 
-    end loop;
+    end loop loop_dummy_4;
 
     check(nmi_fault = '1', "NMI on WE mismatch (latched)");
 
@@ -152,39 +153,39 @@ architecture rtl of tb_lockstep_fault_inject is
       sel   => "1111"
     );
 
-    for dummy in 1 to 3 loop
+    loop_dummy_5 : for lv_dummy in 1 to 3 loop
 
       wait until rising_edge(tb_clk);
 
-    end loop;
+    end loop loop_dummy_5;
 
     check(nmi_fault = '1', "NMI on single-bit data flip (latched)");
 
     -- --- Every bus field trips the comparator on its own, from a clean reset ---
-    for field in 0 to 4 loop
+    loop_field : for lv_field in 0 to 4 loop
 
       tb_rst_n   <= '0';
       core_a_bus <= c_clean_bus;
       core_b_bus <= c_clean_bus;
 
-      for dummy in 1 to 3 loop
+      loop_dummy_6 : for lv_dummy in 1 to 3 loop
 
         wait until rising_edge(tb_clk);
 
-      end loop;
+      end loop loop_dummy_6;
 
       tb_rst_n <= '1';
 
-      for dummy in 1 to 3 loop
+      loop_dummy_7 : for lv_dummy in 1 to 3 loop
 
         wait until rising_edge(tb_clk);
 
-      end loop;
+      end loop loop_dummy_7;
 
       check(nmi_fault = '0', "no fault while the cores agree");
       check(bus_valid = '1', "bus open while the cores agree");
 
-      case field is
+      case lv_field is
 
         when 0 =>
 
@@ -208,17 +209,17 @@ architecture rtl of tb_lockstep_fault_inject is
 
       end case;
 
-      for dummy in 1 to 3 loop
+      loop_dummy_8 : for lv_dummy in 1 to 3 loop
 
         wait until rising_edge(tb_clk);
 
-      end loop;
+      end loop loop_dummy_8;
 
       check(nmi_fault = '1', "NMI from one field");
       check(bus_valid = '0', "bus isolated by one field");
       check_equal(sys_bus.sel, std_logic_vector'("0000"), "isolated bus carries no byte enables");
 
-    end loop;
+    end loop loop_field;
 
     test_runner_cleanup(runner);
 

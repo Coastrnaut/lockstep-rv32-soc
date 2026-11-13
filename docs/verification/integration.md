@@ -73,6 +73,6 @@ dividers made generic first.
 
 | Item | Status |
 |------|--------|
-| Area and timing of each profile | Not recorded. `build.py` records them per profile, but Vivado on this machine lists no devices, so no build has run (see `fpga/arty_a7_100t/README.md`) |
+| Area and timing of each profile | Not recorded. `build.py` records them per profile, but the Artix-7 devices are installed, but Vivado reports an Alveo licence and `get_parts` then lists no parts (`docs/verification/toolchain.md`), so no build has run (see `fpga/arty_a7_100t/README.md`) |
 | Clock profiles | Not started: needs generic UART and CAN timing |
 | Register descriptions beyond addresses | Field layouts are in the table's text and the HSI, not generated |

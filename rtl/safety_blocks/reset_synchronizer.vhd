@@ -71,13 +71,13 @@ begin
 
     if rising_edge(clk_i) then
 
-      for i in 1 to g_stages - 1 loop
+      loop_i : for lv_i in 1 to g_stages - 1 loop
 
-        assert not (r_stages(i) = '1' and r_stages(i - 1) = '0')
+        assert not (r_stages(lv_i) = '1' and r_stages(lv_i - 1) = '0')
           report "FORMAL FAIL: reset chain released out of order"
           severity error;
 
-      end loop;
+      end loop loop_i;
 
     end if;
 

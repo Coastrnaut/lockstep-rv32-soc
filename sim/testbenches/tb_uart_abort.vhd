@@ -124,7 +124,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       clk_stopped <= false;
       bus_i       <= c_bus_idle;
@@ -196,7 +196,7 @@ begin
         check_equal(uart_tx, '1', "and it stays at mark");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

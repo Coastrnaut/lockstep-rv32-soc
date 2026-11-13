@@ -22,9 +22,10 @@ end entity tb_soc_bus_concurrency;
 
 architecture tb of tb_soc_bus_concurrency is
 
-  constant clk_period : time := 20 ns;
-  signal   clk        : std_logic;
-  signal   rst_n      : std_logic;
+  constant c_clk_period : time := 20 ns;
+
+  signal clk   : std_logic;
+  signal rst_n : std_logic;
 
   signal core_a_bus : t_rv_bus;
   signal core_b_bus : t_rv_bus;
@@ -37,12 +38,12 @@ architecture tb of tb_soc_bus_concurrency is
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    clk <= '0', '1' after clk_period / 2;
-    wait for clk_period;
+    clk <= '0', '1' after c_clk_period / 2;
+    wait for c_clk_period;
 
   end process p_clk;
 
-  uut : entity lockstep.lockstep_comparator
+  i_uut : entity lockstep.lockstep_comparator
     port map (
       clk_i         => clk,
       rst_n_syn_i   => rst_n,
@@ -62,48 +63,48 @@ architecture tb of tb_soc_bus_concurrency is
     rst_n <= '0';
     wait for 100 ns;
     rst_n <= '1';
-    wait for clk_period * 2;
+    wait for c_clk_period * 2;
 
     -- TEST 1: Back-to-back writes (10 cycles)
     report "TEST: Back-to-back writes";
 
-    for dummy in 0 to 9 loop
+    loop_dummy : for lv_dummy in 0 to 9 loop
 
       core_a_bus <=
       (
-        addr  => std_logic_vector(to_unsigned(dummy, 32)),
-        data  => std_logic_vector(to_unsigned(dummy * 17, 32)),
+        addr  => std_logic_vector(to_unsigned(lv_dummy, 32)),
+        data  => std_logic_vector(to_unsigned(lv_dummy * 17, 32)),
         we    => '1',
         valid => '1',
         sel   => "1111"
       );
       core_b_bus <=
       (
-        addr  => std_logic_vector(to_unsigned(dummy, 32)),
-        data  => std_logic_vector(to_unsigned(dummy * 17, 32)),
+        addr  => std_logic_vector(to_unsigned(lv_dummy, 32)),
+        data  => std_logic_vector(to_unsigned(lv_dummy * 17, 32)),
         we    => '1',
         valid => '1',
         sel   => "1111"
       );
       wait until rising_edge(clk);
-      check(safe_state = '0', "back-to-back #" & integer'image(dummy) & ": ok");
-      check(bus_valid = '1', "back-to-back #" & integer'image(dummy) & ": valid");
+      check(safe_state = '0', "back-to-back #" & integer'image(lv_dummy) & ": ok");
+      check(bus_valid = '1', "back-to-back #" & integer'image(lv_dummy) & ": valid");
 
-    end loop;
+    end loop loop_dummy;
 
     core_a_bus.valid <= '0';
     core_b_bus.valid <= '0';
-    wait for clk_period;
+    wait for c_clk_period;
 
     -- TEST 2: Alternating R/W
     report "TEST: Alternating R/W";
 
-    for dummy in 0 to 9 loop
+    loop_dummy_2 : for lv_dummy in 0 to 9 loop
 
       core_a_bus <=
       (
         addr  => x"00001000",
-        data  => std_logic_vector(to_unsigned(dummy, 32)),
+        data  => std_logic_vector(to_unsigned(lv_dummy, 32)),
         we    => '1',
         valid => '1',
         sel   => "1111"
@@ -111,95 +112,95 @@ architecture tb of tb_soc_bus_concurrency is
       core_b_bus <=
       (
         addr  => x"00001000",
-        data  => std_logic_vector(to_unsigned(dummy, 32)),
+        data  => std_logic_vector(to_unsigned(lv_dummy, 32)),
         we    => '1',
         valid => '1',
         sel   => "1111"
       );
       wait until rising_edge(clk);
-      check(safe_state = '0', "alt R/W #" & integer'image(dummy) & ": ok");
+      check(safe_state = '0', "alt R/W #" & integer'image(lv_dummy) & ": ok");
 
-    end loop;
+    end loop loop_dummy_2;
 
     core_a_bus.valid <= '0';
     core_b_bus.valid <= '0';
-    wait for clk_period;
+    wait for c_clk_period;
 
     -- TEST 3: Max bus stall (valid held 20 cycles)
     report "TEST: Max bus stall";
 
-    for dummy in 0 to 19 loop
+    loop_dummy_3 : for lv_dummy in 0 to 19 loop
 
       core_a_bus <= (addr => x"00002000", data => x"CAFECAFE", we => '1', valid => '1', sel => "1111");
       core_b_bus <= (addr => x"00002000", data => x"CAFECAFE", we => '1', valid => '1', sel => "1111");
       wait until rising_edge(clk);
-      check(safe_state = '0', "stall #" & integer'image(dummy) & ": ok");
+      check(safe_state = '0', "stall #" & integer'image(lv_dummy) & ": ok");
 
-    end loop;
+    end loop loop_dummy_3;
 
     core_a_bus.valid <= '0';
     core_b_bus.valid <= '0';
-    wait for clk_period;
+    wait for c_clk_period;
 
     -- TEST 4: Rapid address changes
     report "TEST: Rapid address changes";
 
-    for dummy in 0 to 7 loop
+    loop_dummy_4 : for lv_dummy in 0 to 7 loop
 
       core_a_bus <=
       (
-        addr  => std_logic_vector(to_unsigned(4096 + dummy * 4, 32)),
-        data  => std_logic_vector(to_unsigned(dummy, 32)),
+        addr  => std_logic_vector(to_unsigned(4096 + lv_dummy * 4, 32)),
+        data  => std_logic_vector(to_unsigned(lv_dummy, 32)),
         we    => '1',
         valid => '1',
         sel   => "1111"
       );
       core_b_bus <=
       (
-        addr  => std_logic_vector(to_unsigned(4096 + dummy * 4, 32)),
-        data  => std_logic_vector(to_unsigned(dummy, 32)),
+        addr  => std_logic_vector(to_unsigned(4096 + lv_dummy * 4, 32)),
+        data  => std_logic_vector(to_unsigned(lv_dummy, 32)),
         we    => '1',
         valid => '1',
         sel   => "1111"
       );
       wait until rising_edge(clk);
-      check(safe_state = '0', "rapid addr #" & integer'image(dummy) & ": ok");
+      check(safe_state = '0', "rapid addr #" & integer'image(lv_dummy) & ": ok");
 
-    end loop;
+    end loop loop_dummy_4;
 
     core_a_bus.valid <= '0';
     core_b_bus.valid <= '0';
-    wait for clk_period;
+    wait for c_clk_period;
 
     -- TEST 5: Burst write
     report "TEST: Burst write 4 beats";
 
-    for dummy in 0 to 3 loop
+    loop_dummy_5 : for lv_dummy in 0 to 3 loop
 
       core_a_bus <=
       (
-        addr  => std_logic_vector(to_unsigned(dummy * 4, 32)),
-        data  => std_logic_vector(to_unsigned(dummy, 32)),
+        addr  => std_logic_vector(to_unsigned(lv_dummy * 4, 32)),
+        data  => std_logic_vector(to_unsigned(lv_dummy, 32)),
         we    => '1',
         valid => '1',
         sel   => "1111"
       );
       core_b_bus <=
       (
-        addr  => std_logic_vector(to_unsigned(dummy * 4, 32)),
-        data  => std_logic_vector(to_unsigned(dummy, 32)),
+        addr  => std_logic_vector(to_unsigned(lv_dummy * 4, 32)),
+        data  => std_logic_vector(to_unsigned(lv_dummy, 32)),
         we    => '1',
         valid => '1',
         sel   => "1111"
       );
       wait until rising_edge(clk);
-      check(safe_state = '0', "burst #" & integer'image(dummy) & ": ok");
+      check(safe_state = '0', "burst #" & integer'image(lv_dummy) & ": ok");
 
-    end loop;
+    end loop loop_dummy_5;
 
     core_a_bus.valid <= '0';
     core_b_bus.valid <= '0';
-    wait for clk_period;
+    wait for c_clk_period;
 
     test_runner_cleanup(runner);
 

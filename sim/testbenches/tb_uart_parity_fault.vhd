@@ -62,7 +62,7 @@ begin
 
   test_runner_watchdog(runner, 1 ms);
 
-  dut : entity lockstep.safe_uart
+  i_dut : entity lockstep.safe_uart
     port map (
       clk_i        => clk,
       rst_n_i      => rst_n,
@@ -133,14 +133,14 @@ begin
     procedure send_byte is
     begin
 
-      << signal dut.r_tx_parity : std_logic >> <= force '1';
+      << signal i_dut.r_tx_parity : std_logic >> <= force '1';
       write_bus(c_uart_tx_data_addr, x"00000042");
 
-      for dummy in 1 to 4 loop
+      loop_dummy : for lv_dummy in 1 to 4 loop
 
         wait until rising_edge(clk);
 
-      end loop;
+      end loop loop_dummy;
 
     end procedure send_byte;
 
@@ -156,7 +156,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       bus_i  <= c_bus_idle;
       bus_ok <= '1';
@@ -206,7 +206,7 @@ begin
         check_equal(uart_irq, '1', "the gate blocks the write");
       elsif run("error_beats_a_status_write_on_the_same_clock") then
         -- The error appears the clock after the byte is stored
-        << signal dut.r_tx_parity : std_logic >> <= force '1';
+        << signal i_dut.r_tx_parity : std_logic >> <= force '1';
         write_bus(c_uart_tx_data_addr, x"00000042");
         write_bus(c_uart_status_addr, x"00000000");
         settle;
@@ -221,7 +221,7 @@ begin
         check_read(c_uart_status_addr, 0, "STATUS clear");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

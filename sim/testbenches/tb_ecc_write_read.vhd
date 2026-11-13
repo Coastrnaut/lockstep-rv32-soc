@@ -35,22 +35,22 @@ architecture rtl of tb_ecc_write_read is
   signal s_sbe     : std_logic;
   signal s_dbe     : std_logic;
 
-  constant clk_half : time := 5 ns;begin
+  constant c_clk_half : time := 5 ns;begin
 
-  clk_proc : process is
+  p_clk : process is
   begin
 
     s_clk <= '0';
-    wait for clk_half;
+    wait for c_clk_half;
 
-    loop
+    loop_forever : loop
 
       s_clk <= not s_clk;
-      wait for clk_half;
+      wait for c_clk_half;
 
-    end loop;
+    end loop loop_forever;
 
-  end process clk_proc;
+  end process p_clk;
 
   i_ecc : entity lockstep.hamming_ecc_wrapper
     port map (
@@ -136,20 +136,21 @@ architecture rtl of tb_ecc_write_read is
     s_rd_en   <= '0';
 
     -- --- Test 7: Write pattern, verify ECC is generated (non-zero) ---
-    s_data_wr <= x"0000000000000001";  -- single bit, ECC must be non-zero
+    -- single bit, ECC must be non-zero
+    s_data_wr <= x"0000000000000001";
     s_wr_en   <= '1';
     wait until rising_edge(s_clk);
     s_wr_en   <= '0';
     -- Check ECC has at least one bit set
     v_ecc_nonzero := false;
 
-    for i in 0 to 7 loop
+    loop_i : for lv_i in 0 to 7 loop
 
-      if (s_ecc_o(i) = '1') then
+      if (s_ecc_o(lv_i) = '1') then
         v_ecc_nonzero := true;
       end if;
 
-    end loop;
+    end loop loop_i;
 
     check(v_ecc_nonzero, "ECC generated: non-zero for single-bit data");
 

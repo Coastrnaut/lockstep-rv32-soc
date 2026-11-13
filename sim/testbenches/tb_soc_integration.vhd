@@ -23,10 +23,10 @@ end entity tb_soc_integration;
 
 architecture rtl of tb_soc_integration is
 
-  constant clk_period : time := 20 ns;
+  constant c_clk_period : time := 20 ns;
 
   -- More than the reset and the comparator self-test take
-  constant c_boot : time := clk_period * 300;
+  constant c_boot : time := c_clk_period * 300;
 
   signal clk    : std_logic;
   signal wd_clk : std_logic;
@@ -42,8 +42,8 @@ architecture rtl of tb_soc_integration is
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    clk <= '0', '1' after clk_period / 2;
-    wait for clk_period;
+    clk <= '0', '1' after c_clk_period / 2;
+    wait for c_clk_period;
 
   end process p_clk;
 
@@ -79,12 +79,12 @@ architecture rtl of tb_soc_integration is
 
     -- --- Test 1: Reset assertion ---
     rst_n <= '0';
-    wait for clk_period * 5;
+    wait for c_clk_period * 5;
     check(actuator_safe = '1', "in reset: actuators held safe");
 
     -- --- Test 2: Reset de-assertion ---
     rst_n <= '1';
-    wait for clk_period * 6;
+    wait for c_clk_period * 6;
     check(actuator_safe = '1', "self-test: actuators still held safe");
     wait for c_boot;
 
@@ -94,18 +94,18 @@ architecture rtl of tb_soc_integration is
 
     -- --- Test 3: CAN RX dominant bit — SoC receives ---
     can_rx <= '0';
-    wait for clk_period * 3;
+    wait for c_clk_period * 3;
     can_rx <= '1';
-    wait for clk_period * 5;
+    wait for c_clk_period * 5;
 
     -- --- Test 4: Extended idle ---
-    wait for clk_period * 20;
+    wait for c_clk_period * 20;
 
     -- --- Test 5: Reset during CAN activity ---
     can_rx <= '0';
-    wait for clk_period;
+    wait for c_clk_period;
     rst_n  <= '0';
-    wait for clk_period * 3;
+    wait for c_clk_period * 3;
     rst_n  <= '1';
     wait for c_boot;
     can_rx <= '1';
@@ -115,13 +115,13 @@ architecture rtl of tb_soc_integration is
 
     -- --- Test 6: Multiple reset cycles ---
     rst_n <= '0';
-    wait for clk_period * 2;
+    wait for c_clk_period * 2;
     rst_n <= '1';
-    wait for clk_period * 3;
+    wait for c_clk_period * 3;
     rst_n <= '0';
-    wait for clk_period * 2;
+    wait for c_clk_period * 2;
     rst_n <= '1';
-    wait for clk_period * 3;
+    wait for c_clk_period * 3;
 
     -- --- Test 7: Verify safety outputs are valid (not X/U) ---
     check((actuator_safe = '0') or (actuator_safe = '1'), "actuator: valid level");

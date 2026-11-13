@@ -82,7 +82,7 @@ begin
 
   test_runner_watchdog(runner, 10 ms);
 
-  dut : entity lockstep.ecc_data_ram
+  i_dut : entity lockstep.ecc_data_ram
     port map (
       clk_i       => clk,
       rst_n_i     => rst_n,
@@ -96,8 +96,8 @@ begin
 
   p_stim : process is
 
-    alias ram_word is << signal dut.r_word : std_logic_vector(71 downto 0) >>;
-    alias ram_ecc  is << signal dut.w_merged_ecc : std_logic_vector(7 downto 0) >>;
+    alias ram_word is << signal i_dut.r_word : std_logic_vector(71 downto 0) >>;
+    alias ram_ecc  is << signal i_dut.w_merged_ecc : std_logic_vector(7 downto 0) >>;
 
     variable v_ecc    : std_logic_vector(7 downto 0);
     variable v_clocks : natural;
@@ -221,12 +221,12 @@ begin
     procedure wait_one_patrol_pass is
     begin
 
-      for i in 1 to c_words + 4 loop
+      loop_i : for lv_i in 1 to c_words + 4 loop
 
         wait until rising_edge(clk);
         check_equal(dbe_fatal, '0', "the patrol never trips the SoC");
 
-      end loop;
+      end loop loop_i;
 
     end procedure wait_one_patrol_pass;
 
@@ -246,7 +246,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       bus_i     <= c_bus_idle;
       bus_ok    <= '1';
@@ -277,35 +277,35 @@ begin
         check_equal(v_rdata, std_logic_vector'(x"CAFEF00D"), "the new value");
       elsif run("byte_enables_merge_into_either_half") then
 
-        for offset in 0 to 1 loop
+        loop_offset : for lv_offset in 0 to 1 loop
 
-          for pattern in 0 to 15 loop
+          loop_pattern : for lv_pattern in 0 to 15 loop
 
             write_bus(x"20000100", x"AAAAAAAA");
             write_bus(x"20000104", x"BBBBBBBB");
 
-            if (offset = 0) then
-              write_bus(x"20000100", x"15141312", std_logic_vector(to_unsigned(pattern, 4)));
+            if (lv_offset = 0) then
+              write_bus(x"20000100", x"15141312", std_logic_vector(to_unsigned(lv_pattern, 4)));
             else
-              write_bus(x"20000104", x"15141312", std_logic_vector(to_unsigned(pattern, 4)));
+              write_bus(x"20000104", x"15141312", std_logic_vector(to_unsigned(lv_pattern, 4)));
             end if;
 
             -- The bytes not stored keep what they had
             v_data := x"15141312";
 
-            for lane in 0 to 3 loop
+            loop_lane : for lv_lane in 0 to 3 loop
 
-              if (((pattern / 2 ** lane) mod 2) = 0) then
-                if (offset = 0) then
-                  v_data(lane * 8 + 7 downto lane * 8) := x"AA";
+              if (((lv_pattern / 2 ** lv_lane) mod 2) = 0) then
+                if (lv_offset = 0) then
+                  v_data(lv_lane * 8 + 7 downto lv_lane * 8) := x"AA";
                 else
-                  v_data(lane * 8 + 7 downto lane * 8) := x"BB";
+                  v_data(lv_lane * 8 + 7 downto lv_lane * 8) := x"BB";
                 end if;
               end if;
 
-            end loop;
+            end loop loop_lane;
 
-            if (offset = 0) then
+            if (lv_offset = 0) then
               check_read(x"20000100", v_data, "stored half");
               check_read(x"20000104", x"BBBBBBBB", "other half");
             else
@@ -313,9 +313,9 @@ begin
               check_read(x"20000100", x"AAAAAAAA", "other half");
             end if;
 
-          end loop;
+          end loop loop_pattern;
 
-        end loop;
+        end loop loop_offset;
 
       elsif run("addresses_outside_the_ram_do_nothing") then
         write_bus(c_ram_base_addr, x"12345678");
@@ -364,16 +364,18 @@ begin
         write_bus(x"20000050", x"A5A55A5A");
         write_bus(x"20000054", x"0F0FF0F0");
 
-        for index in 0 to 71 loop
+        loop_index : for lv_index in 0 to 71 loop
 
-          read_bus(x"20000050", std_logic_vector(shift_left(to_unsigned(1, 72), index)));
-          check_equal(v_rdata, std_logic_vector'(x"A5A55A5A"), "low half after flipping bit " & integer'image(index));
+          read_bus(x"20000050", std_logic_vector(shift_left(to_unsigned(1, 72), lv_index)));
+          check_equal(v_rdata, std_logic_vector'(x"A5A55A5A"),
+                      "low half after flipping bit " & integer'image(lv_index));
           check_equal(v_fatal, '0', "not fatal");
-          read_bus(x"20000054", std_logic_vector(shift_left(to_unsigned(1, 72), index)));
-          check_equal(v_rdata, std_logic_vector'(x"0F0FF0F0"), "high half after flipping bit " & integer'image(index));
+          read_bus(x"20000054", std_logic_vector(shift_left(to_unsigned(1, 72), lv_index)));
+          check_equal(v_rdata, std_logic_vector'(x"0F0FF0F0"),
+                      "high half after flipping bit " & integer'image(lv_index));
           check_equal(v_fatal, '0', "not fatal");
 
-        end loop;
+        end loop loop_index;
 
         check_register(c_ecc_sbe_count_addr, 72 * 2, "SBE_COUNT");
         check_register(c_ecc_dbe_count_addr, 0, "DBE_COUNT");
@@ -422,11 +424,11 @@ begin
         write_bus(x"20000090", x"12345678");
         ram_word(2) <= force '1';
 
-        for dummy in 1 to 16#10000# loop
+        loop_dummy : for lv_dummy in 1 to 16#10000# loop
 
           read_bus(x"20000090");
 
-        end loop;
+        end loop loop_dummy;
 
         ram_word(2) <= release;
         check_register(c_ecc_sbe_count_addr, 16#FFFF#, "does not wrap");
@@ -502,12 +504,12 @@ begin
         write_bus(x"20000010", x"5A5AA5A5");
         v_clocks := 6;
 
-        while unsigned(t_patrol(31 downto 16)) = 0 loop
+        loop_while_2 : while unsigned(t_patrol(31 downto 16)) = 0 loop
 
           check_read(x"20000010", x"5A5AA5A5", "every load answered in the clock after its strobe");
           v_clocks := v_clocks + 2;
 
-        end loop;
+        end loop loop_while_2;
 
         info("one patrol pass under back-to-back loads: " & integer'image(v_clocks) & " clocks for " &
              integer'image(c_words) & " words");
@@ -569,7 +571,7 @@ begin
         check_read(x"200000A0", x"12345678", "the RAM");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

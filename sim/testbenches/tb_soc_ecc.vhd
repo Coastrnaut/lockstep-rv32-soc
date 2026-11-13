@@ -129,12 +129,12 @@ begin
     wait until uart_tx = '0';
     wait for c_uart_bit_time / 2;
 
-    for i in 0 to 7 loop
+    loop_i : for lv_i in 0 to 7 loop
 
       wait for c_uart_bit_time;
-      v_byte(i) := uart_tx;
+      v_byte(lv_i) := uart_tx;
 
-    end loop;
+    end loop loop_i;
 
     wait for c_uart_bit_time * 2;
     uart_log(uart_count + 1) <= v_byte;
@@ -166,15 +166,15 @@ begin
       diag_cs_n <= '0';
       wait for 1 us;
 
-      for i in t_telemetry'range loop
+      loop_i_2 : for lv_i in t_telemetry'range loop
 
-        v_record(i) := diag_sdo;
-        diag_sck    <= '1';
+        v_record(lv_i) := diag_sdo;
+        diag_sck       <= '1';
         wait for 500 ns;
-        diag_sck    <= '0';
+        diag_sck       <= '0';
         wait for 500 ns;
 
-      end loop;
+      end loop loop_i_2;
 
       diag_cs_n <= '1';
       wait for 1 us;
@@ -188,14 +188,30 @@ begin
     alias b_ack     is << signal i_soc.i_cpu_checker.xbus_ack_i : std_ulogic >>;
     alias b_err     is << signal i_soc.i_cpu_checker.xbus_err_i : std_ulogic >>;
     alias b_dat     is << signal i_soc.i_cpu_checker.xbus_dat_i : std_ulogic_vector(31 downto 0) >>;
-    alias a_enter   is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
-    alias a_cause   is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
-    alias b_enter   is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
-    alias b_cause   is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
-    alias a_rd_we   is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
-    alias a_rd_addr is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i : std_ulogic_vector(4 downto 0) >>;
-    alias b_rd_we   is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
-    alias b_rd_addr is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i : std_ulogic_vector(4 downto 0) >>;
+    alias a_enter   is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter
+      : std_ulogic >>;
+    alias a_cause   is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause
+      : std_ulogic_vector(6 downto 0) >>;
+    alias b_enter   is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter
+      : std_ulogic >>;
+    alias b_cause   is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause
+      : std_ulogic_vector(6 downto 0) >>;
+    alias a_rd_we   is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i
+      : std_ulogic >>;
+    alias a_rd_addr is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i
+      : std_ulogic_vector(4 downto 0) >>;
+    alias b_rd_we   is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i
+      : std_ulogic >>;
+    alias b_rd_addr is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i
+      : std_ulogic_vector(4 downto 0) >>;
 
     -- The load and the byte store in the program's RAM test, to the word at
     -- 0x20000008, whose low half then holds 0x12345678 and 0x12345A78. Both have
@@ -218,12 +234,12 @@ begin
 
       v_found := false;
 
-      while not v_found loop
+      loop_while : while not v_found loop
 
         wait until rising_edge(clk);
         v_found := sys_bus.valid = '1' and sys_bus.we = we and sys_bus.addr = addr;
 
-      end loop;
+      end loop loop_while;
 
       wait for 1 ns;
       ram_word(1 downto 0) <= force "11";
@@ -256,7 +272,7 @@ begin
       v_a_done := false;
       v_b_done := false;
 
-      for dummy in 1 to 100 loop
+      loop_dummy : for lv_dummy in 1 to 100 loop
 
         wait until rising_edge(clk);
         check(not (a_rd_we = '1' and a_rd_addr = c_t2), "core A: no write to the load's register");
@@ -274,7 +290,7 @@ begin
 
         exit when v_a_done and v_b_done;
 
-      end loop;
+      end loop loop_dummy;
 
       check(v_a_done, "core A took a trap");
       check(v_b_done, "core B took a trap");
@@ -302,7 +318,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while_2 : while test_suite loop
 
       diag_cs_n <= '1';
       diag_sck  <= '0';
@@ -409,12 +425,12 @@ begin
         rst_n   <= '1';
         v_found := false;
 
-        while not v_found loop
+        loop_while_3 : while not v_found loop
 
           wait until rising_edge(clk);
           v_found := sys_bus.valid = '1' and sys_bus.we = '1' and sys_bus.addr = c_load_addr;
 
-        end loop;
+        end loop loop_while_3;
 
         wait for 1 ns;
         check_equal(ram_word(31 downto 0), std_logic_vector'(x"12345678"), "the byte never landed");
@@ -442,7 +458,7 @@ begin
         check_equal(sbe_count, v_sbe, "still the same count");
       end if;
 
-    end loop;
+    end loop loop_while_2;
 
     test_runner_cleanup(runner);
 

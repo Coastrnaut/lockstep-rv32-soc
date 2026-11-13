@@ -113,11 +113,11 @@ begin
         -- Calculate even parity for the data byte
         v_parity := '0';
 
-        for i in 0 to 7 loop
+        loop_i : for lv_i in 0 to 7 loop
 
-          v_parity := v_parity xor bus_i.data(i);
+          v_parity := v_parity xor bus_i.data(lv_i);
 
-        end loop;
+        end loop loop_i;
 
         r_tx_parity <= v_parity;
 
@@ -142,11 +142,11 @@ begin
 
     v_calc_parity := '0';
 
-    for i in 0 to 7 loop
+    loop_i_2 : for lv_i in 0 to 7 loop
 
-      v_calc_parity := v_calc_parity xor r_tx_data(i);
+      v_calc_parity := v_calc_parity xor r_tx_data(lv_i);
 
-    end loop;
+    end loop loop_i_2;
 
     w_parity_ok <= '1' when (v_calc_parity = r_tx_parity) else '0';
 
@@ -173,12 +173,15 @@ begin
             r_baud_cnt <= (others => '0');
             if (r_tx_valid = '1' and w_parity_ok = '1') then
               -- Load shift register: start(0) + data[1-8] + parity(9) + stop(10)
-              r_tx_shift(10)         <= '1';                 -- stop bit
+              -- stop bit
+              r_tx_shift(10)         <= '1';
               r_tx_shift(9)          <= r_tx_parity;
               r_tx_shift(8 downto 1) <= r_tx_data;
-              r_tx_shift(0)          <= '0';                 -- start bit
-              r_tx_bits              <= "1010";              -- 10 bits to shift
-              r_uart_st              <= uart_start;
+              -- start bit
+              r_tx_shift(0) <= '0';
+              -- 10 bits to shift
+              r_tx_bits <= "1010";
+              r_uart_st <= uart_start;
             end if;
 
           when uart_start =>

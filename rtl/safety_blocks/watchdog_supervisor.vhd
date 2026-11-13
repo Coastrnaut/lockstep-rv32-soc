@@ -25,8 +25,9 @@ library lockstep;
 entity watchdog_supervisor is
   port (
     -- System side
-    clk_i    : in    std_logic;
-    rst_n_i  : in    std_logic; -- Cold reset, synchronous to clk_i
+    clk_i : in    std_logic;
+    -- Cold reset, synchronous to clk_i
+    rst_n_i  : in    std_logic;
     bus_i    : in    t_rv_bus;
     bus_ok_i : in    std_logic;
 
@@ -34,8 +35,9 @@ entity watchdog_supervisor is
     rdata_o : out   std_logic_vector(c_data_width - 1 downto 0);
 
     -- Independent oscillator side
-    wd_clk_i   : in    std_logic;
-    wd_rst_n_i : in    std_logic; -- Cold reset, synchronous to wd_clk_i
+    wd_clk_i : in    std_logic;
+    -- Cold reset, synchronous to wd_clk_i
+    wd_rst_n_i : in    std_logic;
 
     -- High while the watchdog resets the SoC. Comes from a flip-flop, so it
     -- cannot glitch, and it is asynchronous to clk_i.

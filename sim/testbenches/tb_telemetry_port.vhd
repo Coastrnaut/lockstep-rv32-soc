@@ -52,7 +52,7 @@ begin
 
   test_runner_watchdog(runner, 1 ms);
 
-  dut : entity lockstep.telemetry_port
+  i_dut : entity lockstep.telemetry_port
     port map (
       clk_i       => clk,
       rst_n_i     => rst_n,
@@ -79,19 +79,19 @@ begin
       cs_n     <= '0';
       wait for period;
 
-      for i in 0 to bits - 1 loop
+      loop_i : for lv_i in 0 to bits - 1 loop
 
-        v_record(c_telemetry_bits - 1 - i) := sdo;
-        sck                                <= '1';
+        v_record(c_telemetry_bits - 1 - lv_i) := sdo;
+        sck                                   <= '1';
         wait for period / 2 - 1 ns;
         -- The port moves on after sck falls, so the bit holds for the whole
         -- high phase, and a controller may sample anywhere in it
-        check_equal(sdo, v_record(c_telemetry_bits - 1 - i), "sdo holds while sck is high");
+        check_equal(sdo, v_record(c_telemetry_bits - 1 - lv_i), "sdo holds while sck is high");
         wait for 1 ns;
         sck <= '0';
         wait for period / 2;
 
-      end loop;
+      end loop loop_i;
 
       cs_n <= '1';
       wait for period;
@@ -102,7 +102,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       cs_n      <= '1';
       sck       <= '0';
@@ -132,15 +132,15 @@ begin
         wait for c_fast;
         telemetry <= c_inverted;
 
-        for i in c_telemetry_bits - 1 downto 0 loop
+        loop_i_2 : for lv_i in c_telemetry_bits - 1 downto 0 loop
 
-          v_record(i) := sdo;
-          sck         <= '1';
+          v_record(lv_i) := sdo;
+          sck            <= '1';
           wait for c_fast / 2;
-          sck         <= '0';
+          sck            <= '0';
           wait for c_fast / 2;
 
-        end loop;
+        end loop loop_i_2;
 
         cs_n <= '1';
         check_equal(v_record, c_pattern, "the record as it was when chip select fell");
@@ -158,13 +158,13 @@ begin
         cs_n      <= '1';
         wait for c_fast;
 
-        for i in 1 to 20 loop
+        loop_i_3 : for lv_i in 1 to 20 loop
 
           sck <= not sck;
           wait for c_fast / 2;
           check_equal(sdo, '0', "low while not selected");
 
-        end loop;
+        end loop loop_i_3;
 
       elsif run("a_cold_reset_clears_a_read_in_progress") then
         cs_n  <= '0';
@@ -177,7 +177,7 @@ begin
         rst_n <= '1';
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

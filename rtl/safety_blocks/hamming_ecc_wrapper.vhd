@@ -34,10 +34,12 @@ entity hamming_ecc_wrapper is
     ecc_rd_i  : in    std_logic_vector(7 downto 0);
 
     -- Output: corrected data + error flags
-    data_o          : out   std_logic_vector(g_data_width - 1 downto 0);
-    ecc_o           : out   std_logic_vector(7 downto 0);
-    sbe_corrected_o : out   std_logic; -- Single-bit error corrected
-    dbe_fatal_o     : out   std_logic; -- Double-bit error (uncorrectable)
+    data_o : out   std_logic_vector(g_data_width - 1 downto 0);
+    ecc_o  : out   std_logic_vector(7 downto 0);
+    -- Single-bit error corrected
+    sbe_corrected_o : out   std_logic;
+    -- Double-bit error (uncorrectable)
+    dbe_fatal_o : out   std_logic;
 
     -- Bit 7: overall parity failed. Bits 6:0: position of a single flipped bit.
     syndrome_o : out   std_logic_vector(7 downto 0)
@@ -68,17 +70,17 @@ architecture rtl of hamming_ecc_wrapper is
     v_position   := 3;
     v_next_check := 4;
 
-    for i in t_positions'range loop
+    loop_i : for lv_i in t_positions'range loop
 
       if (v_position = v_next_check) then
         v_position   := v_position + 1;
         v_next_check := v_next_check * 2;
       end if;
 
-      v_positions(i) := v_position;
-      v_position     := v_position + 1;
+      v_positions(lv_i) := v_position;
+      v_position        := v_position + 1;
 
-    end loop;
+    end loop loop_i;
 
     return v_positions;
 
@@ -116,45 +118,45 @@ begin
     -- Calculate Hamming parity bits
     v_parity := (others => '0');
 
-    for i in 0 to 6 loop
+    loop_i_2 : for lv_i in 0 to 6 loop
 
       v_parity_count := 0;
 
-      for j in 0 to g_data_width - 1 loop
+      loop_j : for lv_j in 0 to g_data_width - 1 loop
 
-        if ((c_positions(j) / 2 ** i) mod 2 /= 0) then
-          if (data_wr_i(j) = '1') then
+        if ((c_positions(lv_j) / 2 ** lv_i) mod 2 /= 0) then
+          if (data_wr_i(lv_j) = '1') then
             v_parity_count := v_parity_count + 1;
           end if;
         end if;
 
-      end loop;
+      end loop loop_j;
 
       if ((v_parity_count mod 2) = 1) then
-        v_parity(i) := '1';
+        v_parity(lv_i) := '1';
       end if;
 
-    end loop;
+    end loop loop_i_2;
 
     -- Overall parity (P7): XOR of all data bits + all parity bits
     v_overall_parity := '0';
     v_parity_count   := 0;
 
-    for j in 0 to g_data_width - 1 loop
+    loop_j_2 : for lv_j in 0 to g_data_width - 1 loop
 
-      if (data_wr_i(j) = '1') then
+      if (data_wr_i(lv_j) = '1') then
         v_parity_count := v_parity_count + 1;
       end if;
 
-    end loop;
+    end loop loop_j_2;
 
-    for i in 0 to 6 loop
+    loop_i_3 : for lv_i in 0 to 6 loop
 
-      if (v_parity(i) = '1') then
+      if (v_parity(lv_i) = '1') then
         v_parity_count := v_parity_count + 1;
       end if;
 
-    end loop;
+    end loop loop_i_3;
 
     if ((v_parity_count mod 2) = 1) then
       v_overall_parity := '1';
@@ -186,25 +188,25 @@ begin
     -- Recalculate parity from received data
     v_recalc_parity := (others => '0');
 
-    for i in 0 to 6 loop
+    loop_i_4 : for lv_i in 0 to 6 loop
 
       v_parity_count := 0;
 
-      for j in 0 to g_data_width - 1 loop
+      loop_j_3 : for lv_j in 0 to g_data_width - 1 loop
 
-        if ((c_positions(j) / 2 ** i) mod 2 /= 0) then
-          if (data_rd_i(j) = '1') then
+        if ((c_positions(lv_j) / 2 ** lv_i) mod 2 /= 0) then
+          if (data_rd_i(lv_j) = '1') then
             v_parity_count := v_parity_count + 1;
           end if;
         end if;
 
-      end loop;
+      end loop loop_j_3;
 
       if ((v_parity_count mod 2) = 1) then
-        v_recalc_parity(i) := '1';
+        v_recalc_parity(lv_i) := '1';
       end if;
 
-    end loop;
+    end loop loop_i_4;
 
     -- Syndrome = received ECC XOR recalculated ECC
     v_syndrome := v_recalc_parity xor ecc_rd_i(6 downto 0);
@@ -212,21 +214,21 @@ begin
     -- Overall parity check for double-error detection
     v_parity_count := 0;
 
-    for j in 0 to g_data_width - 1 loop
+    loop_j_4 : for lv_j in 0 to g_data_width - 1 loop
 
-      if (data_rd_i(j) = '1') then
+      if (data_rd_i(lv_j) = '1') then
         v_parity_count := v_parity_count + 1;
       end if;
 
-    end loop;
+    end loop loop_j_4;
 
-    for i in 0 to 6 loop
+    loop_i_5 : for lv_i in 0 to 6 loop
 
-      if (ecc_rd_i(i) = '1') then
+      if (ecc_rd_i(lv_i) = '1') then
         v_parity_count := v_parity_count + 1;
       end if;
 
-    end loop;
+    end loop loop_i_5;
 
     if ((v_parity_count mod 2) = 1) then
       v_overall_check := '1';
@@ -251,15 +253,15 @@ begin
       -- A data bit, unless no bit has this position, which takes three or more flips
       w_dbe <= '1';
 
-      for j in 0 to g_data_width - 1 loop
+      loop_j_5 : for lv_j in 0 to g_data_width - 1 loop
 
-        if (c_positions(j) = to_integer(unsigned(v_syndrome))) then
-          w_sbe               <= '1';
-          w_dbe               <= '0';
-          w_corrected_data(j) <= not data_rd_i(j);
+        if (c_positions(lv_j) = to_integer(unsigned(v_syndrome))) then
+          w_sbe                  <= '1';
+          w_dbe                  <= '0';
+          w_corrected_data(lv_j) <= not data_rd_i(lv_j);
         end if;
 
-      end loop;
+      end loop loop_j_5;
 
     end if;
 

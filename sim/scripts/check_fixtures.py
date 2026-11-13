@@ -23,6 +23,7 @@ FIXTURES = {
     "fpga/arty_a7_100t/board_firmware.py": ["fpga/arty_a7_100t/board_imem_image.vhd"],
     "sim/scripts/register_map.py": ["config/package_soc_types.vhd", "sw/include/lockstep_soc_regs.h",
                                     "docs/safety/register_map.md"],
+    "sim/scripts/vsg_config.py": ["sim/vsg_config.yaml", "sim/vsg_testbench.yaml"],
 }
 
 

@@ -20,14 +20,15 @@ end entity tb_ecc;
 
 architecture rtl of tb_ecc is
 
-  constant c_dw      : positive := 64;
-  signal   data_wr_i : std_logic_vector(c_dw - 1 downto 0);
-  signal   data_rd_i : std_logic_vector(c_dw - 1 downto 0);
-  signal   ecc_rd_i  : std_logic_vector(7 downto 0);
-  signal   data_o    : std_logic_vector(c_dw - 1 downto 0);
-  signal   ecc_o     : std_logic_vector(7 downto 0);
-  signal   sbe_o     : std_logic;
-  signal   dbe_o     : std_logic;
+  constant c_dw : positive := 64;
+
+  signal data_wr_i : std_logic_vector(c_dw - 1 downto 0);
+  signal data_rd_i : std_logic_vector(c_dw - 1 downto 0);
+  signal ecc_rd_i  : std_logic_vector(7 downto 0);
+  signal data_o    : std_logic_vector(c_dw - 1 downto 0);
+  signal ecc_o     : std_logic_vector(7 downto 0);
+  signal sbe_o     : std_logic;
+  signal dbe_o     : std_logic;
 
   component hamming_ecc_wrapper is
     generic (

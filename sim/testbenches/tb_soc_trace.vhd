@@ -141,9 +141,15 @@ begin
 
   p_stim : process is
 
-    alias a_rd_we    is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
-    alias a_rd_addr  is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i : std_ulogic_vector(4 downto 0) >>;
-    alias a_wdata    is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.rf_wdata : std_ulogic_vector(31 downto 0) >>;
+    alias a_rd_we    is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i
+      : std_ulogic >>;
+    alias a_rd_addr  is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_addr_i
+      : std_ulogic_vector(4 downto 0) >>;
+    alias a_wdata    is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.rf_wdata
+      : std_ulogic_vector(31 downto 0) >>;
     alias trace_a    is << signal i_soc.w_core_a_trace : trace_port_t >>;
     alias status_sys is << signal i_soc.i_watchdog_supervisor.r_status_sys : std_logic_vector(9 downto 0) >>;
 
@@ -157,7 +163,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       rst_n <= '0';
       wait for c_clk_period * 5;
@@ -179,7 +185,7 @@ begin
         status_sys <= release;
         v_traps    := 0;
 
-        for dummy in 1 to 10000 loop
+        loop_dummy : for lv_dummy in 1 to 10000 loop
 
           wait until rising_edge(clk);
 
@@ -187,7 +193,7 @@ begin
             v_traps := v_traps + 1;
           end if;
 
-        end loop;
+        end loop loop_dummy;
 
         check_equal(v_traps, 11, "11 trap handler entries on core A");
         check_equal(mismatch, '0', "no retirement differs, traps included");
@@ -204,7 +210,7 @@ begin
         -- The order number of that instruction, from core A's own trace
         v_found := false;
 
-        for dummy in 1 to 8 loop
+        loop_dummy_2 : for lv_dummy in 1 to 8 loop
 
           if (trace_a.valid = '1' and trace_a.rd_addr = c_s5) then
             v_order := to_integer(unsigned(trace_a.order(31 downto 0)));
@@ -215,7 +221,7 @@ begin
 
           wait until rising_edge(clk);
 
-        end loop;
+        end loop loop_dummy_2;
 
         check(v_found, "core A retired the corrupted write");
 
@@ -238,7 +244,7 @@ begin
              std_logic'image(nmi_fault));
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

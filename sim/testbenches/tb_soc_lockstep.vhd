@@ -243,23 +243,44 @@ begin
 
     -- Each core's interrupt logic: MEI pending, MEI pending and enabled (MEIE),
     -- an interrupt being taken (which needs MIE), and trap entry with its cause
-    alias a_irq_pnd  is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
-    alias a_irq_buf  is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
-    alias a_irq_fire is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire : std_ulogic_vector(1 downto 0) >>;
-    alias a_enter    is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
-    alias a_cause    is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
-    alias b_irq_pnd  is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
-    alias b_irq_buf  is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
-    alias b_irq_fire is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire : std_ulogic_vector(1 downto 0) >>;
-    alias b_enter    is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter : std_ulogic >>;
-    alias b_cause    is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause : std_ulogic_vector(6 downto 0) >>;
+    alias a_irq_pnd  is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd
+      : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias a_irq_buf  is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf
+      : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias a_irq_fire is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire
+      : std_ulogic_vector(1 downto 0) >>;
+    alias a_enter    is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter
+      : std_ulogic >>;
+    alias a_cause    is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause
+      : std_ulogic_vector(6 downto 0) >>;
+    alias b_irq_pnd  is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_pnd
+      : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias b_irq_buf  is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_buf
+      : std_ulogic_vector(irq_width_c - 1 downto 0) >>;
+    alias b_irq_fire is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.irq_fire
+      : std_ulogic_vector(1 downto 0) >>;
+    alias b_enter    is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.env_enter
+      : std_ulogic >>;
+    alias b_cause    is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_control_inst.ecause
+      : std_ulogic_vector(6 downto 0) >>;
 
-    variable v_found          : boolean;
-    alias    comparator_state is << signal i_soc.i_lockstep_gate.r_current_state : t_safe_state >>;
-    alias    soc_bus_valid    is << signal i_soc.w_bus_valid : std_logic >>;
-    alias    soc_rst_n        is << signal i_soc.w_rst_n : std_logic >>;
-    alias    self_test_passed is << signal i_soc.w_self_test_passed : std_logic >>;
-    alias    wd_counter       is << signal i_soc.i_watchdog_supervisor.i_watchdog.r_counter : unsigned(15 downto 0) >>;
+    variable v_found : boolean;
+
+    alias comparator_state is << signal i_soc.i_lockstep_gate.r_current_state : t_safe_state >>;
+    alias soc_bus_valid    is << signal i_soc.w_bus_valid : std_logic >>;
+    alias soc_rst_n        is << signal i_soc.w_rst_n : std_logic >>;
+    alias self_test_passed is << signal i_soc.w_self_test_passed : std_logic >>;
+    alias wd_counter       is << signal i_soc.i_watchdog_supervisor.i_watchdog.r_counter : unsigned(15 downto 0) >>;
 
     procedure cold_reset is
     begin
@@ -275,11 +296,11 @@ begin
     ) is
     begin
 
-      for dummy in 1 to count loop
+      loop_dummy : for lv_dummy in 1 to count loop
 
         wait until rising_edge(clk);
 
-      end loop;
+      end loop loop_dummy;
 
     end procedure wait_clocks;
 
@@ -310,7 +331,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       if run("core_b_is_core_a_two_clocks_ago_all_through_the_program") then
         cov_kind_gap    <= NewID("load or store, by spacing");
@@ -330,23 +351,23 @@ begin
         check(IsCovered(cov_kind_target), "every kind of access to every target");
       elsif run("same_glitch_on_both_core_buses_is_caught") then
 
-        for length in 1 to 6 loop
+        loop_length : for lv_length in 1 to 6 loop
 
           cold_reset;
           wait for c_boot;
           wait until rising_edge(clk);
           core_a_data <= force x"DEADBEEF";
           core_b_data <= force x"DEADBEEF";
-          wait_clocks(length);
+          wait_clocks(lv_length);
           core_a_data <= release;
           core_b_data <= release;
-          check_tripped("a glitch of " & integer'image(length) & " clocks");
+          check_tripped("a glitch of " & integer'image(lv_length) & " clocks");
 
-        end loop;
+        end loop loop_length;
 
       elsif run("same_glitch_on_both_cores_read_data_is_caught") then
 
-        for length in 1 to 2 loop
+        loop_length_2 : for lv_length in 1 to 2 loop
 
           cold_reset;
 
@@ -359,14 +380,14 @@ begin
           -- This answers "not busy" to core A. Core B's answer is two clocks away.
           core_a_rsp.data <= force x"00000000";
           core_b_rsp.data <= force x"00000000";
-          wait_clocks(length);
+          wait_clocks(lv_length);
           core_a_rsp.data <= release;
           core_b_rsp.data <= release;
 
           wait until actuator_safe = '1' for c_timeout;
-          check_tripped("a glitch of " & integer'image(length) & " clocks on the read data");
+          check_tripped("a glitch of " & integer'image(lv_length) & " clocks on the read data");
 
-        end loop;
+        end loop loop_length_2;
 
       elsif run("comparator_stuck_at_no_error_keeps_the_soc_safe") then
         << signal i_soc.i_lockstep_gate.w_mismatch_detected : std_logic >> <= force '0';
@@ -446,7 +467,7 @@ begin
         -- MEI is up at both cores two clocks apart, and neither takes it
         wait_clocks(2);
 
-        for dummy in 1 to 3000 loop
+        loop_dummy_2 : for lv_dummy in 1 to 3000 loop
 
           wait until rising_edge(clk);
           check_equal(a_irq_pnd(irq_mei_irq_c), '1', "core A: MEI pending");
@@ -468,19 +489,19 @@ begin
           check_equal(actuator_safe, '1', "actuators still safe");
           check_equal(sys_bus.valid, '0', "nothing reaches the system bus");
 
-        end loop;
+        end loop loop_dummy_2;
 
         -- After a cold reset, the first store to that word reads it first: the
         -- word store before the trip is there, and the byte is not
         cold_reset;
         v_found := false;
 
-        while not v_found loop
+        loop_while_2 : while not v_found loop
 
           wait until rising_edge(clk);
           v_found := sys_bus.valid = '1' and sys_bus.we = '1' and sys_bus.addr = x"20000008";
 
-        end loop;
+        end loop loop_while_2;
 
         wait for 1 ns;
         check_equal(ram_word(31 downto 0), std_logic_vector'(x"12345678"), "the spoiled byte store never landed");
@@ -505,45 +526,49 @@ begin
         check(rx_frame.stuff_error, "and it was cut off");
       elsif run("illegal_comparator_state_is_reported_kept_by_a_watchdog_reset_and_cleared_cold") then
         -- HSI FLT-03 and FLT-04, for each one-bit corruption of 0x5A
-        for bit_index in 0 to 7 loop
+        loop_bit_index : for lv_bit_index in 0 to 7 loop
 
           cold_reset;
           wait for c_boot;
-          check_equal(nmi_fault, '0', "healthy before bit " & integer'image(bit_index));
+          check_equal(nmi_fault, '0', "healthy before bit " & integer'image(lv_bit_index));
           wait until rising_edge(clk);
-          comparator_state <= force st_system_ok xor std_logic_vector(shift_left(to_unsigned(1, 8), bit_index));
+          comparator_state <= force st_system_ok xor std_logic_vector(shift_left(to_unsigned(1, 8), lv_bit_index));
           wait_clocks(1);
           comparator_state <= release;
           wait_clocks(2);
-          check_equal(nmi_fault, '1', "bit " & integer'image(bit_index) & ": reported on the pin");
-          check_equal(actuator_safe, '1', "bit " & integer'image(bit_index) & ": actuators safe");
-          check_equal(soc_bus_valid, '0', "bit " & integer'image(bit_index) & ": bus closed");
+          check_equal(nmi_fault, '1', "bit " & integer'image(lv_bit_index) & ": reported on the pin");
+          check_equal(actuator_safe, '1', "bit " & integer'image(lv_bit_index) & ": actuators safe");
+          check_equal(soc_bus_valid, '0', "bit " & integer'image(lv_bit_index) & ": bus closed");
 
           -- A watchdog reset restarts the cores and keeps the fault
           wd_counter <= force to_unsigned(49990, 16);
           wait until rising_edge(wd_clk);
           wd_counter <= release;
           wait until soc_rst_n = '0' for c_timeout;
-          check_equal(soc_rst_n, '0', "bit " & integer'image(bit_index) & ": the watchdog reset the SoC");
+          check_equal(soc_rst_n, '0', "bit " & integer'image(lv_bit_index) & ": the watchdog reset the SoC");
           wait until soc_rst_n = '1' for c_timeout;
           wait_clocks(20);
-          check_equal(nmi_fault, '1', "bit " & integer'image(bit_index) & ": still reported after a watchdog reset");
-          check_equal(actuator_safe, '1', "bit " & integer'image(bit_index) & ": still safe after a watchdog reset");
-          check_equal(soc_bus_valid, '0', "bit " & integer'image(bit_index) & ": still closed after a watchdog reset");
+          check_equal(nmi_fault, '1',
+                      "bit " & integer'image(lv_bit_index) & ": still reported after a watchdog reset");
+          check_equal(actuator_safe, '1',
+                      "bit " & integer'image(lv_bit_index) & ": still safe after a watchdog reset");
+          check_equal(soc_bus_valid, '0',
+                      "bit " & integer'image(lv_bit_index) & ": still closed after a watchdog reset");
 
           -- A cold reset clears it, and the self-test qualifies the comparator again
           cold_reset;
           wait for c_boot;
-          check_equal(comparator_state, st_system_ok, "bit " & integer'image(bit_index) & ": healthy after a cold reset");
-          check_equal(nmi_fault, '0', "bit " & integer'image(bit_index) & ": cleared by a cold reset");
-          check_equal(actuator_safe, '0', "bit " & integer'image(bit_index) & ": actuators released");
-          check_equal(self_test_passed, '1', "bit " & integer'image(bit_index) & ": the self-test passed again");
+          check_equal(comparator_state, st_system_ok,
+                      "bit " & integer'image(lv_bit_index) & ": healthy after a cold reset");
+          check_equal(nmi_fault, '0', "bit " & integer'image(lv_bit_index) & ": cleared by a cold reset");
+          check_equal(actuator_safe, '0', "bit " & integer'image(lv_bit_index) & ": actuators released");
+          check_equal(self_test_passed, '1', "bit " & integer'image(lv_bit_index) & ": the self-test passed again");
 
-        end loop;
+        end loop loop_bit_index;
 
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

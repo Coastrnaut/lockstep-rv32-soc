@@ -31,13 +31,18 @@ library work;
 
 entity tb_fault_campaign is
   generic (
-    runner_cfg  : string  := "";
-    g_trial     : natural := 0;     -- The manifest's trial number
-    g_site      : natural := 0;     -- 0 for no fault; see p_inject
-    g_bit       : natural := 0;
-    g_kind      : natural := 2;     -- 0 stuck at 0, 1 stuck at 1, 2 flipped
-    g_duration  : natural := 1;     -- Clocks the fault lasts, 0 for the rest of the run
-    g_inject_ns : natural := 50000; -- When, from the end of the cold reset
+    runner_cfg : string := "";
+    -- The manifest's trial number
+    g_trial : natural := 0;
+    -- 0 for no fault; see p_inject
+    g_site : natural := 0;
+    g_bit  : natural := 0;
+    -- 0 stuck at 0, 1 stuck at 1, 2 flipped
+    g_kind : natural := 2;
+    -- Clocks the fault lasts, 0 for the rest of the run
+    g_duration : natural := 1;
+    -- When, from the end of the cold reset
+    g_inject_ns : natural := 50000;
     g_run_us    : natural := 700
   );
 end entity tb_fault_campaign;
@@ -169,12 +174,12 @@ begin
     v_time := now;
     wait for c_uart_bit_time / 2;
 
-    for i in 0 to 7 loop
+    loop_i : for lv_i in 0 to 7 loop
 
       wait for c_uart_bit_time;
-      v_byte(i) := uart_tx;
+      v_byte(lv_i) := uart_tx;
 
-    end loop;
+    end loop loop_i;
 
     wait for c_uart_bit_time * 2;
 
@@ -207,8 +212,12 @@ begin
 
   p_stim : process is
 
-    alias a_wdata      is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.rf_wdata : std_ulogic_vector(31 downto 0) >>;
-    alias b_wdata      is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.rf_wdata : std_ulogic_vector(31 downto 0) >>;
+    alias a_wdata      is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.rf_wdata
+      : std_ulogic_vector(31 downto 0) >>;
+    alias b_wdata      is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.rf_wdata
+      : std_ulogic_vector(31 downto 0) >>;
     alias a_fetch      is << signal i_soc.i_cpu_master.i_neorv32.imem_rsp : bus_rsp_t >>;
     alias a_bus_data   is << signal i_soc.w_core_a_xbus_data : std_logic_vector(31 downto 0) >>;
     alias a_bus_addr   is << signal i_soc.w_core_a_xbus_addr : std_logic_vector(31 downto 0) >>;
@@ -221,14 +230,19 @@ begin
     alias can_pin      is << signal i_soc.i_automotive_can.r_tx_pin : std_logic >>;
     alias reset_stages is << signal i_soc.i_reset_sync.r_stages : std_logic_vector(1 downto 0) >>;
     alias selftest_res is << signal i_soc.i_comparator_self_test.r_result : t_safe_state >>;
-    alias a_rd_we      is << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
-    alias b_rd_we      is << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i : std_ulogic >>;
+    alias a_rd_we      is
+      << signal i_soc.i_cpu_master.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i
+      : std_ulogic >>;
+    alias b_rd_we      is
+      << signal i_soc.i_cpu_checker.i_neorv32.core_complex_gen(0).neorv32_cpu_inst.neorv32_cpu_regfile_inst.rd_we_i
+      : std_ulogic >>;
     alias a_bus        is << signal i_soc.w_core_a_bus : t_rv_bus >>;
     alias ram_read     is << signal i_soc.i_ecc_ram.r_read : std_logic >>;
     alias ram_write    is << signal i_soc.i_ecc_ram.r_write : std_logic >>;
 
-    file     f_result : text;
-    variable v_line   : line;
+    variable v_line : line;
+
+    file f_result : text;
 
     -- The level to force: stuck at 0 or 1, or the opposite of what is there
 
@@ -541,7 +555,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       if run("trial") then
         rst_n    <= '0';
@@ -562,11 +576,11 @@ begin
 
           if (g_duration > 0) then
 
-            for dummy in 1 to g_duration loop
+            loop_dummy : for lv_dummy in 1 to g_duration loop
 
               wait until rising_edge(clk);
 
-            end loop;
+            end loop loop_dummy;
 
             wait for 1 ns;
             release_fault;
@@ -597,21 +611,21 @@ begin
         write(v_line, "retired=" & integer'image(compared));
         writeline(f_result, v_line);
 
-        for i in 1 to uart_count loop
+        loop_i_2 : for lv_i in 1 to uart_count loop
 
-          write(v_line, "uart " & integer'image(uart_times(i) / 1 ps) & " " &
-                to_hstring(uart_bytes(i)));
+          write(v_line, "uart " & integer'image(uart_times(lv_i) / 1 ps) & " " &
+                to_hstring(uart_bytes(lv_i)));
           writeline(f_result, v_line);
 
-        end loop;
+        end loop loop_i_2;
 
-        for i in 1 to rx_done loop
+        loop_i_3 : for lv_i in 1 to rx_done loop
 
-          exit when i > can_times'high;
-          write(v_line, "can " & integer'image(can_times(i) / 1 ps));
+          exit when lv_i > can_times'high;
+          write(v_line, "can " & integer'image(can_times(lv_i) / 1 ps));
           writeline(f_result, v_line);
 
-        end loop;
+        end loop loop_i_3;
 
         if (rx_done > 0) then
           write(v_line, "can_frame id=" & to_hstring(rx_frame.id) & " dlc=" & to_hstring(rx_frame.dlc) &
@@ -623,7 +637,7 @@ begin
         file_close(f_result);
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

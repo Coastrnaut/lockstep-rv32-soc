@@ -128,12 +128,12 @@ begin
     wait until uart_tx = '0';
     wait for c_uart_bit_time / 2;
 
-    for i in 0 to 7 loop
+    loop_i : for lv_i in 0 to 7 loop
 
       wait for c_uart_bit_time;
-      v_byte(i) := uart_tx;
+      v_byte(lv_i) := uart_tx;
 
-    end loop;
+    end loop loop_i;
 
     wait for c_uart_bit_time * 2;
     uart_log(uart_count + 1) <= v_byte;
@@ -176,7 +176,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       ack_enable <= '1';
       sender_tx  <= '1';
@@ -225,9 +225,9 @@ begin
 
         -- The program is polling the watchdog by now, so this comes as an interrupt.
         -- It sends the low byte of the identifier, which is 0x23, to the UART.
-        for wire_bit in 1 to c_rx_vectors(2).length loop
+        loop_wire_bit : for lv_wire_bit in 1 to c_rx_vectors(2).length loop
 
-          if (c_rx_vectors(2).wire(wire_bit) = '0') then
+          if (c_rx_vectors(2).wire(lv_wire_bit) = '0') then
             sender_tx <= '0';
           else
             sender_tx <= '1';
@@ -235,7 +235,7 @@ begin
 
           wait for c_can_bit_time;
 
-        end loop;
+        end loop loop_wire_bit;
 
         sender_tx <= '1';
         check_uart_byte(6, x"23");
@@ -259,7 +259,7 @@ begin
         check_uart_byte(4, x"32");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

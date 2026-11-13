@@ -32,8 +32,9 @@ entity soc_bus_fabric is
     g_ram_addr_bits : positive range 4 to 15 := 15
   );
   port (
-    clk_i   : in    std_logic;
-    rst_n_i : in    std_logic; -- Warm reset: clears the response pending
+    clk_i : in    std_logic;
+    -- Warm reset: clears the response pending
+    rst_n_i : in    std_logic;
 
     -- The gated system bus, after the comparator
     bus_i : in    t_rv_bus;
@@ -62,11 +63,14 @@ architecture rtl of soc_bus_fabric is
 
   subtype t_target is std_logic_vector(4 downto 0);
 
-  constant c_tgt_ram  : natural := 0; -- SRAM and the ECC registers
+  -- SRAM and the ECC registers
+  constant c_tgt_ram  : natural := 0;
   constant c_tgt_wd   : natural := 1;
   constant c_tgt_can  : natural := 2;
   constant c_tgt_uart : natural := 3;
-  constant c_tgt_none : natural := 4; -- Unmapped
+
+  -- Unmapped
+  constant c_tgt_none : natural := 4;
 
   type t_addresses is array (natural range <>) of std_logic_vector(c_addr_width - 1 downto 0);
 
@@ -120,13 +124,13 @@ architecture rtl of soc_bus_fabric is
   ) return boolean is
   begin
 
-    for i in regs'range loop
+    loop_i : for lv_i in regs'range loop
 
-      if (addr(c_addr_width - 1 downto 2) = regs(i)(c_addr_width - 1 downto 2)) then
+      if (addr(c_addr_width - 1 downto 2) = regs(lv_i)(c_addr_width - 1 downto 2)) then
         return true;
       end if;
 
-    end loop;
+    end loop loop_i;
 
     return false;
 

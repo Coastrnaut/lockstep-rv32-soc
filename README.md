@@ -37,7 +37,8 @@ Two NEORV32 RISC-V cores run the same program, core B two clocks behind core A. 
 │   └── peripherals/      # Safety-gated CAN controller and diagnostic UART
 ├── sw/include/           # Generated C register header
 └── sim/                  # Verification environment (VUnit)
-    ├── testbenches/      # Functional and fault-injection test suites
+    ├── testbenches/      # Functional and fault-injection test suites (VUnit)
+    ├── portable/         # Plain-VHDL benches that also run on Vivado's xsim
     ├── formal/           # SymbiYosys properties and jobs
     ├── campaign/         # Fault campaign manifests and results
     ├── firmware/         # Generated test program for the cores
@@ -55,6 +56,9 @@ Local development and CI use **GHDL** with the **mcode** backend and the **VUnit
 ### Formal, fault campaign and board checks
 A separate CI job proves properties of the comparator, the bus fabric and the RAM's store commit with YoWASP Yosys and SymbiYosys (`docs/verification/formal.md`). `sim/scripts/fault_campaign.py` runs a seeded fault campaign (`docs/verification/fault_campaign.md`). `fpga/arty_a7_100t/check_board.py` checks the board wrapper and image with GHDL in CI.
 
+### Vivado
+When Vivado is installed, `sim/run.py` adds a Vivado stage after the lint gates: every file analysed by xvhdl, the SoC elaborated by xelab, and the plain-VHDL benches run on xsim and GHDL. xsim cannot run the VUnit benches (`docs/verification/toolchain.md` says why). `python run.py --vivado` runs that stage alone.
+
 ### Planned: licensed simulator
 Structural coverage and gate-level simulation are not part of the flow yet.
 
@@ -69,7 +73,7 @@ sudo apt-get update && sudo apt-get install -y ghdl python3 python3-pip
 pip install -r sim/requirements.txt
 ```
 
-`sim/run.py` uses `VUNIT_GHDL_PATH` if it is set, then `C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin` on Windows, then `ghdl` on `PATH`.
+`sim/run.py` uses `VUNIT_GHDL_PATH` if it is set, then `C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin` or `C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin` on Windows, then `ghdl` on `PATH`. It finds Vivado from `VIVADO_BIN`, `XILINX_VIVADO`, `PATH` or the default install folders.
 
 ### Compiling and Executing Tests
 ```bash
@@ -78,8 +82,10 @@ cd lockstep-rv32-soc
 git submodule update --init --recursive
 cd sim
 python3 run.py --lint      # ghdl -Wall analysis and ghdl --synth of every block
-python3 run.py --vsg       # style
-python3 run.py -p 4 --xunit-xml vunit_out/regression.xml
+python3 run.py --vsg       # style, every VSG rule (sim/vsg_config.yaml)
+python3 run.py --vsg-fix   # let VSG fix what it can
+python3 run.py --vivado    # the Vivado stage only: xvhdl, xelab, xsim
+python3 run.py -p 4 --xunit-xml vunit_out/regression.xml   # lint, Vivado stage if installed, every test
 python3 run.py "sim_lib.tb_soc_ecc.*"    # one bench
 ```
 
@@ -87,6 +93,7 @@ python3 run.py "sim_lib.tb_soc_ecc.*"    # one bench
 ```bash
 python3 sim/scripts/check_fixtures.py                 # generated files match their generators
 python3 sim/scripts/register_map.py                   # regenerate the register constants, C header and table
+python3 sim/scripts/vsg_config.py                     # regenerate the VSG configuration from the installed VSG
 python3 sim/scripts/check_evidence.py                 # every bench, test, property and file the documents cite exists
 python3 sim/scripts/fmeda.py                          # check the FMEDA input table; metrics once it has rates
 python3 sim/scripts/ci_report.py manifest manifest.json

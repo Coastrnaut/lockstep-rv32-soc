@@ -268,13 +268,13 @@ begin
 
       v_word := old;
 
-      for lane in 0 to 3 loop
+      loop_lane : for lv_lane in 0 to 3 loop
 
-        if (sel(lane) = '1') then
-          v_word(lane * 8 + 7 downto lane * 8) := data(lane * 8 + 7 downto lane * 8);
+        if (sel(lv_lane) = '1') then
+          v_word(lv_lane * 8 + 7 downto lv_lane * 8) := data(lv_lane * 8 + 7 downto lv_lane * 8);
         end if;
 
-      end loop;
+      end loop loop_lane;
 
       return v_word;
 
@@ -285,7 +285,7 @@ begin
     test_runner_setup(runner, runner_cfg);
     v_rand.InitSeed(tb_soc_bus_fabric'instance_name);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       reset_all;
 
@@ -313,16 +313,16 @@ begin
       elsif run("unmapped_addresses_answer_one_err_with_no_data_and_no_store") then
         transfer(x"20000000", x"5A5A5A5A", '1');
 
-        for i in c_unmapped'range loop
+        loop_i : for lv_i in c_unmapped'range loop
 
-          transfer(c_unmapped(i), x"00000000", '0');
-          check_equal(v_err, '1', "ERR for a load from " & to_hstring(c_unmapped(i)));
-          check_equal(v_ack, '0', "no ACK for a load from " & to_hstring(c_unmapped(i)));
-          transfer(c_unmapped(i), x"FFFFFFFF", '1');
-          check_equal(v_err, '1', "ERR for a store to " & to_hstring(c_unmapped(i)));
-          check_equal(v_ack, '0', "no ACK for a store to " & to_hstring(c_unmapped(i)));
+          transfer(c_unmapped(lv_i), x"00000000", '0');
+          check_equal(v_err, '1', "ERR for a load from " & to_hstring(c_unmapped(lv_i)));
+          check_equal(v_ack, '0', "no ACK for a load from " & to_hstring(c_unmapped(lv_i)));
+          transfer(c_unmapped(lv_i), x"FFFFFFFF", '1');
+          check_equal(v_err, '1', "ERR for a store to " & to_hstring(c_unmapped(lv_i)));
+          check_equal(v_ack, '0', "no ACK for a store to " & to_hstring(c_unmapped(lv_i)));
 
-        end loop;
+        end loop loop_i;
 
         wait for 1 ns;
         check_equal(errs, 2 * c_unmapped'length, "one ERR each");
@@ -370,12 +370,12 @@ begin
         check_equal(bus_valid, '0', "the gate stays closed");
         check_equal(safe, '1', "safe state");
 
-        for dummy in 1 to 4 loop
+        loop_dummy : for lv_dummy in 1 to 4 loop
 
           wait until rising_edge(clk);
           check_equal(commit, '0', "nothing commits afterwards");
 
-        end loop;
+        end loop loop_dummy;
 
         check_equal(accepted, 3, "only the two setup stores and the load were accepted");
       elsif run("double_bit_error_on_a_partial_store_answers_err_and_writes_nothing") then
@@ -469,7 +469,7 @@ begin
         v_model := (others => (others => '0'));
         v_errs  := 0;
 
-        for request in 1 to 2000 loop
+        loop_request : for lv_request in 1 to 2000 loop
 
           v_index := v_rand.RandInt(0, 15);
           v_addr  := std_logic_vector(unsigned(c_ram_base_addr) + v_index * 4);
@@ -522,7 +522,7 @@ begin
           check_equal(rsp.ack, '1', "ACK for the check load");
           check_equal(rsp.rdata, v_model(v_index), "word " & integer'image(v_index));
 
-        end loop;
+        end loop loop_request;
 
         wait until rising_edge(clk);
         check_equal(errs, v_errs, "one ERR for each unmapped request");
@@ -530,7 +530,7 @@ begin
         check_equal(nmi_fault, '0', "no fault");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

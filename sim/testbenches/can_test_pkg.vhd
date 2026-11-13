@@ -12,16 +12,19 @@ package can_test_pkg is
   constant c_max_frame_bits : positive := 135;
 
   type t_rx_frame is record
-    id             : std_logic_vector(10 downto 0);
-    flags          : std_logic_vector(2 downto 0);  -- RTR, IDE, r0
-    dlc            : std_logic_vector(3 downto 0);
-    data           : std_logic_vector(63 downto 0); -- First byte on the wire in 63:56
-    crc            : std_logic_vector(14 downto 0);
-    crc_expected   : std_logic_vector(14 downto 0);
-    crc_delimiter  : std_logic;
-    ack_slot       : std_logic;
-    ack_delimiter  : std_logic;
-    tail_recessive : natural;                       -- EOF and intermission
+    id : std_logic_vector(10 downto 0);
+    -- RTR, IDE, r0
+    flags : std_logic_vector(2 downto 0);
+    dlc   : std_logic_vector(3 downto 0);
+    -- First byte on the wire in 63:56
+    data          : std_logic_vector(63 downto 0);
+    crc           : std_logic_vector(14 downto 0);
+    crc_expected  : std_logic_vector(14 downto 0);
+    crc_delimiter : std_logic;
+    ack_slot      : std_logic;
+    ack_delimiter : std_logic;
+    -- EOF and intermission
+    tail_recessive : natural;
     stuff_error    : boolean;
     -- What the DUT drove, not the bus: one sample per wire bit from SOF
     wire        : std_logic_vector(0 to c_max_frame_bits - 1);

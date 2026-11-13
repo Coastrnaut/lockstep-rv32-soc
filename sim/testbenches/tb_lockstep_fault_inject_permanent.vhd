@@ -17,26 +17,27 @@ end entity tb_lockstep_fault_inject_permanent;
 
 architecture tb of tb_lockstep_fault_inject_permanent is
 
-  constant clk_period : time := 20 ns;
-  signal   clk        : std_logic;
-  signal   rst_n      : std_logic;
-  signal   core_a_bus : t_rv_bus;
-  signal   core_b_bus : t_rv_bus;
-  signal   nmi_fault  : std_logic;
-  signal   safe_state : std_logic;
-  signal   bus_valid  : std_logic;
-  signal   sys_bus    : t_rv_bus;begin
+  constant c_clk_period : time := 20 ns;
+
+  signal clk        : std_logic;
+  signal rst_n      : std_logic;
+  signal core_a_bus : t_rv_bus;
+  signal core_b_bus : t_rv_bus;
+  signal nmi_fault  : std_logic;
+  signal safe_state : std_logic;
+  signal bus_valid  : std_logic;
+  signal sys_bus    : t_rv_bus;begin
 
   p_clk : process is
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    clk <= '0', '1' after clk_period / 2;
-    wait for clk_period;
+    clk <= '0', '1' after c_clk_period / 2;
+    wait for c_clk_period;
 
   end process p_clk;
 
-  uut : entity lockstep.lockstep_comparator
+  i_uut : entity lockstep.lockstep_comparator
     port map (
       clk_i         => clk,
       rst_n_syn_i   => rst_n,
@@ -104,14 +105,14 @@ architecture tb of tb_lockstep_fault_inject_permanent is
            "stuck-at-0 we");
 
     -- TEST 5: Permanent fault campaign (data bits 0-7)
-    for bit_index in 0 to 7 loop
+    loop_bit_index : for lv_bit_index in 0 to 7 loop
 
-      inject((addr  => x"00005000", data => std_logic_vector(to_unsigned(2 ** bit_index, 32)), we => '1',
+      inject((addr  => x"00005000", data => std_logic_vector(to_unsigned(2 ** lv_bit_index, 32)), we => '1',
               valid => '1', sel => "1111"),
              (addr => x"00005000", data => x"00000000", we => '1', valid => '1', sel => "1111"),
-             "campaign bit" & integer'image(bit_index));
+             "campaign bit" & integer'image(lv_bit_index));
 
-    end loop;
+    end loop loop_bit_index;
 
     -- TEST 6: Verify recovery after reset
     core_a_bus <= (addr => x"00006000", data => x"00000042", we => '1', valid => '1', sel => "1111");

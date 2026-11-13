@@ -21,19 +21,20 @@ end entity tb_watchdog;
 architecture rtl of tb_watchdog is
 
   -- Independent watchdog clock (fast for simulation)
-  constant wd_clk_period : time := 10 ns;
-  signal   wd_clk        : std_logic;
-  signal   wd_rst_n      : std_logic;
-  signal   cpu_kick      : std_logic;
-  signal   sys_rst       : std_logic;
-  signal   wd_stat       : std_logic_vector(7 downto 0);begin
+  constant c_wd_clk_period : time := 10 ns;
+
+  signal wd_clk   : std_logic;
+  signal wd_rst_n : std_logic;
+  signal cpu_kick : std_logic;
+  signal sys_rst  : std_logic;
+  signal wd_stat  : std_logic_vector(7 downto 0);begin
 
   p_clk : process is
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    wd_clk <= '0', '1' after wd_clk_period / 2;
-    wait for wd_clk_period;
+    wd_clk <= '0', '1' after c_wd_clk_period / 2;
+    wait for c_wd_clk_period;
 
   end process p_clk;
 
@@ -53,27 +54,27 @@ architecture rtl of tb_watchdog is
     cpu_kick <= '0';
     wd_rst_n <= '0';
 
-    for dummy in 1 to 5 loop
+    loop_dummy : for lv_dummy in 1 to 5 loop
 
       wait until rising_edge(wd_clk);
 
-    end loop;
+    end loop loop_dummy;
 
     wd_rst_n <= '1';
 
-    for dummy in 1 to 10 loop
+    loop_dummy_2 : for lv_dummy in 1 to 10 loop
 
       wait until rising_edge(wd_clk);
 
-    end loop;
+    end loop loop_dummy_2;
 
     -- --- Test 1: Normal periodic kicks (within window) ---
     -- C_WD_MIN=40000, C_WD_MAX=50000 — kick at ~45000 counts
-    for dummy in 1 to 45000 loop
+    loop_dummy_3 : for lv_dummy in 1 to 45000 loop
 
       wait until rising_edge(wd_clk);
 
-    end loop;
+    end loop loop_dummy_3;
 
     cpu_kick <= '1';
     wait until rising_edge(wd_clk);
@@ -81,11 +82,11 @@ architecture rtl of tb_watchdog is
     check(sys_rst = '0', "no reset on valid kick");
 
     -- --- Test 2: Kick too early (below MIN) ---
-    for dummy in 1 to 10 loop
+    loop_dummy_4 : for lv_dummy in 1 to 10 loop
 
       wait until rising_edge(wd_clk);
 
-    end loop;
+    end loop loop_dummy_4;
 
     cpu_kick <= '1';
     wait until rising_edge(wd_clk);

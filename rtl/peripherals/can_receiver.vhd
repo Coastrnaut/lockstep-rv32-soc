@@ -29,13 +29,16 @@ entity can_receiver is
     rst_n_i : in    std_logic;
 
     -- The bus, and the bit timing, from the controller
-    rx_i          : in    std_logic; -- Synchronised
+    -- Synchronised
+    rx_i          : in    std_logic;
     sample_tick_i : in    std_logic;
     bit_tick_i    : in    std_logic;
-    sof_allowed_i : in    std_logic; -- At least 10 recessive bits have gone by
+    -- At least 10 recessive bits have gone by
+    sof_allowed_i : in    std_logic;
 
     -- The state of the node
-    clear_i         : in    std_logic; -- Reset, gate down or bus-off: stay off the bus
+    -- Reset, gate down or bus-off: stay off the bus
+    clear_i         : in    std_logic;
     transmitting_i  : in    std_logic;
     tx_failed_i     : in    std_logic;
     error_passive_i : in    std_logic;
@@ -57,7 +60,8 @@ entity can_receiver is
     rtr_o         : out   std_logic;
     ide_o         : out   std_logic;
     dlc_o         : out   unsigned(3 downto 0);
-    data_o        : out   std_logic_vector(63 downto 0) -- First byte in 63:56
+    -- First byte in 63:56
+    data_o : out   std_logic_vector(63 downto 0)
   );
 end entity can_receiver;
 
@@ -77,9 +81,11 @@ architecture rtl of can_receiver is
   -- The field that the next sampled bit belongs to
 
   type t_field is (
-    field_wait, -- Outside a frame, until the next SOF
+    -- Outside a frame, until the next SOF
+    field_wait,
     field_id,
-    field_rtr,  -- RTR, or SRR in an extended frame
+    -- RTR, or SRR in an extended frame
+    field_rtr,
     field_ide,
     field_ext_id,
     field_ext_rtr,
@@ -92,7 +98,8 @@ architecture rtl of can_receiver is
     field_ack,
     field_ack_delim,
     field_eof,
-    field_flag  -- An error flag, sent by p_pin
+    -- An error flag, sent by p_pin
+    field_flag
   );
 
   signal r_field : t_field;

@@ -216,7 +216,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       rst_n  <= '0';
       bus_ok <= '1';
@@ -313,7 +313,7 @@ begin
         check_equal(rx_starts, 0, "no CAN frame");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

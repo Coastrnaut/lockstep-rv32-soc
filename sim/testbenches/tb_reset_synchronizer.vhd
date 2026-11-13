@@ -27,21 +27,25 @@ architecture tb of tb_reset_synchronizer is
   -- c_half_period, so nothing here can be the work of a clock edge.
   constant c_settle : time := 1 ns;
 
-  signal clk      : std_logic;
-  signal rst_n    : std_logic;
-  signal rst_syn  : std_logic; -- The default of two stages
-  signal rst_long : std_logic; -- Five stages
+  signal clk   : std_logic;
+  signal rst_n : std_logic;
+
+  -- The default of two stages
+  signal rst_syn : std_logic;
+
+  -- Five stages
+  signal rst_long : std_logic;
 
 begin
 
-  dut : entity lockstep.reset_synchronizer
+  i_dut : entity lockstep.reset_synchronizer
     port map (
       clk_i       => clk,
       rst_n_i     => rst_n,
       rst_n_syn_o => rst_syn
     );
 
-  dut_long : entity lockstep.reset_synchronizer
+  i_dut_long : entity lockstep.reset_synchronizer
     generic map (
       g_stages => 5
     )
@@ -94,11 +98,11 @@ begin
 
       set_reset('1');
 
-      for dummy in 1 to 5 loop
+      loop_dummy : for lv_dummy in 1 to 5 loop
 
         tick;
 
-      end loop;
+      end loop loop_dummy;
 
       check_equal(rst_syn, '1', "two stages released");
       check_equal(rst_long, '1', "five stages released");
@@ -109,7 +113,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       clk <= '0';
       set_reset('0');
@@ -125,12 +129,12 @@ begin
         set_reset('1');
         check_equal(rst_syn, '0', "the input alone releases nothing");
 
-        for edge in 1 to 5 loop
+        loop_edge : for lv_edge in 1 to 5 loop
 
           check_equal(rst_long, '0', "five stages still held");
           rising_clock;
 
-          if (edge = 1) then
+          if (lv_edge = 1) then
             check_equal(rst_syn, '0', "two stages held for one edge");
           else
             check_equal(rst_syn, '1', "two stages released by the second edge");
@@ -138,7 +142,7 @@ begin
 
           falling_clock;
 
-        end loop;
+        end loop loop_edge;
 
         check_equal(rst_long, '1', "five stages released by the fifth edge");
       elsif run("release_exactly_on_a_rising_edge_still_takes_every_stage") then
@@ -172,7 +176,7 @@ begin
         check_equal(rst_syn, '1', "released two edges after the pulse");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

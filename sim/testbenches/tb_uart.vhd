@@ -20,16 +20,17 @@ end entity tb_uart;
 
 architecture rtl of tb_uart is
 
-  constant clk_period : time := 20 ns;
-  constant c_bit_time : time := clk_period * 434;
-  signal   tb_clk     : std_logic;
-  signal   tb_rst_n   : std_logic;
-  signal   bus_i      : t_rv_bus;
-  signal   bus_ok     : std_logic;
-  signal   uart_tx    : std_logic;
-  signal   uart_busy  : std_logic;
-  signal   uart_err   : std_logic;
-  signal   rdata      : std_logic_vector(31 downto 0);
+  constant c_clk_period : time := 20 ns;
+  constant c_bit_time   : time := c_clk_period * 434;
+
+  signal tb_clk    : std_logic;
+  signal tb_rst_n  : std_logic;
+  signal bus_i     : t_rv_bus;
+  signal bus_ok    : std_logic;
+  signal uart_tx   : std_logic;
+  signal uart_busy : std_logic;
+  signal uart_err  : std_logic;
+  signal rdata     : std_logic_vector(31 downto 0);
 
   -- What the receiver on uart_tx saw
   signal rx_count  : natural;
@@ -44,8 +45,8 @@ architecture rtl of tb_uart is
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    tb_clk <= '0', '1' after clk_period / 2;
-    wait for clk_period;
+    tb_clk <= '0', '1' after c_clk_period / 2;
+    wait for c_clk_period;
 
   end process p_clk;
 
@@ -73,12 +74,12 @@ architecture rtl of tb_uart is
     wait until uart_tx = '0';
     wait for c_bit_time / 2;
 
-    for i in 0 to 7 loop
+    loop_i : for lv_i in 0 to 7 loop
 
       wait for c_bit_time;
-      v_byte(i) := uart_tx;
+      v_byte(lv_i) := uart_tx;
 
-    end loop;
+    end loop loop_i;
 
     wait for c_bit_time;
     rx_parity <= uart_tx;
@@ -159,26 +160,26 @@ architecture rtl of tb_uart is
       sel   => "1111"
     );
 
-    for dummy in 1 to 5 loop
+    loop_dummy : for lv_dummy in 1 to 5 loop
 
       wait until rising_edge(tb_clk);
 
-    end loop;
+    end loop loop_dummy;
 
     tb_rst_n <= '1';
 
-    for dummy in 1 to 5 loop
+    loop_dummy_2 : for lv_dummy in 1 to 5 loop
 
       wait until rising_edge(tb_clk);
 
-    end loop;
+    end loop loop_dummy_2;
 
     -- --- Test 1: Idle state ---
     check(uart_busy = '0', "UART idle at start");
     check(uart_tx = '1', "TX recessive at idle");
 
     -- --- Test 2: Write valid data → TX starts ---
-    bus_i       <=
+    bus_i <=
     (
       addr  => c_uart_tx_data_addr,
       data  => x"00000041",
@@ -186,26 +187,29 @@ architecture rtl of tb_uart is
       valid => '1',
       sel   => "1111"
     );
-    wait until rising_edge(tb_clk);                                                      -- p_rx_regs accepts write
+    -- p_rx_regs accepts write
+    wait until rising_edge(tb_clk);
     bus_i.valid <= '0';
-    wait until rising_edge(tb_clk);                                                      -- FSM sees r_tx_valid, transitions
-    wait until rising_edge(tb_clk);                                                      -- extra margin
+    -- FSM sees r_tx_valid, transitions
+    wait until rising_edge(tb_clk);
+    -- extra margin
+    wait until rising_edge(tb_clk);
     check(uart_busy = '1', "UART busy after write");
     check(uart_err = '0', "no parity error on valid write");
     check_read(c_uart_status_addr, 1, "STATUS while busy");
     check_read(c_uart_parity_addr, 1, "PARITY good");
 
     -- STATUS is not zero while busy, so a stray decode would show here
-    for addr_bit in 0 to 31 loop
+    loop_addr_bit : for lv_addr_bit in 0 to 31 loop
 
-      v_addr           := c_uart_status_addr;
-      v_addr(addr_bit) := not v_addr(addr_bit);
+      v_addr              := c_uart_status_addr;
+      v_addr(lv_addr_bit) := not v_addr(lv_addr_bit);
       check_read(v_addr, 0, "another address reads zero");
 
-    end loop;
+    end loop loop_addr_bit;
 
     -- --- Test 3: Wait for TX to finish (max 10000 cycles) ---
-    for dummy in 1 to 10000 loop
+    loop_dummy_3 : for lv_dummy in 1 to 10000 loop
 
       wait until rising_edge(tb_clk);
 
@@ -213,7 +217,7 @@ architecture rtl of tb_uart is
         exit;
       end if;
 
-    end loop;
+    end loop loop_dummy_3;
 
     check(uart_busy = '0', "UART idle after TX complete");
     wait until rising_edge(tb_clk);
@@ -228,7 +232,7 @@ architecture rtl of tb_uart is
     check_equal(start_width, c_bit_time, "434 clocks per bit: 115200 baud from 50 MHz");
 
     -- --- Test 4: A write one address bit away, or to the CAN mailbox, is ignored ---
-    for addr_bit in 0 to 32 loop
+    loop_addr_bit_2 : for lv_addr_bit in 0 to 32 loop
 
       bus_i <=
       (
@@ -239,9 +243,9 @@ architecture rtl of tb_uart is
         sel   => "1111"
       );
 
-      if (addr_bit < 32) then
-        bus_i.addr           <= c_uart_tx_data_addr;
-        bus_i.addr(addr_bit) <= not c_uart_tx_data_addr(addr_bit);
+      if (lv_addr_bit < 32) then
+        bus_i.addr              <= c_uart_tx_data_addr;
+        bus_i.addr(lv_addr_bit) <= not c_uart_tx_data_addr(lv_addr_bit);
       end if;
 
       wait until rising_edge(tb_clk);
@@ -251,27 +255,27 @@ architecture rtl of tb_uart is
       wait until rising_edge(tb_clk);
       check(uart_busy = '0', "no TX from another address");
 
-    end loop;
+    end loop loop_addr_bit_2;
 
     -- --- Test 5: Reads answer only at their own addresses ---
     check_read(c_uart_tx_data_addr, 0, "TX_DATA is write only");
 
-    for addr_bit in 0 to 31 loop
+    loop_addr_bit_3 : for lv_addr_bit in 0 to 31 loop
 
-      v_addr           := c_uart_parity_addr;
-      v_addr(addr_bit) := not v_addr(addr_bit);
+      v_addr              := c_uart_parity_addr;
+      v_addr(lv_addr_bit) := not v_addr(lv_addr_bit);
       check_read(v_addr, 0, "another address reads zero");
 
-    end loop;
+    end loop loop_addr_bit_3;
 
     bus_ok <= '0';
     check_read(c_uart_parity_addr, 0, "gate low reads zero");
     bus_ok <= '1';
 
     -- --- Test 6: Every data bit reaches the pin, with the right parity ---
-    for pattern in 0 to 5 loop
+    loop_pattern : for lv_pattern in 0 to 5 loop
 
-      v_data      := c_patterns(pattern);
+      v_data      := c_patterns(lv_pattern);
       bus_i       <=
       (
         addr  => c_uart_tx_data_addr,
@@ -282,14 +286,14 @@ architecture rtl of tb_uart is
       );
       wait until rising_edge(tb_clk);
       bus_i.valid <= '0';
-      wait until rx_count = pattern + 2 for c_bit_time * 13;
-      check_equal(rx_count, pattern + 2, "frame on uart_tx");
+      wait until rx_count = lv_pattern + 2 for c_bit_time * 13;
+      check_equal(rx_count, lv_pattern + 2, "frame on uart_tx");
       check_equal(rx_byte, v_data, "data bits on uart_tx");
       check_equal(rx_parity, xor v_data, "even parity on uart_tx");
       check_equal(rx_stop, '1', "stop bit on uart_tx");
       wait for c_bit_time;
 
-    end loop;
+    end loop loop_pattern;
 
     -- --- Test 7: A store has to include byte 0, where the data is ---
     bus_i       <=

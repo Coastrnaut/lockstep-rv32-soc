@@ -47,7 +47,7 @@ begin
 
   end process p_clk;
 
-  dut : entity lockstep.temporal_diversity
+  i_dut : entity lockstep.temporal_diversity
     port map (
       clk_i        => clk,
       core_a_bus_i => bus_in,
@@ -72,11 +72,11 @@ begin
     test_runner_setup(runner, runner_cfg);
     v_random.InitSeed(tb_temporal_diversity'instance_name);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       if run("both_lines_are_exactly_two_clocks_long") then
 
-        for clock in 0 to c_clocks - 1 loop
+        loop_clock : for lv_clock in 0 to c_clocks - 1 loop
 
           v_flags := v_random.RandSlv(7);
 
@@ -105,7 +105,7 @@ begin
           v_bus(c_skew)    := bus_in;
           v_inputs(c_skew) := core_in;
 
-          if (clock >= c_skew) then
+          if (lv_clock >= c_skew) then
             check(bus_out = v_bus(0), "bus");
             check(core_out = v_inputs(0), "inputs");
           end if;
@@ -113,11 +113,11 @@ begin
           v_bus(0 to c_skew - 1)    := v_bus(1 to c_skew);
           v_inputs(0 to c_skew - 1) := v_inputs(1 to c_skew);
 
-        end loop;
+        end loop loop_clock;
 
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

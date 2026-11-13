@@ -28,9 +28,10 @@ package package_soc_types is
   -- ------------------------------------------------------------------------
 
   type t_rv_bus is record
-    addr  : std_logic_vector(C_ADDR_WIDTH - 1 downto 0);
-    data  : std_logic_vector(C_DATA_WIDTH - 1 downto 0);
-    sel   : std_logic_vector(3 downto 0); -- Byte enables: 1111 is a word store
+    addr : std_logic_vector(C_ADDR_WIDTH - 1 downto 0);
+    data : std_logic_vector(C_DATA_WIDTH - 1 downto 0);
+    -- Byte enables: 1111 is a word store
+    sel   : std_logic_vector(3 downto 0);
     we    : std_logic;
     valid : std_logic;
   end record t_rv_bus;
@@ -90,8 +91,11 @@ package package_soc_types is
 
   subtype t_safe_state is std_logic_vector(7 downto 0);
 
-  constant st_system_ok     : t_safe_state := x"5A"; -- "01011010"
-  constant st_fault_tripped : t_safe_state := x"A5"; -- "10100101"
+  -- "01011010"
+  constant st_system_ok : t_safe_state := x"5A";
+
+  -- "10100101"
+  constant st_fault_tripped : t_safe_state := x"A5";
 
   -- ------------------------------------------------------------------------
   -- Watchdog Timing Constants
@@ -142,6 +146,7 @@ package package_soc_types is
   constant c_uart_tx_data_addr   : std_logic_vector(c_addr_width - 1 downto 0) := x"40000400";
   constant c_uart_status_addr    : std_logic_vector(c_addr_width - 1 downto 0) := x"40000404";
   constant c_uart_parity_addr    : std_logic_vector(c_addr_width - 1 downto 0) := x"40000408";
+
 -- END GENERATED
 
 end package package_soc_types;

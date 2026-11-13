@@ -57,7 +57,7 @@ begin
   clk   <= '0';
   rst_n <= '1';
 
-  dut : entity lockstep.hamming_ecc_wrapper
+  i_dut : entity lockstep.hamming_ecc_wrapper
     port map (
       clk_i           => clk,
       rst_n_i         => rst_n,
@@ -112,36 +112,36 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       if run("clean_words_read_back_with_no_error") then
 
-        for value in c_values'range loop
+        loop_value : for lv_value in c_values'range loop
 
-          encode(c_values(value));
+          encode(c_values(lv_value));
           decode(v_code);
-          check_equal(corrected, c_values(value), "data");
+          check_equal(corrected, c_values(lv_value), "data");
           check_equal(sbe, '0', "no single-bit error");
           check_equal(dbe, '0', "no double-bit error");
 
-        end loop;
+        end loop loop_value;
 
       elsif run("every_single_bit_flip_is_corrected") then
 
-        for value in c_values'range loop
+        loop_value_2 : for lv_value in c_values'range loop
 
-          for bit_a in 0 to c_code_width - 1 loop
+          loop_bit_a : for lv_bit_a in 0 to c_code_width - 1 loop
 
-            encode(c_values(value));
-            flip(v_code, bit_a);
+            encode(c_values(lv_value));
+            flip(v_code, lv_bit_a);
             decode(v_code);
-            check_equal(corrected, c_values(value), "data after flipping bit " & integer'image(bit_a));
-            check_equal(sbe, '1', "reported after flipping bit " & integer'image(bit_a));
-            check_equal(dbe, '0', "not fatal after flipping bit " & integer'image(bit_a));
+            check_equal(corrected, c_values(lv_value), "data after flipping bit " & integer'image(lv_bit_a));
+            check_equal(sbe, '1', "reported after flipping bit " & integer'image(lv_bit_a));
+            check_equal(dbe, '0', "not fatal after flipping bit " & integer'image(lv_bit_a));
 
-          end loop;
+          end loop loop_bit_a;
 
-        end loop;
+        end loop loop_value_2;
 
       elsif run("three_flips_that_name_no_bit_are_fatal") then
         -- Check bits at positions 1, 8 and 64 leave a syndrome of 73, and the
@@ -155,33 +155,33 @@ begin
         check_equal(sbe, '0', "not corrected");
       elsif run("every_double_bit_flip_is_reported") then
 
-        for value in c_values'range loop
+        loop_value_3 : for lv_value in c_values'range loop
 
-          encode(c_values(value));
+          encode(c_values(lv_value));
 
-          for bit_a in 0 to c_code_width - 2 loop
+          loop_bit_a_2 : for lv_bit_a in 0 to c_code_width - 2 loop
 
-            for bit_b in bit_a + 1 to c_code_width - 1 loop
+            loop_bit_b : for lv_bit_b in lv_bit_a + 1 to c_code_width - 1 loop
 
-              flip(v_code, bit_a);
-              flip(v_code, bit_b);
+              flip(v_code, lv_bit_a);
+              flip(v_code, lv_bit_b);
               decode(v_code);
-              check_equal(dbe, '1', "fatal after flipping bits " & integer'image(bit_a) & " and " &
-                          integer'image(bit_b));
-              check_equal(sbe, '0', "not corrected after flipping bits " & integer'image(bit_a) & " and " &
-                          integer'image(bit_b));
-              flip(v_code, bit_a);
-              flip(v_code, bit_b);
+              check_equal(dbe, '1', "fatal after flipping bits " & integer'image(lv_bit_a) & " and " &
+                          integer'image(lv_bit_b));
+              check_equal(sbe, '0', "not corrected after flipping bits " & integer'image(lv_bit_a) & " and " &
+                          integer'image(lv_bit_b));
+              flip(v_code, lv_bit_a);
+              flip(v_code, lv_bit_b);
 
-            end loop;
+            end loop loop_bit_b;
 
-          end loop;
+          end loop loop_bit_a_2;
 
-        end loop;
+        end loop loop_value_3;
 
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

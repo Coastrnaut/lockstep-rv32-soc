@@ -22,9 +22,9 @@ library neorv32;
 entity lockstep_core is
   generic (
     -- NEORV32 boot source: 0 = bootloader, 1 = custom address, 2 = IMEM image
-    boot_mode_select : natural range 0 to 2 := 0;
+    g_boot_mode : natural range 0 to 2 := 0;
     -- Execution trace port, for verification only (roadmap R2.2)
-    trace_port_en : boolean := false
+    g_trace_en : boolean := false
   );
   port (
     clk_i  : in    std_ulogic;
@@ -56,15 +56,17 @@ architecture structural of lockstep_core is
 
 begin
 
+  -- NEORV32's own generic names, which this repository's g_ prefix cannot apply to
+  -- vsg_off generic_map_601
   i_neorv32 : entity neorv32.neorv32_top
     generic map (
       -- General
       clock_frequency => 50_000_000,
-      trace_port_en   => trace_port_en,
+      trace_port_en   => g_trace_en,
       dual_core_en    => false,
 
       -- Boot
-      boot_mode_select => boot_mode_select,
+      boot_mode_select => g_boot_mode,
       boot_addr_custom => x"00000000",
 
       -- OCD
@@ -220,6 +222,7 @@ begin
       io_tracer_buffer    => 1,
       io_tracer_simlog_en => false
     )
+    -- vsg_on generic_map_601
     port map (
       -- Global
       clk_i      => clk_i,

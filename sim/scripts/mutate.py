@@ -185,7 +185,7 @@ MUTANTS = [
     ("top: core B gets no read data", TOP, [(r"xbus_dat_i => w_core_b_in\.rdata", "xbus_dat_i => (others => '0')")]),
     ("top: UART read data dropped", FAB, [(r"w_rdata <= uart_rdata_i;", "w_rdata <= (others => '0');")]),
     ("top: CAN read data dropped", FAB, [(r"w_rdata <= can_rdata_i;", "w_rdata <= (others => '0');")]),
-    ("top: checker core boots elsewhere", TOP, [(r"(boot_mode_select => g_boot_mode.*?)boot_mode_select => g_boot_mode", r"\1boot_mode_select => 0")]),
+    ("top: checker core boots elsewhere", TOP, [(r"(g_boot_mode => g_boot_mode.*?)g_boot_mode => g_boot_mode", r"\1g_boot_mode => 0")]),
 
     # --- Byte enables, and each field the comparator checks
     ("sel: comparator ignores byte enables", LOCK, [(r"\(core_a_bus_i\.sel /= core_b_bus_i\.sel\)", "(false and core_a_bus_i.sel /= core_b_bus_i.sel)")]),
@@ -202,9 +202,9 @@ MUTANTS = [
 
     # --- UART serialiser
     ("uart: shift register does not shift", UART, [(r"r_tx_shift <= '1' & r_tx_shift\(10 downto 1\);", "r_tx_shift <= r_tx_shift(10 downto 1) & '1';")]),
-    ("uart: stop bit not loaded", UART, [(r"r_tx_shift\(10\)\s+<= '1';\s+-- stop bit", "")]),
+    ("uart: stop bit not loaded", UART, [(r"-- stop bit\s+r_tx_shift\(10\)\s+<= '1';", "")]),
     ("uart: parity sent inverted", UART, [(r"r_tx_shift\(9\)\s+<= r_tx_parity;", "r_tx_shift(9) <= not r_tx_parity;")]),
-    ("uart: start bit recessive", UART, [(r"r_tx_shift\(0\)\s+<= '0';\s+-- start bit", "r_tx_shift(0) <= '1';")]),
+    ("uart: start bit recessive", UART, [(r"-- start bit\s+r_tx_shift\(0\) <= '0';", "r_tx_shift(0) <= '1';")]),
     ("uart: bit one clock long", UART, [(r"if \(r_baud_cnt >= c_baud_div - 1\) then", "if (r_baud_cnt >= c_baud_div) then")]),
     ("uart: one bit too few", UART, [(r'r_tx_bits\s+<= "1010";', 'r_tx_bits <= "1001";')]),
 
@@ -290,9 +290,9 @@ MUTANTS = [
     ("ecc: a flipped P7 goes unreported", ECC, [(r"(elsif \(\(unsigned\(v_syndrome\) and \(unsigned\(v_syndrome\) - 1\)\) = 0\) then.*?)w_sbe <= '1';", r"\1null;")]),
     ("ecc: double flips not fatal", ECC, [(r"if \(v_syndrome /= \"0000000\"\) then\s+w_dbe <= '1';", "if (v_syndrome /= \"0000000\") then\n        null;")]),
     ("ecc: three flips not fatal", ECC, [(r"(which takes three or more flips\s+)w_dbe <= '1';", r"\1null;")]),
-    ("ecc: located bit not flipped", ECC, [(r"w_corrected_data\(j\) <= not data_rd_i\(j\);", "w_corrected_data(j) <= data_rd_i(j);")]),
-    ("ecc: correction still fatal", ECC, [(r"w_sbe               <= '1';\s+w_dbe               <= '0';", "w_sbe               <= '1';")]),
-    ("ecc: P7 misses the check bits", ECC, [(r"for i in 0 to 6 loop\s+if \(v_parity\(i\) = '1'\) then\s+v_parity_count := v_parity_count \+ 1;\s+end if;\s+end loop;", "")]),
+    ("ecc: located bit not flipped", ECC, [(r"w_corrected_data\(lv_j\) <= not data_rd_i\(lv_j\);", "w_corrected_data(lv_j) <= data_rd_i(lv_j);")]),
+    ("ecc: correction still fatal", ECC, [(r"w_sbe\s+<= '1';\s+w_dbe\s+<= '0';", "w_sbe <= '1';")]),
+    ("ecc: P7 misses the check bits", ECC, [(r"loop_i_3 : for lv_i in 0 to 6 loop\s+if \(v_parity\(lv_i\) = '1'\) then\s+v_parity_count := v_parity_count \+ 1;\s+end if;\s+end loop loop_i_3;", "")]),
     ("ecc: top check bit stuck low", ECC, [(r"ecc_o\(6 downto 0\) <= v_parity;", "ecc_o(6 downto 0) <= '0' & v_parity(5 downto 0);")]),
 
     # --- ECC protected RAM
@@ -302,7 +302,7 @@ MUTANTS = [
     ("ram: access ignores the gate", RAM, [(r"w_selected <= '1' when \(bus_ok_i = '1' and ", "w_selected <= '1' when (")]),
     ("ram: store lands when the gate closes", RAM, [(r"w_commit <= '1' when \(r_write = '1' and bus_ok_i = '1' and w_dbe = '0'", "w_commit <= '1' when (r_write = '1' and w_dbe = '0'")]),
     ("ram: store writes over an uncorrectable word", RAM, [(r"w_commit <= '1' when \(r_write = '1' and bus_ok_i = '1' and w_dbe = '0'", "w_commit <= '1' when (r_write = '1' and bus_ok_i = '1'")]),
-    ("ram: byte enables ignored", RAM, [(r"if \(r_write = '1' and r_sel\(i\) = '1'\) then", "if (r_write = '1') then")]),
+    ("ram: byte enables ignored", RAM, [(r"if \(r_write = '1' and r_sel\(lv_i\) = '1'\) then", "if (r_write = '1') then")]),
     ("ram: stores go to the wrong half", RAM, [(r"if \(r_upper = '1'\) then\s+v_low := v_low \+ 32;", "if (r_upper = '0') then\n        v_low := v_low + 32;")]),
     ("ram: loads come from the wrong half", RAM, [(r"w_corrected\(63 downto 32\) when \(r_upper = '1'\) else", "w_corrected(63 downto 32) when (r_upper = '0') else")]),
     ("ram: loads are not corrected", RAM, [(r"w_corrected\(63 downto 32\) when \(r_upper = '1'\) else\s+w_corrected\(31 downto 0\);", "r_word(63 downto 32) when (r_upper = '1') else r_word(31 downto 0);")]),
@@ -361,8 +361,8 @@ MUTANTS = [
     ("bus: ACK with ERR", FAB, [(r"w_ack <= '1' when \(r_pending = '1' and rst_n_i = '1' and w_err = '0'\) else", "w_ack <= '1' when (r_pending = '1' and rst_n_i = '1') else")]),
     ("bus: read data from every slave", FAB, [(r"w_rdata <= \(others => '0'\);\n\n    if \(w_ack = '1' and r_we = '0'\) then", "w_rdata <= ram_rdata_i or wd_rdata_i or can_rdata_i or uart_rdata_i;\n\n    if (false) then")]),
     ("bus: a reset does not stop the response", FAB, [(r"w_ack <= '1' when \(r_pending = '1' and rst_n_i = '1' and", "w_ack <= '1' when (r_pending = '1' and")]),
-    ("bus: decode ignores the top address bit", FAB, [(r"addr\(c_addr_width - 1 downto 2\) = regs\(i\)\(c_addr_width - 1 downto 2\)", "addr(c_addr_width - 2 downto 2) = regs(i)(c_addr_width - 2 downto 2)")]),
-    ("bus: decode ignores bits above the window", FAB, [(r"addr\(c_addr_width - 1 downto 2\) = regs\(i\)\(c_addr_width - 1 downto 2\)", "addr(11 downto 2) = regs(i)(11 downto 2)")]),
+    ("bus: decode ignores the top address bit", FAB, [(r"addr\(c_addr_width - 1 downto 2\) = regs\(lv_i\)\(c_addr_width - 1 downto 2\)", "addr(c_addr_width - 2 downto 2) = regs(lv_i)(c_addr_width - 2 downto 2)")]),
+    ("bus: decode ignores bits above the window", FAB, [(r"addr\(c_addr_width - 1 downto 2\) = regs\(lv_i\)\(c_addr_width - 1 downto 2\)", "addr(11 downto 2) = regs(lv_i)(11 downto 2)")]),
     ("bus: RAM decoded half size", FAB, [(r"addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\) =\s+c_ram_base_addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\)", "addr(c_addr_width - 1 downto g_ram_addr_bits + 2) = c_ram_base_addr(c_addr_width - 1 downto g_ram_addr_bits + 2)")]),
     ("bus: RAM decoded double size", FAB, [(r"addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\) =\s+c_ram_base_addr\(c_addr_width - 1 downto g_ram_addr_bits \+ 3\)", "addr(c_addr_width - 1 downto g_ram_addr_bits + 4) = c_ram_base_addr(c_addr_width - 1 downto g_ram_addr_bits + 4)")]),
     ("bus: target not captured with the request", FAB, [(r"r_target  <= decode\(bus_i\.addr\);", "null;")]),

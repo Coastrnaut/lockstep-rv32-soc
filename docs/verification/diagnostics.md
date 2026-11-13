@@ -52,8 +52,8 @@ once per drive cycle.
 ## Shortening it: options
 
 Resource figures are Yosys `synth_xilinx` estimates for 7-series, with FSM
-extraction off, from GHDL's netlist. Vivado has no devices installed here, so
-these are not Vivado numbers. They are close enough to compare the options.
+extraction off, from GHDL's netlist. Vivado cannot target the board here (its
+licence offers no parts), so these are not Vivado numbers. They are close enough to compare the options.
 
 | Block | LUTs | Flip-flops |
 |-------|------|------------|

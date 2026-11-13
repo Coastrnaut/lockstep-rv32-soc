@@ -148,12 +148,12 @@ begin
     wait until uart_tx = '0';
     wait for c_uart_bit_time / 2;
 
-    for i in 0 to 7 loop
+    loop_i : for lv_i in 0 to 7 loop
 
       wait for c_uart_bit_time;
-      v_byte(i) := uart_tx;
+      v_byte(lv_i) := uart_tx;
 
-    end loop;
+    end loop loop_i;
 
     wait for c_uart_bit_time * 2;
     uart_log(uart_count + 1) <= v_byte;
@@ -228,12 +228,12 @@ begin
 
       v_found := false;
 
-      while not v_found loop
+      loop_while : while not v_found loop
 
         wait until rising_edge(clk);
         v_found := sys_bus.valid = '1' and sys_bus.we = we and sys_bus.addr = addr;
 
-      end loop;
+      end loop loop_while;
 
     end procedure wait_for_request;
 
@@ -256,7 +256,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while_2 : while test_suite loop
 
       rst_n <= '0';
       wait for c_clk_period * 5;
@@ -301,7 +301,8 @@ begin
         -- reads it first: still zero, so the dropped store never landed.
         wait_for_request(x"20000008", '1');
         wait for 1 ns;
-        check_equal(ram_word(31 downto 0), std_logic_vector'(x"00000000"), "the store caught by the reset never landed");
+        check_equal(ram_word(31 downto 0), std_logic_vector'(x"00000000"),
+                    "the store caught by the reset never landed");
 
         -- '0' from each start, then 'M': the program's RAM test passed
         check_uart_byte(2, x"30");
@@ -309,7 +310,7 @@ begin
         check_equal(nmi_fault, '0', "a warm reset is not a fault");
       end if;
 
-    end loop;
+    end loop loop_while_2;
 
     test_runner_cleanup(runner);
 

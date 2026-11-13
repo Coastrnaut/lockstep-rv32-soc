@@ -20,9 +20,9 @@ end entity tb_fsm_illegal_recovery;
 
 architecture tb of tb_fsm_illegal_recovery is
 
-  constant clk_period     : time     := 20 ns;
+  constant c_clk_period   : time     := 20 ns;
   constant c_clks_per_bit : positive := 8;
-  constant c_bit_time     : time     := clk_period * c_clks_per_bit;
+  constant c_bit_time     : time     := c_clk_period * c_clks_per_bit;
 
   -- A whole frame, plus the 11 recessive bits that come before it
   constant c_max_frame_time : time := c_bit_time * (c_max_frame_bits + 11);
@@ -44,12 +44,12 @@ architecture tb of tb_fsm_illegal_recovery is
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    clk <= '0', '1' after clk_period / 2;
-    wait for clk_period;
+    clk <= '0', '1' after c_clk_period / 2;
+    wait for c_clk_period;
 
   end process p_clk;
 
-  uut : entity lockstep.automotive_can_controller
+  i_uut : entity lockstep.automotive_can_controller
     generic map (
       g_clks_per_bit => c_clks_per_bit
     )
@@ -88,14 +88,14 @@ architecture tb of tb_fsm_illegal_recovery is
     bus_ok <= '1';
     wait for 100 ns;
     rst_n  <= '1';
-    wait for clk_period * 2;
+    wait for c_clk_period * 2;
 
     -- TEST 1: Normal TX baseline (DLC=0)
     report "TEST: Normal CAN TX baseline";
     bus_i       <= (addr => c_can_tx_request_addr, data => x"00000000", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     bus_i.valid <= '0';
-    wait for clk_period * 10;
+    wait for c_clk_period * 10;
     check(can_busy = '1', "baseline: frame in progress");
     wait for c_max_frame_time;
     check(can_busy = '0', "baseline: idle after tx");
@@ -105,42 +105,42 @@ architecture tb of tb_fsm_illegal_recovery is
     bus_i       <= (addr => c_can_tx_request_addr, data => x"00000000", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     bus_i.valid <= '0';
-    wait for clk_period * 10;
+    wait for c_clk_period * 10;
     check(can_busy = '1', "bus conflict: frame in progress");
     bus_ok      <= '0';
     wait until rising_edge(clk);
     bus_ok      <= '1';
-    wait for clk_period * 2;
+    wait for c_clk_period * 2;
     check(can_busy = '0', "bus conflict: recovered to idle");
 
     -- TEST 3: Rapid bus_ok toggle
     report "TEST: Rapid bus_ok toggle";
 
-    for dummy in 0 to 4 loop
+    loop_dummy : for lv_dummy in 0 to 4 loop
 
       bus_i       <= (addr => c_can_tx_request_addr, data => x"00000000", we => '1', valid => '1', sel => "1111");
       wait until rising_edge(clk);
       bus_i.valid <= '0';
-      wait for clk_period * 10;
+      wait for c_clk_period * 10;
       bus_ok      <= '0';
       wait until rising_edge(clk);
       bus_ok      <= '1';
-      wait for clk_period * 2;
+      wait for c_clk_period * 2;
       check(can_busy = '0', "rapid toggle: recovered");
 
-    end loop;
+    end loop loop_dummy;
 
     -- TEST 4: Bus held invalid during TX
     report "TEST: Bus invalid during TX";
     bus_i       <= (addr => c_can_tx_request_addr, data => x"00000000", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     bus_i.valid <= '0';
-    wait for clk_period * 10;
+    wait for c_clk_period * 10;
     bus_ok      <= '0';
-    wait for clk_period * 10;
+    wait for c_clk_period * 10;
     check(can_busy = '0', "bus invalid: frame abandoned");
     bus_ok      <= '1';
-    wait for clk_period * 10;
+    wait for c_clk_period * 10;
     check(can_busy = '0', "bus invalid: recovered");
 
     -- TEST 5: Dominant bus traffic during TX is a bit error, and the frame is sent again

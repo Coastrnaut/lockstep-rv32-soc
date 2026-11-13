@@ -22,8 +22,10 @@ entity lockstep_comparator is
     -- --------------------------------------------------------------------
     -- Clock & Reset Domain (Rule 1.1, 1.2, 1.4)
     -- --------------------------------------------------------------------
-    clk_i       : in    std_logic; -- Global system clock
-    rst_n_syn_i : in    std_logic; -- Synchronously de-asserted reset
+    -- Global system clock
+    clk_i : in    std_logic;
+    -- Synchronously de-asserted reset
+    rst_n_syn_i : in    std_logic;
 
     -- --------------------------------------------------------------------
     -- Core A Interface (Master Core)
@@ -44,10 +46,14 @@ entity lockstep_comparator is
     -- --------------------------------------------------------------------
     -- Safety Supervisor & Actuator Intercept
     -- --------------------------------------------------------------------
-    nmi_fault_o  : out   std_logic; -- Fault now or latched: follows the compare at once
-    fault_o      : out   std_logic; -- Fault latched: from registers only, for pins and MEI
-    safe_state_o : out   std_logic; -- Force vehicle actuators to safe mode
-    bus_valid_o  : out   std_logic; -- Hardware transaction validation gate
+    -- Fault now or latched: follows the compare at once
+    nmi_fault_o : out   std_logic;
+    -- Fault latched: from registers only, for pins and MEI
+    fault_o : out   std_logic;
+    -- Force vehicle actuators to safe mode
+    safe_state_o : out   std_logic;
+    -- Hardware transaction validation gate
+    bus_valid_o : out   std_logic;
 
     -- System Outputs (Only passes Master Core signals forward if safe)
     sys_bus_o : out   t_rv_bus

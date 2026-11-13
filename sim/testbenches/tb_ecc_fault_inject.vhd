@@ -34,23 +34,23 @@ architecture rtl of tb_ecc_fault_inject is
   signal s_sbe     : std_logic;
   signal s_dbe     : std_logic;
 
-  constant clk_half : time := 5 ns;begin
+  constant c_clk_half : time := 5 ns;begin
 
   -- Clock
-  clk_proc : process is
+  p_clk : process is
   begin
 
     s_clk <= '0';
-    wait for clk_half;
+    wait for c_clk_half;
 
-    loop
+    loop_forever : loop
 
       s_clk <= not s_clk;
-      wait for clk_half;
+      wait for c_clk_half;
 
-    end loop;
+    end loop loop_forever;
 
-  end process clk_proc;
+  end process p_clk;
 
   -- DUT
   i_ecc : entity lockstep.hamming_ecc_wrapper
@@ -67,7 +67,8 @@ architecture rtl of tb_ecc_fault_inject is
       sbe_corrected_o => s_sbe,
       dbe_fatal_o     => s_dbe
 
-    ); -- Stimulus
+    -- Stimulus
+    );
 
   p_stim : process is
 
@@ -111,7 +112,8 @@ architecture rtl of tb_ecc_fault_inject is
     check(s_dbe = '0', "No DBE on single bit-flip");
 
     -- --- Test 3: Read with bit-flip in data bit 0 (SBE) ---
-    s_data_rd <= x"0000000000000003";  -- bits 0 and 1 set (bit 0 flipped from 0x01)
+    -- bits 0 and 1 set (bit 0 flipped from 0x01)
+    s_data_rd <= x"0000000000000003";
     s_ecc_rd  <= v_good_ecc;
     s_rd_en   <= '1';
     wait until rising_edge(s_clk);

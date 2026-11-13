@@ -68,9 +68,15 @@ def main():
     r = subprocess.run(cmd, capture_output=True, text=True)
     log = r.stdout + r.stderr
     (out / "build_stdout.log").write_text(log, encoding="utf-8")
-    if "Could not get a valid part" in log or "No part matched" in log:
-        sys.exit(f"Vivado has no {PART}: add the Artix-7 devices with the AMD installer")
-    checks = re.findall(r"BUILD CHECK (OK|FAILED): (.*)", log)
+    if any(s in log for s in ("Could not get a valid part", "No part matched", "Invalid part specified")):
+        licence = re.search(r"INFO: \[Common 17-\d+\] (A valid .*license.*)", log)
+        sys.exit(f"Vivado lists no {PART}, so it cannot build for the board. The Artix-7 device files "
+                 f"may be installed and still not offered: Vivado offers only the parts its licence "
+                 f"covers" + (f" (it reported: {licence.group(1).strip()})" if licence else "") +
+                 ". Check get_parts in the Vivado Tcl console, and the licence manager.")
+    # Vivado echoes the Tcl source with a leading '#', so only lines that start with the
+    # message are results
+    checks = re.findall(r"^BUILD CHECK (OK|FAILED): (.*)$", log, re.M)
     for status, message in checks:
         print(f"[{status}] {message}")
     if r.returncode != 0 or "BUILD DONE" not in log:

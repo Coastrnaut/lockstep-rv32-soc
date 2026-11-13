@@ -17,26 +17,28 @@ end entity tb_soc_addr_boundary;
 
 architecture tb of tb_soc_addr_boundary is
 
-  signal   clk        : std_logic;
-  constant clk_per    : time := 10 ns;
-  signal   rst_n      : std_logic;
-  signal   core_a_bus : t_rv_bus;
-  signal   core_b_bus : t_rv_bus;
-  signal   safe_state : std_logic;
-  signal   nmi_fault  : std_logic;
-  signal   bus_valid  : std_logic;
-  signal   sys_bus    : t_rv_bus;begin
+  signal clk : std_logic;
+
+  constant c_clk_per : time := 10 ns;
+
+  signal rst_n      : std_logic;
+  signal core_a_bus : t_rv_bus;
+  signal core_b_bus : t_rv_bus;
+  signal safe_state : std_logic;
+  signal nmi_fault  : std_logic;
+  signal bus_valid  : std_logic;
+  signal sys_bus    : t_rv_bus;begin
 
   p_clk : process is
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    clk <= '0', '1' after clk_per / 2;
-    wait for clk_per;
+    clk <= '0', '1' after c_clk_per / 2;
+    wait for c_clk_per;
 
   end process p_clk;
 
-  u_dut : entity lockstep.lockstep_comparator
+  i_dut : entity lockstep.lockstep_comparator
     port map (
       clk_i         => clk,
       rst_n_syn_i   => rst_n,
@@ -48,7 +50,7 @@ architecture tb of tb_soc_addr_boundary is
       bus_valid_o   => bus_valid,
       sys_bus_o     => sys_bus
 
-    );test_proc : process is
+    );p_test : process is
   begin
 
     test_runner_setup(runner, runner_cfg);
@@ -78,8 +80,8 @@ architecture tb of tb_soc_addr_boundary is
     core_b_bus.data  <= x"11111111";
     core_b_bus.we    <= '1';
     core_b_bus.valid <= '1';
-    wait for clk_per;
-    wait for clk_per;
+    wait for c_clk_per;
+    wait for c_clk_per;
     check(safe_state = '0', "TEST1: min addr match");
     check(bus_valid = '1', "TEST1: bus valid");
 
@@ -92,8 +94,8 @@ architecture tb of tb_soc_addr_boundary is
     core_b_bus.data  <= x"22222222";
     core_b_bus.we    <= '0';
     core_b_bus.valid <= '1';
-    wait for clk_per;
-    wait for clk_per;
+    wait for c_clk_per;
+    wait for c_clk_per;
     check(safe_state = '0', "TEST2: max addr match");
 
     -- TEST 3: Address mismatch -> fault
@@ -105,8 +107,8 @@ architecture tb of tb_soc_addr_boundary is
     core_b_bus.data  <= x"33333333";
     core_b_bus.we    <= '1';
     core_b_bus.valid <= '1';
-    wait for clk_per;
-    wait for clk_per;
+    wait for c_clk_per;
+    wait for c_clk_per;
     check(safe_state = '1', "TEST3: addr mismatch fault");
     check(nmi_fault = '1', "TEST3: NMI fires");
 
@@ -119,8 +121,8 @@ architecture tb of tb_soc_addr_boundary is
     core_b_bus.data  <= x"BBBBBBBB";
     core_b_bus.we    <= '0';
     core_b_bus.valid <= '1';
-    wait for clk_per;
-    wait for clk_per;
+    wait for c_clk_per;
+    wait for c_clk_per;
     check(safe_state = '1', "TEST4: data mismatch fault");
 
     -- TEST 5: Valid deasserted -> fault latched
@@ -132,8 +134,8 @@ architecture tb of tb_soc_addr_boundary is
     core_b_bus.data  <= x"DDDDDDDD";
     core_b_bus.we    <= '1';
     core_b_bus.valid <= '0';
-    wait for clk_per;
-    wait for clk_per;
+    wait for c_clk_per;
+    wait for c_clk_per;
     check(safe_state = '1', "TEST5: fault latched");
 
     -- TEST 6: Reset clears fault
@@ -146,8 +148,8 @@ architecture tb of tb_soc_addr_boundary is
     core_b_bus.data  <= x"EEEEEEEE";
     core_b_bus.we    <= '1';
     core_b_bus.valid <= '1';
-    wait for clk_per;
-    wait for clk_per;
+    wait for c_clk_per;
+    wait for c_clk_per;
     rst_n            <= '0';
     wait for 10 ns;
     rst_n            <= '1';
@@ -163,8 +165,8 @@ architecture tb of tb_soc_addr_boundary is
     core_b_bus.data  <= x"00000000";
     core_b_bus.we    <= '1';
     core_b_bus.valid <= '1';
-    wait for clk_per;
-    wait for clk_per;
+    wait for c_clk_per;
+    wait for c_clk_per;
     check(safe_state = '0', "TEST7: zero data match");
 
     -- TEST 8: Max data match
@@ -176,13 +178,13 @@ architecture tb of tb_soc_addr_boundary is
     core_b_bus.data  <= x"FFFFFFFF";
     core_b_bus.we    <= '0';
     core_b_bus.valid <= '1';
-    wait for clk_per;
-    wait for clk_per;
+    wait for c_clk_per;
+    wait for c_clk_per;
     check(safe_state = '0', "TEST8: max data match");
 
     test_runner_cleanup(runner);
     wait for 100 ns;
 
-  end process test_proc;
+  end process p_test;
 
 end architecture tb;

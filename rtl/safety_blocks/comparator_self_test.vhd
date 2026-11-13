@@ -38,17 +38,21 @@ library lockstep;
 
 entity comparator_self_test is
   port (
-    clk_i   : in    std_logic;
-    rst_n_i : in    std_logic; -- Cold reset, synchronous to clk_i
+    clk_i : in    std_logic;
+    -- Cold reset, synchronous to clk_i
+    rst_n_i : in    std_logic;
 
     -- What the test does to the comparator
-    flip_bus_o    : out   t_rv_bus;  -- Bits to flip in core B's bus
+    -- Bits to flip in core B's bus
+    flip_bus_o    : out   t_rv_bus;
     fatal_fault_o : out   std_logic;
-    rst_n_o       : out   std_logic; -- The comparator's reset
+    -- The comparator's reset
+    rst_n_o : out   std_logic;
 
     -- What the comparator does about it
-    nmi_fault_i  : in    std_logic;
-    fault_i      : in    std_logic; -- The registered fault, which drives the pin
+    nmi_fault_i : in    std_logic;
+    -- The registered fault, which drives the pin
+    fault_i      : in    std_logic;
     safe_state_i : in    std_logic;
     bus_valid_i  : in    std_logic;
 

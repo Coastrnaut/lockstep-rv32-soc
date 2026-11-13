@@ -48,7 +48,7 @@ assessment would need.
 | VSG | 3.35.0 | Style | None that affect function | Not safety-relevant |
 | YoWASP Yosys, SymbiYosys, Z3 | 0.71, z3 5.4.1 | Formal proofs | A false proof | Broken-RTL runs check that each proof fails when it should (`run_formal.py --broken`); cover tasks show each antecedent is reachable |
 | Python generators | 3.11 (CI), 3.12 (local) | Firmware image, CAN reference frames, register map | A wrong fixture that the RTL then matches | Generators are independent of the RTL; `check_fixtures.py` checks they still match their outputs |
-| Vivado | Not yet run | Synthesis, place and route | Merged or re-encoded safety logic; timing | Build checks written; no build |
+| Vivado | 2026.1 | xvhdl and xelab on every file, xsim on the plain benches; synthesis, place and route | A second compiler's view of the RTL; merged or re-encoded safety logic; timing | Analysis, elaboration and the plain benches agree with GHDL (`docs/verification/toolchain.md`). Build checks written; no build: the installed licence offers no parts |
 
 ## Assumptions to settle with a target
 

@@ -56,9 +56,11 @@ entity ecc_data_ram is
     g_patrol : boolean := true
   );
   port (
-    clk_i       : in    std_logic;
-    rst_n_i     : in    std_logic; -- Cold reset, so the error counts outlast a watchdog reset
-    bus_rst_n_i : in    std_logic; -- Warm reset: drops an access in progress
+    clk_i : in    std_logic;
+    -- Cold reset, so the error counts outlast a watchdog reset
+    rst_n_i : in    std_logic;
+    -- Warm reset: drops an access in progress
+    bus_rst_n_i : in    std_logic;
 
     -- Internal bus from lockstep comparator
     bus_i    : in    t_rv_bus;
@@ -300,19 +302,19 @@ begin
 
     v_word := w_corrected;
 
-    for i in 0 to 3 loop
+    loop_i : for lv_i in 0 to 3 loop
 
-      v_low := i * 8;
+      v_low := lv_i * 8;
 
       if (r_upper = '1') then
         v_low := v_low + 32;
       end if;
 
-      if (r_write = '1' and r_sel(i) = '1') then
-        v_word(v_low + 7 downto v_low) := r_data(i * 8 + 7 downto i * 8);
+      if (r_write = '1' and r_sel(lv_i) = '1') then
+        v_word(v_low + 7 downto v_low) := r_data(lv_i * 8 + 7 downto lv_i * 8);
       end if;
 
-    end loop;
+    end loop loop_i;
 
     w_merged <= v_word;
 

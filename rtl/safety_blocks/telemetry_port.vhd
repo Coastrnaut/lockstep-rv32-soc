@@ -27,8 +27,9 @@ library lockstep;
 
 entity telemetry_port is
   port (
-    clk_i   : in    std_logic;
-    rst_n_i : in    std_logic; -- Cold reset
+    clk_i : in    std_logic;
+    -- Cold reset
+    rst_n_i : in    std_logic;
 
     -- What to send, sampled when chip select falls
     telemetry_i : in    t_telemetry;

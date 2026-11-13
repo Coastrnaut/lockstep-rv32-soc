@@ -22,9 +22,10 @@ end entity tb_soc_reset_timing;
 
 architecture tb of tb_soc_reset_timing is
 
-  constant clk_period : time := 20 ns;
-  signal   clk        : std_logic;
-  signal   rst_n      : std_logic;
+  constant c_clk_period : time := 20 ns;
+
+  signal clk   : std_logic;
+  signal rst_n : std_logic;
 
   signal core_a_bus : t_rv_bus;
   signal core_b_bus : t_rv_bus;
@@ -37,12 +38,12 @@ architecture tb of tb_soc_reset_timing is
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    clk <= '0', '1' after clk_period / 2;
-    wait for clk_period;
+    clk <= '0', '1' after c_clk_period / 2;
+    wait for c_clk_period;
 
   end process p_clk;
 
-  uut : entity lockstep.lockstep_comparator
+  i_uut : entity lockstep.lockstep_comparator
     port map (
       clk_i         => clk,
       rst_n_syn_i   => rst_n,
@@ -62,9 +63,9 @@ architecture tb of tb_soc_reset_timing is
     -- TEST 1: Asynchronous reset release
     report "TEST: Async reset release";
     rst_n <= '0';
-    wait for clk_period;
+    wait for c_clk_period;
     rst_n <= '1';
-    wait for clk_period / 2;
+    wait for c_clk_period / 2;
     wait until rising_edge(clk);
     wait until rising_edge(clk);
     wait until rising_edge(clk);
@@ -86,19 +87,19 @@ architecture tb of tb_soc_reset_timing is
     rst_n <= '0';
     wait for 5 ns;
     rst_n <= '1';
-    wait for clk_period * 3;
+    wait for c_clk_period * 3;
     check(safe_state = '0', "glitch: recovered");
 
     -- TEST 4: Multiple toggle during init
     report "TEST: Multiple reset toggles";
     rst_n <= '0';
-    wait for clk_period;
+    wait for c_clk_period;
     rst_n <= '1';
-    wait for clk_period;
+    wait for c_clk_period;
     rst_n <= '0';
-    wait for clk_period;
+    wait for c_clk_period;
     rst_n <= '1';
-    wait for clk_period * 2;
+    wait for c_clk_period * 2;
     check(safe_state = '0', "multi-toggle: ok");
 
     -- TEST 5: Reset during active transaction
@@ -107,9 +108,9 @@ architecture tb of tb_soc_reset_timing is
     core_b_bus       <= (addr => x"00001000", data => x"DEADBEEF", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     rst_n            <= '0';
-    wait for clk_period * 2;
+    wait for c_clk_period * 2;
     rst_n            <= '1';
-    wait for clk_period * 3;
+    wait for c_clk_period * 3;
     core_a_bus.valid <= '0';
     core_b_bus.valid <= '0';
     check(safe_state = '0', "reset-during-tx: ok");
@@ -117,9 +118,9 @@ architecture tb of tb_soc_reset_timing is
     -- TEST 6: Extended reset hold
     report "TEST: Extended reset hold";
     rst_n <= '0';
-    wait for clk_period * 2;
+    wait for c_clk_period * 2;
     rst_n <= '1';
-    wait for clk_period;
+    wait for c_clk_period;
     check(safe_state = '0', "extended hold: ok");
 
     test_runner_cleanup(runner);

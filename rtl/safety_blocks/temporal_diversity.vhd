@@ -74,12 +74,12 @@ begin
       r_bus(1)    <= core_a_bus_i;
       r_inputs(1) <= core_a_in_i;
 
-      for i in 2 to g_cycles loop
+      loop_i : for lv_i in 2 to g_cycles loop
 
-        r_bus(i)    <= r_bus(i - 1);
-        r_inputs(i) <= r_inputs(i - 1);
+        r_bus(lv_i)    <= r_bus(lv_i - 1);
+        r_inputs(lv_i) <= r_inputs(lv_i - 1);
 
-      end loop;
+      end loop loop_i;
 
     end if;
 

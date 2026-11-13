@@ -101,7 +101,7 @@ begin
 
   test_runner_watchdog(runner, 40 ms);
 
-  dut : entity lockstep.watchdog_supervisor
+  i_dut : entity lockstep.watchdog_supervisor
     port map (
       clk_i       => clk,
       rst_n_i     => rst_n,
@@ -124,9 +124,9 @@ begin
 
   p_stim : process is
 
-    alias wd_kick      is << signal dut.w_kick : std_logic >>;
-    alias wd_violation is << signal dut.w_violation : std_logic >>;
-    alias wd_counter   is << signal dut.i_watchdog.r_counter : unsigned(15 downto 0) >>;
+    alias wd_kick      is << signal i_dut.w_kick : std_logic >>;
+    alias wd_violation is << signal i_dut.w_violation : std_logic >>;
+    alias wd_counter   is << signal i_dut.i_watchdog.r_counter : unsigned(15 downto 0) >>;
 
     variable v_rdata     : std_logic_vector(31 downto 0);
     variable v_violation : std_logic;
@@ -151,11 +151,11 @@ begin
     ) is
     begin
 
-      for dummy in 1 to count loop
+      loop_dummy : for lv_dummy in 1 to count loop
 
         wait until rising_edge(wd_clk);
 
-      end loop;
+      end loop loop_dummy;
 
     end procedure wait_wd_clocks;
 
@@ -263,7 +263,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       bus_i      <= c_bus_idle;
       bus_ok     <= '1';
@@ -277,12 +277,12 @@ begin
 
         cold_reset;
 
-        for window in 1 to 3 loop
+        loop_window : for lv_window in 1 to 3 loop
 
           wait_wd_clocks(c_inside);
           kick;
 
-        end loop;
+        end loop loop_window;
 
         wait_wd_clocks(c_inside);
         check_equal(resets, 0, "no reset");
@@ -346,27 +346,27 @@ begin
         -- before the edge that samples it. Half periods of 7 and 13 ns drift
         -- against the 20 ns system clock, so the kick crosses at a different
         -- phase each time.
-        for ratio in c_ratios'range loop
+        loop_ratio : for lv_ratio in c_ratios'range loop
 
-          for boundary in c_boundaries'range loop
+          loop_boundary : for lv_boundary in c_boundaries'range loop
 
-            wd_half_ns <= c_ratios(ratio);
+            wd_half_ns <= c_ratios(lv_ratio);
             cold_reset;
             v_resets   := resets;
-            kick_sampled_at(c_boundaries(boundary));
+            kick_sampled_at(c_boundaries(lv_boundary));
 
-            if (c_boundaries(boundary) >= c_min) then
-              check_equal(v_violation, '0', "no violation sampled at " & integer'image(c_boundaries(boundary)));
+            if (c_boundaries(lv_boundary) >= c_min) then
+              check_equal(v_violation, '0', "no violation sampled at " & integer'image(c_boundaries(lv_boundary)));
               wait_wd_clocks(c_crossing);
-              check_equal(resets, v_resets, "no reset after a kick at " & integer'image(c_boundaries(boundary)));
+              check_equal(resets, v_resets, "no reset after a kick at " & integer'image(c_boundaries(lv_boundary)));
               check_reset_src(c_src_normal);
             else
-              check_equal(v_violation, '1', "violation sampled at " & integer'image(c_boundaries(boundary)));
+              check_equal(v_violation, '1', "violation sampled at " & integer'image(c_boundaries(lv_boundary)));
               wait_for_reset;
               check_reset_src(c_src_early);
             end if;
 
-          end loop;
+          end loop loop_boundary;
 
           -- No kick: the count reaching MAX is the timeout, reported as late
           cold_reset;
@@ -378,7 +378,7 @@ begin
           check_equal(sys_reset, '1', "timeout one clock after MAX-1");
           check_reset_src(c_src_late);
 
-        end loop;
+        end loop loop_ratio;
 
       elsif run("only_a_word_store_of_the_key_to_kick_counts") then
         cold_reset;
@@ -391,11 +391,11 @@ begin
         write_bus(x"40000300", x"0000DEAD");
         write_bus(x"C0000200", x"0000DEAD");
 
-        for pattern in 0 to 14 loop
+        loop_pattern : for lv_pattern in 0 to 14 loop
 
-          write_bus(c_wd_kick_addr, x"0000DEAD", std_logic_vector(to_unsigned(pattern, 4)));
+          write_bus(c_wd_kick_addr, x"0000DEAD", std_logic_vector(to_unsigned(lv_pattern, 4)));
 
-        end loop;
+        end loop loop_pattern;
 
         bus_ok <= '0';
         kick;
@@ -492,7 +492,7 @@ begin
         check_late_reset;
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

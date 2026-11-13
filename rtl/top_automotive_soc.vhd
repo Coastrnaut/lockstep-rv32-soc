@@ -37,8 +37,10 @@ entity top_automotive_soc is
     -- --------------------------------------------------------------------
     -- Global Clock and Reset System
     -- --------------------------------------------------------------------
-    clk_i   : in    std_logic; -- Main system clock string
-    rst_n_i : in    std_logic; -- External master hardware reset
+    -- Main system clock string
+    clk_i : in    std_logic;
+    -- External master hardware reset
+    rst_n_i : in    std_logic;
 
     -- Independent on-chip RC oscillator for the watchdog (Rule CD-03)
     wd_clk_i : in    std_logic;
@@ -46,15 +48,20 @@ entity top_automotive_soc is
     -- --------------------------------------------------------------------
     -- Functional Automotive Interfaces
     -- --------------------------------------------------------------------
-    can_tx_o  : out   std_logic; -- Hardened CAN-Bus transmission line
-    can_rx_i  : in    std_logic; -- Hardened CAN-Bus reception line
-    uart_tx_o : out   std_logic; -- Safe UART diagnostic output
+    -- Hardened CAN-Bus transmission line
+    can_tx_o : out   std_logic;
+    -- Hardened CAN-Bus reception line
+    can_rx_i : in    std_logic;
+    -- Safe UART diagnostic output
+    uart_tx_o : out   std_logic;
 
     -- --------------------------------------------------------------------
     -- Safety Supervisor & Actuator Isolation Pins
     -- --------------------------------------------------------------------
-    nmi_fault_o     : out   std_logic; -- Diagnostic non-maskable interrupt flag
-    actuator_safe_o : out   std_logic; -- Hardwired actuator lockdown control
+    -- Diagnostic non-maskable interrupt flag
+    nmi_fault_o : out   std_logic;
+    -- Hardwired actuator lockdown control
+    actuator_safe_o : out   std_logic;
 
     -- --------------------------------------------------------------------
     -- Read-only diagnostic port: the ECC first-fault record over SPI, for an
@@ -239,8 +246,8 @@ begin
   -- written once (rtl/lockstep_core.vhd) and cannot drift apart.
   i_cpu_master : entity lockstep.lockstep_core
     generic map (
-      boot_mode_select => g_boot_mode,
-      trace_port_en    => g_trace_en
+      g_boot_mode => g_boot_mode,
+      g_trace_en  => g_trace_en
     )
     port map (
       clk_i      => clk_i,
@@ -264,8 +271,8 @@ begin
   -- ========================================================================
   i_cpu_checker : entity lockstep.lockstep_core
     generic map (
-      boot_mode_select => g_boot_mode,
-      trace_port_en    => g_trace_en
+      g_boot_mode => g_boot_mode,
+      g_trace_en  => g_trace_en
     )
     port map (
       clk_i      => clk_i,
@@ -308,7 +315,8 @@ begin
       sys_bus_o   => w_safe_sys_bus,
       bus_valid_o => w_bus_valid
 
-    ); -- ========================================================================
+    -- ========================================================================
+    );
 
   -- 7. COMPARATOR SELF-TEST
   -- ========================================================================
@@ -353,7 +361,8 @@ begin
       can_status_o => open,
       can_irq_o    => w_can_irq
 
-    ); -- ========================================================================
+    -- ========================================================================
+    );
 
   -- 9. SAFE UART DIAGNOSTIC INTERFACE
   -- ========================================================================

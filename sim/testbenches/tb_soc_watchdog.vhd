@@ -87,12 +87,12 @@ begin
     -- This gives the stimulus time to say that the oscillator is dead
     wait for c_wd_clk_period;
 
-    while (not wd_dead) loop
+    loop_while : while (not wd_dead) loop
 
       wd_clk <= '0', '1' after c_wd_clk_period / 2;
       wait for c_wd_clk_period;
 
-    end loop;
+    end loop loop_while;
 
     wait;
 
@@ -144,12 +144,12 @@ begin
     wait until uart_tx = '0';
     wait for c_uart_bit_time / 2;
 
-    for i in 0 to 7 loop
+    loop_i : for lv_i in 0 to 7 loop
 
       wait for c_uart_bit_time;
-      v_byte(i) := uart_tx;
+      v_byte(lv_i) := uart_tx;
 
-    end loop;
+    end loop loop_i;
 
     wait for c_uart_bit_time * 2;
     uart_log(uart_count + 1) <= v_byte;
@@ -187,7 +187,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while_2 : while test_suite loop
 
       if run("program_kicks_in_the_window_then_times_out_then_kicks_early") then
         cold_reset;
@@ -260,7 +260,7 @@ begin
         check_equal(actuator_safe, '0', "no reset");
       end if;
 
-    end loop;
+    end loop loop_while_2;
 
     test_runner_cleanup(runner);
 

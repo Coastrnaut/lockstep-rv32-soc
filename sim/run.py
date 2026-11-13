@@ -10,8 +10,15 @@ from vunit import VUnit
 # ==============================================================================
 # Simulator: GHDL with the mcode backend, chosen in one place, in this order:
 #   1. VUNIT_GHDL_PATH, the directory holding the ghdl executable
-#   2. C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin, on Windows, if it exists
-#   3. ghdl on PATH
+#   2. on Windows, the first of these that exists:
+#      C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin, C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin
+#   3. ghdl on PATH (Linux and CI)
+#
+# Vivado: when Vivado is installed (VIVADO_BIN, XILINX_VIVADO, PATH or the default
+# install folders), the lint gates are followed by a Vivado stage
+# (sim/scripts/vivado_sim.py): every file analysed by xvhdl, the SoC elaborated
+# by xelab, and the plain-VHDL benches run on both xsim and GHDL. xsim cannot run
+# the VUnit benches themselves; vivado_sim.py says why.
 # Licensed simulators are not selected here. They need a job of their own,
 # with their own tool versions and evidence. The Python tools are pinned in
 # sim/requirements.txt. OSVVM is VUnit's bundled copy (vu.add_osvvm()): the
@@ -20,7 +27,10 @@ from vunit import VUnit
 # Usage, from sim/:
 #   python run.py --compile             # Compile only
 #   python run.py                       # Lint gates, then every test
-#   python run.py --lint | --vsg        # One lint gate only
+#   python run.py --lint | --vsg        # One lint gate only, then exit
+#   python run.py --vsg-fix             # Let vsg fix what it can, then exit
+#   python run.py --vivado              # The Vivado stage only, then exit
+#   LOCKSTEP_NO_VIVADO=1 python run.py  # Skip the Vivado stage
 #   python run.py "sim_lib.tb_soc_ecc.*" -p 4 --xunit-xml vunit_out/out.xml
 #   LOCKSTEP_NO_LINT=1 python run.py    # Skip the lint gates, as mutation runs do
 #
@@ -28,7 +38,7 @@ from vunit import VUnit
 # note below), so two runs from the same directory at once are not supported.
 # ==============================================================================
 
-_WINDOWS_GHDL = Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin")
+_WINDOWS_GHDL = [Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin"), Path(r"C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin")]
 
 
 # ---------------------------------------------------------------------------
@@ -57,8 +67,10 @@ def find_ghdl():
                 return explicit, str(exe)
         print(f"ERROR: VUNIT_GHDL_PATH={explicit} holds no ghdl executable.")
         sys.exit(1)
-    if os.name == "nt" and (_WINDOWS_GHDL / "ghdl.exe").is_file():
-        return str(_WINDOWS_GHDL), str(_WINDOWS_GHDL / "ghdl.exe")
+    if os.name == "nt":
+        for folder in _WINDOWS_GHDL:
+            if (folder / "ghdl.exe").is_file():
+                return str(folder), str(folder / "ghdl.exe")
     return None, _find_exe("ghdl")
 
 
@@ -66,14 +78,17 @@ def find_ghdl():
 # When neither is present, the full pipeline (lint → compile → test) runs.
 _lint_only = "--lint" in sys.argv
 _vsg_only = "--vsg" in sys.argv
-sys.argv = [a for a in sys.argv if a not in ("--lint", "--vsg")]
+_vsg_fix = "--vsg-fix" in sys.argv
+_vivado_only = "--vivado" in sys.argv
+sys.argv = [a for a in sys.argv if a not in ("--lint", "--vsg", "--vsg-fix", "--vivado")]
+_vsg_only = _vsg_only or _vsg_fix
 
 ghdl_dir, ghdl_exe = find_ghdl()
 if ghdl_exe is None and not _vsg_only:
     print("ERROR: GHDL not found. Set VUNIT_GHDL_PATH or put ghdl on PATH.")
     sys.exit(1)
 
-print(f"Using simulator: ghdl ({ghdl_exe})")
+print(f"Using simulator: {os.environ.get('VUNIT_SIMULATOR', 'ghdl')} (GHDL {ghdl_exe})")
 
 # ---------------------------------------------------------------------------
 # Configure VUnit for GHDL
@@ -122,7 +137,10 @@ def _fix_paths_sim(self, config, output_path, elaborate_only, ghdl_e, wave_file)
 GHDLInterface.compile_vhdl_file_command = _fix_paths_cmd
 GHDLInterface._get_command = _fix_paths_sim
 
-os.environ["VUNIT_SIMULATOR"] = "ghdl"
+# GHDL unless VUNIT_SIMULATOR names another simulator VUnit supports, such as
+# modelsim for Questa at sign-off. Only GHDL is tested here; the lint gates
+# always use GHDL.
+os.environ.setdefault("VUNIT_SIMULATOR", "ghdl")
 if ghdl_dir:
     os.environ["VUNIT_GHDL_PATH"] = ghdl_dir
 
@@ -302,33 +320,48 @@ def _run_ghdl_lint(ghdl_exe):
 # Catches: whitespace, indentation, keyword alignment, naming conventions.
 # Runs on our RTL + testbenches, skips NEORV32 (third-party).
 # ---------------------------------------------------------------------------
-def _run_vsg(vsg_exe):
-    """Run vsg on all our VHDL files (RTL + testbenches, excluding NEORV32)."""
-    # Collect our own VHDL files
-    our_files = []
-    our_files.extend(sorted((root / "config").glob("*.vhd")))
-    our_files.extend(sorted((root / "rtl" / "safety_blocks").glob("*.vhd")))
-    our_files.extend(sorted((root / "rtl" / "peripherals").glob("*.vhd")))
+def _vsg_file_sets():
+    """First-party VHDL in two sets: RTL, and the VUnit benches."""
+    rtl = []
+    rtl.extend(sorted((root / "config").glob("*.vhd")))
+    rtl.extend(sorted((root / "rtl" / "safety_blocks").glob("*.vhd")))
+    rtl.extend(sorted((root / "rtl" / "peripherals").glob("*.vhd")))
     for top in (root / "rtl" / "lockstep_core.vhd", root / "rtl" / "top_automotive_soc.vhd"):
         if top.exists():
-            our_files.append(top)
-    our_files.extend(sorted((root / "sim" / "testbenches").glob("*.vhd")))
+            rtl.append(top)
+    benches = sorted((root / "sim" / "testbenches").glob("*.vhd")) + sorted((root / "sim" / "portable").glob("*.vhd"))
+    return rtl, benches
 
-    if not our_files:
-        print("WARNING: No VHDL files found for VSG.")
-        return True
+
+def _run_vsg(vsg_exe, fix=False):
+    """Run vsg over every first-party VHDL file (not NEORV32).
+
+    sim/vsg_config.yaml enables every VSG rule (sim/scripts/vsg_config.py writes
+    it). The benches also read sim/vsg_testbench.yaml, which turns off the few
+    rules a VUnit bench cannot follow.
+    """
+    rtl, benches = _vsg_file_sets()
+    config = str(root / "sim" / "vsg_config.yaml")
+    bench_config = str(root / "sim" / "vsg_testbench.yaml")
 
     print(f"\n{'='*60}")
-    print(f"Style Lint: vsg")
-    print(f"Files: {len(our_files)}")
+    print("Style Lint: vsg" + (" --fix" if fix else ""))
+    print(f"Files: {len(rtl)} RTL, {len(benches)} benches")
     print(f"{'='*60}")
 
-    cmd = [vsg_exe, "-c", str(root / "sim" / "vsg_config.yaml"), "-ap"] + \
-          [str(f).replace("\\", "/") for f in our_files]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    if r.returncode != 0:
-        print(r.stdout)
-        print(f"\nVSG FAILED (exit {r.returncode}).")
+    ok = True
+    for files, configs in ((rtl, [config]), (benches, [config, bench_config])):
+        if not files:
+            continue
+        # vsg takes --fix or -ap (report every phase), not both
+        cmd = [vsg_exe, "-c"] + configs + (["--fix"] if fix else ["-ap"]) + ["-f"] + \
+              [str(f).replace("\\", "/") for f in files]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if r.returncode != 0:
+            print(r.stdout)
+            ok = False
+    if not ok:
+        print("\nVSG FAILED.")
         return False
 
     print("\nVSG passed — no style violations found.\n")
@@ -367,7 +400,7 @@ if _lint_only:
 
 if _vsg_only:
     if _vsg_exe:
-        if not _run_vsg(_vsg_exe):
+        if not _run_vsg(_vsg_exe, fix=_vsg_fix):
             sys.exit(1)
     else:
         print("ERROR: vsg not found.")
@@ -379,7 +412,7 @@ if _vsg_only:
 # breaks a style rule, and it still has to reach the tests.
 if os.environ.get("LOCKSTEP_NO_LINT"):
     print("Lint gates skipped: LOCKSTEP_NO_LINT is set.")
-else:
+elif not _vivado_only:
     _do_lint()
 
 # ---------------------------------------------------------------------------
@@ -431,6 +464,21 @@ vu.set_sim_option("ghdl.sim_flags", ["--stop-time=50ms"])
 # Must be relative to sim/ since that's the working directory
 # ---------------------------------------------------------------------------
 os.makedirs("reports", exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Vivado stage: with --vivado alone, or after the lint gates when Vivado is
+# installed. CI has no Vivado, so it runs the GHDL regression only.
+# ---------------------------------------------------------------------------
+sys.path.insert(0, str(root / "sim" / "scripts"))
+import vivado_sim  # noqa: E402
+
+_vivado_wanted = _vivado_only or (not os.environ.get("LOCKSTEP_NO_LINT") and not os.environ.get("LOCKSTEP_NO_VIVADO")
+                                  and vivado_sim.find_vivado_bin() is not None)
+if _vivado_wanted:
+    _order = [(f.library.name, f.name) for f in vu.get_compile_order()]
+    _vivado_ok = vivado_sim.run_stage(_order, ghdl_exe)
+    if _vivado_only or not _vivado_ok:
+        sys.exit(0 if _vivado_ok else 1)
 
 # ---------------------------------------------------------------------------
 # Run

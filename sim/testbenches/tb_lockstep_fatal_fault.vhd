@@ -53,7 +53,7 @@ begin
 
   end process p_clk;
 
-  dut : entity lockstep.lockstep_comparator
+  i_dut : entity lockstep.lockstep_comparator
     port map (
       clk_i         => clk,
       rst_n_syn_i   => rst_n,
@@ -71,7 +71,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       core_bus    <= c_store;
       fatal_fault <= '0';
@@ -97,11 +97,11 @@ begin
         check_equal(sys_bus.valid, '0', "the store is stopped");
         check_equal(nmi_fault, '1', "NMI held");
 
-        for dummy in 1 to 10 loop
+        loop_dummy : for lv_dummy in 1 to 10 loop
 
           wait until rising_edge(clk);
 
-        end loop;
+        end loop loop_dummy;
 
         check_equal(safe_state, '1', "one clock of fault is enough");
         check_equal(bus_valid, '0', "still closed");
@@ -138,7 +138,7 @@ begin
         check_equal(nmi_fault, '0', "NMI gone");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

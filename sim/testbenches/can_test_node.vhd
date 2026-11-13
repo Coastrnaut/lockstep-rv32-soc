@@ -20,13 +20,18 @@ entity can_test_node is
     g_bit_time : time
   );
   port (
-    bus_i        : in    std_logic; -- The wired-AND bus
-    dut_tx_i     : in    std_logic; -- Sampled alongside the bus for frame_o.wire
+    -- The wired-AND bus
+    bus_i : in    std_logic;
+    -- Sampled alongside the bus for frame_o.wire
+    dut_tx_i     : in    std_logic;
     ack_enable_i : in    std_logic;
-    ack_o        : out   std_logic; -- Dominant in the ACK slot of a good frame
-    frame_o      : out   t_rx_frame;
-    starts_o     : out   natural;   -- SOFs seen on the bus
-    done_o       : out   natural    -- Frames finished or given up on
+    -- Dominant in the ACK slot of a good frame
+    ack_o   : out   std_logic;
+    frame_o : out   t_rx_frame;
+    -- SOFs seen on the bus
+    starts_o : out   natural;
+    -- Frames finished or given up on
+    done_o : out   natural
   );
 end entity can_test_node;
 
@@ -90,12 +95,12 @@ begin
     ) is
     begin
 
-      for i in field'range loop
+      loop_i : for lv_i in field'range loop
 
         skip_stuff_bit;
         exit when v_frame.stuff_error;
         next_wire_bit(v_bit);
-        field(i) := v_bit;
+        field(lv_i) := v_bit;
 
         if (v_bit = v_last) then
           v_run := v_run + 1;
@@ -108,7 +113,7 @@ begin
           v_crc := crc15_next(v_crc, v_bit);
         end if;
 
-      end loop;
+      end loop loop_i;
 
     end procedure receive_field;
 
@@ -150,7 +155,7 @@ begin
       next_wire_bit(v_frame.ack_slot);
       next_wire_bit(v_frame.ack_delimiter);
 
-      for dummy in 1 to 10 loop
+      loop_dummy : for lv_dummy in 1 to 10 loop
 
         next_wire_bit(v_bit);
 
@@ -158,7 +163,7 @@ begin
           v_frame.tail_recessive := v_frame.tail_recessive + 1;
         end if;
 
-      end loop;
+      end loop loop_dummy;
 
       -- A dominant third intermission bit is the next SOF
       v_in_sof := v_bit = '0';
@@ -169,7 +174,7 @@ begin
 
     ack_o <= '1';
 
-    loop
+    loop_forever : loop
 
       if (not v_in_sof) then
         wait until bus_i = '0';
@@ -188,7 +193,7 @@ begin
         frame_o  <= v_frame;
       end if;
 
-    end loop;
+    end loop loop_forever;
 
   end process p_receiver;
 

@@ -130,7 +130,7 @@ begin
       sys_bus_o     => sys_bus
     );
 
-  dut : entity lockstep.comparator_self_test
+  i_dut : entity lockstep.comparator_self_test
     port map (
       clk_i         => clk,
       rst_n_i       => rst_n,
@@ -170,13 +170,13 @@ begin
         v_flips := test_fatal & flip_bus.valid & flip_bus.we & flip_bus.sel & flip_bus.data & flip_bus.addr;
         v_count := 0;
 
-        for lane in v_flips'range loop
+        loop_lane : for lv_lane in v_flips'range loop
 
-          if (v_flips(lane) = '1') then
+          if (v_flips(lv_lane) = '1') then
             v_count := v_count + 1;
           end if;
 
-        end loop;
+        end loop loop_lane;
 
         lanes_tried <= lanes_tried or v_flips;
 
@@ -191,8 +191,8 @@ begin
   p_stim : process is
 
     alias comparator_mismatch is << signal i_comparator.w_mismatch_detected : std_logic >>;
-    alias test_result         is << signal dut.r_result : t_safe_state >>;
-    alias test_lane           is << signal dut.r_lane : natural range 0 to c_bus_bits >>;
+    alias test_result         is << signal i_dut.r_result : t_safe_state >>;
+    alias test_lane           is << signal i_dut.r_lane : natural range 0 to c_bus_bits >>;
 
     procedure cold_reset is
     begin
@@ -209,11 +209,11 @@ begin
     procedure wait_for_the_test is
     begin
 
-      for dummy in 1 to c_test_clocks + 4 loop
+      loop_dummy : for lv_dummy in 1 to c_test_clocks + 4 loop
 
         wait until rising_edge(clk);
 
-      end loop;
+      end loop loop_dummy;
 
     end procedure wait_for_the_test;
 
@@ -232,7 +232,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       blind_lanes  <= (others => '0');
       blind_fatal  <= '0';
@@ -249,13 +249,13 @@ begin
         wait until rising_edge(clk);
         check_equal(passed, '0', "no pass before the test");
 
-        for dummy in 1 to c_test_clocks - 2 loop
+        loop_dummy_2 : for lv_dummy in 1 to c_test_clocks - 2 loop
 
           wait until rising_edge(clk);
           check_equal(passed, '0', "no pass until the end");
           check_equal(failed, '0', "no failure");
 
-        end loop;
+        end loop loop_dummy_2;
 
         wait until rising_edge(clk);
         wait until rising_edge(clk);
@@ -271,14 +271,14 @@ begin
         check_equal(safe_state, '0', "not tripped");
         check_equal(bus_valid, '1', "bus open");
 
-        for dummy in 1 to 20 loop
+        loop_dummy_3 : for lv_dummy in 1 to 20 loop
 
           wait until rising_edge(clk);
           check_equal(test_rst_n, '1', "comparator no longer reset");
           check_equal(test_fatal, '0', "nothing injected");
           check_equal(flip_bus.valid, '0', "nothing injected");
 
-        end loop;
+        end loop loop_dummy_3;
 
       elsif run("stuck_at_no_error_stops_the_cores") then
         comparator_mismatch <= force '0';
@@ -290,14 +290,14 @@ begin
         check_cores_kept_in_reset("mismatch stuck at error");
       elsif run("every_blind_bus_line_stops_the_cores") then
 
-        for lane in 0 to c_bus_bits - 1 loop
+        loop_lane_2 : for lv_lane in 0 to c_bus_bits - 1 loop
 
-          blind_lanes       <= (others => '0');
-          blind_lanes(lane) <= '1';
+          blind_lanes          <= (others => '0');
+          blind_lanes(lv_lane) <= '1';
           cold_reset;
-          check_cores_kept_in_reset("line " & integer'image(lane));
+          check_cores_kept_in_reset("line " & integer'image(lv_lane));
 
-        end loop;
+        end loop loop_lane_2;
 
       elsif run("a_blind_fatal_input_stops_the_cores") then
         blind_fatal <= '1';
@@ -352,9 +352,9 @@ begin
         wait_for_the_test;
         check_equal(passed, '1', "passed");
 
-        for index in t_safe_state'range loop
+        loop_index : for lv_index in t_safe_state'range loop
 
-          test_result <= force st_system_ok xor std_logic_vector(shift_left(to_unsigned(1, 8), index));
+          test_result <= force st_system_ok xor std_logic_vector(shift_left(to_unsigned(1, 8), lv_index));
           wait until rising_edge(clk);
           wait for 1 ns;
           check_equal(passed, '0', "one flipped bit is not a pass");
@@ -363,7 +363,7 @@ begin
           wait until rising_edge(clk);
           wait for 1 ns;
 
-        end loop;
+        end loop loop_index;
 
       elsif run("a_sequencer_that_never_finishes_reports_a_failure") then
         -- Roadmap R2.4: a sequencer stuck busy keeps the cores in reset, but
@@ -374,11 +374,11 @@ begin
         check_equal(passed, '0', "no pass while still going round");
 
         -- The self-test allows itself 8 clocks more than a healthy run takes
-        for dummy in 1 to 8 loop
+        loop_dummy_4 : for lv_dummy in 1 to 8 loop
 
           wait until rising_edge(clk);
 
-        end loop;
+        end loop loop_dummy_4;
 
         wait for 1 ns;
         check_equal(passed, '0', "no pass from a sequencer that never finished");
@@ -396,7 +396,7 @@ begin
         check_equal(passed, '1', "passed again");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

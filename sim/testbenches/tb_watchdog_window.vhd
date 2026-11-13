@@ -116,7 +116,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       cpu_kick <= '0';
       wd_rst_n <= '0';
@@ -149,19 +149,19 @@ begin
       elsif run("count_runs_from_reset_to_the_timeout_in_max_clocks") then
         -- No forcing: the reset restarts the count at zero, and the edge after
         -- each wait has the count before it equal to the loop index
-        for count in 1 to c_max - 1 loop
+        loop_count : for lv_count in 1 to c_max - 1 loop
 
           wait until rising_edge(wd_clk);
           check_equal(sys_rst, '0', "no reset before MAX");
 
-        end loop;
+        end loop loop_count;
 
         wait until falling_edge(wd_clk);
         check_equal(counter, to_unsigned(c_max, 16), "MAX clocks after reset");
         check_equal(sys_rst, '1', "timeout at MAX");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

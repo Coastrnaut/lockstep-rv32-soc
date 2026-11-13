@@ -20,6 +20,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DOCS = sorted((ROOT / "docs" / "safety").glob("*.md")) + sorted((ROOT / "docs" / "verification").glob("*.md")) + [
     ROOT / "VERIFICATION_SPECIFICATION.md", ROOT / "README.md"]
 BENCHES = ROOT / "sim" / "testbenches"
+# Benches without VUnit, which have no named tests
+PLAIN_BENCHES = [ROOT / "sim" / "portable", ROOT / "fpga" / "arty_a7_100t" / "ghdl"]
 FORMAL = ROOT / "sim" / "formal"
 
 # Configuration names that sim/run.py puts between a bench and its test
@@ -29,6 +31,8 @@ CONFIGS = {"ram_256k", "ram_32k"}
 def tests_of(bench):
     path = BENCHES / f"{bench}.vhd"
     if not path.is_file():
+        if any((d / f"{bench}.vhd").is_file() for d in PLAIN_BENCHES):
+            return set()
         return None
     return set(re.findall(r'run\("([^"]+)"\)', path.read_text(encoding="utf-8")))
 
@@ -59,9 +63,7 @@ def main():
             if bench not in cache:
                 cache[bench] = tests_of(bench)
             if cache[bench] is None:
-                # can_test_* are helper packages, and run.py's own names are not benches
-                if not (BENCHES / f"{bench}.vhd").is_file() and not bench.startswith(("tb_board_firmware",)):
-                    problems.append(f"{rel}: bench {bench} does not exist")
+                problems.append(f"{rel}: bench {bench} does not exist")
                 continue
             checked += 1
             if test and test not in cache[bench]:

@@ -116,7 +116,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       rst_n <= '0';
       wait for c_clk_period * 5;
@@ -135,7 +135,7 @@ begin
         check_equal(actuator_safe, '0', "cores stayed in lockstep");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

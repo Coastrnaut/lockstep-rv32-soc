@@ -98,7 +98,7 @@ begin
 
   test_runner_watchdog(runner, 45 ms);
 
-  dut : entity lockstep.automotive_can_controller
+  i_dut : entity lockstep.automotive_can_controller
     generic map (
       g_clks_per_bit => c_clks_per_bit
     )
@@ -132,7 +132,7 @@ begin
 
   p_sample_gap : process is
 
-    alias sample_tick is << signal dut.w_sample_tick : std_logic >>;
+    alias sample_tick is << signal i_dut.w_sample_tick : std_logic >>;
 
     variable v_count : natural;
 
@@ -150,8 +150,8 @@ begin
 
   p_release_on_arrival : process is
 
-    alias frame_arriving is << signal dut.w_rx_valid : std_logic >>;
-    alias buffer_release is << signal dut.w_buf_release : std_logic >>;
+    alias frame_arriving is << signal i_dut.w_rx_valid : std_logic >>;
+    alias buffer_release is << signal i_dut.w_buf_release : std_logic >>;
 
   begin
 
@@ -168,18 +168,18 @@ begin
     variable v_dut   : std_logic_vector(1 to c_wire_length);
     variable v_gap   : natural;
 
-    alias bus_off is << signal dut.r_bus_off : std_logic >>;
+    alias bus_off is << signal i_dut.r_bus_off : std_logic >>;
 
     procedure wait_clocks (
       constant count : in natural
     ) is
     begin
 
-      for dummy in 1 to count loop
+      loop_dummy : for lv_dummy in 1 to count loop
 
         wait until rising_edge(clk);
 
-      end loop;
+      end loop loop_dummy;
 
     end procedure wait_clocks;
 
@@ -246,19 +246,19 @@ begin
     ) is
     begin
 
-      for index in 1 to count loop
+      loop_index : for lv_index in 1 to count loop
 
-        if (wire(index) = '0') then
+        if (wire(lv_index) = '0') then
           sender_tx <= '0';
         else
           sender_tx <= '1';
         end if;
 
         wait for bit_time * 7 / 8;
-        v_dut(index) := can_tx;
+        v_dut(lv_index) := can_tx;
         wait for bit_time / 8;
 
-      end loop;
+      end loop loop_index;
 
       sender_tx <= '1';
 
@@ -333,7 +333,7 @@ begin
     procedure make_error_passive is
     begin
 
-      for attempt in 1 to 15 loop
+      loop_attempt : for lv_attempt in 1 to 15 loop
 
         send_wire(c_bad_vectors(0).wire, c_bad_vectors(0).length);
         sender_tx <= '0';
@@ -341,7 +341,7 @@ begin
         sender_tx <= '1';
         wait for c_bit_time * 12;
 
-      end loop;
+      end loop loop_attempt;
 
       check_status(135, '1');
 
@@ -383,7 +383,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       ack_enable  <= '0';
       dut_blocked <= '0';
@@ -391,26 +391,26 @@ begin
       if run("every_frame_is_received_and_acknowledged") then
         reset_dut;
 
-        for index in c_rx_vectors'range loop
+        loop_index_2 : for lv_index in c_rx_vectors'range loop
 
-          send_wire(c_rx_vectors(index).wire, c_rx_vectors(index).length);
+          send_wire(c_rx_vectors(lv_index).wire, c_rx_vectors(lv_index).length);
 
-          for wire_bit in 1 to c_rx_vectors(index).length loop
+          loop_wire_bit : for lv_wire_bit in 1 to c_rx_vectors(lv_index).length loop
 
-            if (wire_bit = c_rx_vectors(index).ack_slot) then
-              check_equal(v_dut(wire_bit), '0', "ACK in the ACK slot");
+            if (lv_wire_bit = c_rx_vectors(lv_index).ack_slot) then
+              check_equal(v_dut(lv_wire_bit), '0', "ACK in the ACK slot");
             else
-              check_equal(v_dut(wire_bit), '1', "recessive outside the ACK slot");
+              check_equal(v_dut(lv_wire_bit), '1', "recessive outside the ACK slot");
             end if;
 
-          end loop;
+          end loop loop_wire_bit;
 
           check_rx_status(c_frame_waiting, "frame waiting");
-          check_buffer(c_rx_vectors(index));
+          check_buffer(c_rx_vectors(lv_index));
           release_frame;
           check_rx_status(0, "released");
 
-        end loop;
+        end loop loop_index_2;
 
         check_status(0);
       elsif run("a_sof_is_taken_once_at_any_phase_of_the_bit_timer") then
@@ -418,15 +418,15 @@ begin
 
         -- Each frame starts one clock further round the timer than the last, so
         -- one of them lands on the clock of the sample point
-        for phase in 0 to c_clks_per_bit - 1 loop
+        loop_phase : for lv_phase in 0 to c_clks_per_bit - 1 loop
 
-          wait_clocks(phase mod 7 + 1);
+          wait_clocks(lv_phase mod 7 + 1);
           send_wire(c_rx_vectors(0).wire, c_rx_vectors(0).length);
           check_buffer(c_rx_vectors(0));
           release_frame;
           check_status(0);
 
-        end loop;
+        end loop loop_phase;
 
       elsif run("frames_follow_each_other_in_the_third_intermission_bit") then
         reset_dut;
@@ -438,40 +438,40 @@ begin
         check_status(0);
       elsif run("fast_and_slow_senders_are_followed") then
 
-        for speed in 0 to 3 loop
+        loop_speed : for lv_speed in 0 to 3 loop
 
           reset_dut;
 
-          for index in c_rx_vectors'range loop
+          loop_index_3 : for lv_index in c_rx_vectors'range loop
 
-            case speed is
+            case lv_speed is
 
               when 0 =>
 
-                send_wire(c_rx_vectors(index).wire, c_rx_vectors(index).length, c_bit_time * 99 / 100);
+                send_wire(c_rx_vectors(lv_index).wire, c_rx_vectors(lv_index).length, c_bit_time * 99 / 100);
 
               when 1 =>
 
-                send_wire(c_rx_vectors(index).wire, c_rx_vectors(index).length, c_bit_time * 101 / 100);
+                send_wire(c_rx_vectors(lv_index).wire, c_rx_vectors(lv_index).length, c_bit_time * 101 / 100);
 
               when 2 =>
 
-                send_wire(c_rx_vectors(index).wire, c_rx_vectors(index).length, c_bit_time * 197 / 200);
+                send_wire(c_rx_vectors(lv_index).wire, c_rx_vectors(lv_index).length, c_bit_time * 197 / 200);
 
               when others =>
 
-                send_wire(c_rx_vectors(index).wire, c_rx_vectors(index).length, c_bit_time * 203 / 200);
+                send_wire(c_rx_vectors(lv_index).wire, c_rx_vectors(lv_index).length, c_bit_time * 203 / 200);
 
             end case;
 
-            check_buffer(c_rx_vectors(index));
+            check_buffer(c_rx_vectors(lv_index));
             release_frame;
 
-          end loop;
+          end loop loop_index_3;
 
           check_status(0);
 
-        end loop;
+        end loop loop_speed;
 
       elsif run("late_edge_moves_the_sample_point_later_up_to_a_limit") then
         check_gap(0, c_clks_per_bit);
@@ -511,44 +511,44 @@ begin
         check_equal(sample_gap, c_clks_per_bit, "sampled dominant, so no bit is starting");
       elsif run("bad_frames_get_an_error_flag_in_the_right_bit") then
 
-        for index in c_bad_vectors'range loop
+        loop_index_4 : for lv_index in c_bad_vectors'range loop
 
-          next when c_bad_vectors(index).flag_at = 0;
+          next when c_bad_vectors(lv_index).flag_at = 0;
 
           reset_dut;
-          send_bad_frame(index);
+          send_bad_frame(lv_index);
 
-          for wire_bit in 1 to c_bad_vectors(index).flag_at + c_flag_bits + 1 loop
+          loop_wire_bit_2 : for lv_wire_bit in 1 to c_bad_vectors(lv_index).flag_at + c_flag_bits + 1 loop
 
-            if (wire_bit >= c_bad_vectors(index).flag_at and
-                wire_bit < c_bad_vectors(index).flag_at + c_flag_bits) then
-              check_equal(v_dut(wire_bit), '0', "six dominant bits");
-            elsif (wire_bit = c_bad_vectors(index).ack_at) then
-              check_equal(v_dut(wire_bit), '0', "the frame looked good as far as the ACK slot");
+            if (lv_wire_bit >= c_bad_vectors(lv_index).flag_at and
+                lv_wire_bit < c_bad_vectors(lv_index).flag_at + c_flag_bits) then
+              check_equal(v_dut(lv_wire_bit), '0', "six dominant bits");
+            elsif (lv_wire_bit = c_bad_vectors(lv_index).ack_at) then
+              check_equal(v_dut(lv_wire_bit), '0', "the frame looked good as far as the ACK slot");
             else
-              check_equal(v_dut(wire_bit), '1', "nothing else from the DUT");
+              check_equal(v_dut(lv_wire_bit), '1', "nothing else from the DUT");
             end if;
 
-          end loop;
+          end loop loop_wire_bit_2;
 
           check_status(1);
           check_rx_status(0, "the frame is not delivered");
 
-        end loop;
+        end loop loop_index_4;
 
       elsif run("dominant_last_bit_of_eof_is_not_an_error") then
         reset_dut;
         send_wire(c_bad_vectors(c_bad_vectors'high).wire, c_bad_vectors(c_bad_vectors'high).length + 16);
 
-        for wire_bit in 1 to c_bad_vectors(c_bad_vectors'high).length + 16 loop
+        loop_wire_bit_3 : for lv_wire_bit in 1 to c_bad_vectors(c_bad_vectors'high).length + 16 loop
 
-          if (wire_bit = c_bad_vectors(c_bad_vectors'high).ack_at) then
-            check_equal(v_dut(wire_bit), '0', "ACK");
+          if (lv_wire_bit = c_bad_vectors(c_bad_vectors'high).ack_at) then
+            check_equal(v_dut(lv_wire_bit), '0', "ACK");
           else
-            check_equal(v_dut(wire_bit), '1', "no error flag");
+            check_equal(v_dut(lv_wire_bit), '1', "no error flag");
           end if;
 
-        end loop;
+        end loop loop_wire_bit_3;
 
         check_status(0);
         check_rx_status(c_frame_waiting, "the frame counts");
@@ -575,7 +575,7 @@ begin
         reset_dut;
 
         -- Nine a time, sixteen times, comes to 144
-        for attempt in 1 to 16 loop
+        loop_attempt_2 : for lv_attempt in 1 to 16 loop
 
           send_wire(c_bad_vectors(0).wire, c_bad_vectors(0).length);
           sender_tx <= '0';
@@ -583,22 +583,22 @@ begin
           sender_tx <= '1';
           wait for c_bit_time * 12;
 
-          if (attempt = 14) then
+          if (lv_attempt = 14) then
             check_status(126);
           end if;
 
-        end loop;
+        end loop loop_attempt_2;
 
         check_status(144, '1');
         check_equal(can_status(9), '1', "error passive on the diagnostic port");
 
         send_wire(c_bad_vectors(0).wire, c_bad_vectors(0).flag_at + c_flag_bits + 2);
 
-        for wire_bit in 1 to c_bad_vectors(0).flag_at + c_flag_bits + 1 loop
+        loop_wire_bit_4 : for lv_wire_bit in 1 to c_bad_vectors(0).flag_at + c_flag_bits + 1 loop
 
-          check_equal(v_dut(wire_bit), '1', "nothing but recessive from a passive node");
+          check_equal(v_dut(lv_wire_bit), '1', "nothing but recessive from a passive node");
 
-        end loop;
+        end loop loop_wire_bit_4;
 
         wait for c_bit_time * 11;
         check_status(145, '1');
@@ -609,7 +609,7 @@ begin
       elsif run("error_count_stops_at_255") then
         reset_dut;
 
-        for attempt in 1 to 30 loop
+        loop_attempt_3 : for lv_attempt in 1 to 30 loop
 
           send_wire(c_bad_vectors(0).wire, c_bad_vectors(0).length);
           sender_tx <= '0';
@@ -617,7 +617,7 @@ begin
           sender_tx <= '1';
           wait for c_bit_time * 12;
 
-        end loop;
+        end loop loop_attempt_3;
 
         check_status(255, '1');
       elsif run("good_frames_take_the_error_count_down_one_at_a_time") then
@@ -662,11 +662,11 @@ begin
         read_bus(c_can_rx_id_addr);
         check_rx_status(c_frame_waiting, "reads leave it");
 
-        for pattern in 0 to 14 loop
+        loop_pattern : for lv_pattern in 0 to 14 loop
 
-          write_bus(c_can_rx_status_addr, x"00000000", std_logic_vector(to_unsigned(pattern, 4)));
+          write_bus(c_can_rx_status_addr, x"00000000", std_logic_vector(to_unsigned(lv_pattern, 4)));
 
-        end loop;
+        end loop loop_pattern;
 
         write_bus(c_can_rx_irq_en_addr, x"00000000");
         write_bus(x"C0000328", x"00000000");
@@ -807,11 +807,11 @@ begin
         wait for c_bit_time;
         send_wire(c_bad_vectors(0).wire, c_bad_vectors(0).flag_at + c_flag_bits);
 
-        for wire_bit in 1 to c_bad_vectors(0).flag_at + c_flag_bits loop
+        loop_wire_bit_5 : for lv_wire_bit in 1 to c_bad_vectors(0).flag_at + c_flag_bits loop
 
-          check_equal(v_dut(wire_bit), '1', "no error flag");
+          check_equal(v_dut(lv_wire_bit), '1', "no error flag");
 
-        end loop;
+        end loop loop_wire_bit_5;
 
         wait for c_bit_time * 12;
         send_wire(c_frame.wire, c_frame.length);
@@ -841,10 +841,10 @@ begin
         check_rx_status(0, "the start of it was missed");
       elsif run("overload_flag_from_another_node_just_holds_off_the_next_frame") then
         -- In the first bit of the intermission, and in the second
-        for intermission_bit in 1 to 2 loop
+        loop_intermission_bit : for lv_intermission_bit in 1 to 2 loop
 
           reset_dut;
-          send_wire(c_frame.wire, c_frame.length - 4 + intermission_bit);
+          send_wire(c_frame.wire, c_frame.length - 4 + lv_intermission_bit);
           release_frame;
           sender_tx <= '0';
           wait for c_bit_time * c_flag_bits;
@@ -854,11 +854,11 @@ begin
           check_buffer(c_other_frame);
           check_status(0);
 
-        end loop;
+        end loop loop_intermission_bit;
 
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

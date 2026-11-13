@@ -29,10 +29,14 @@ entity trace_compare is
     trace_a_i : in    trace_port_t;
     trace_b_i : in    trace_port_t;
 
-    compared_o   : out   natural;   -- Events compared so far
-    mismatch_o   : out   std_logic; -- High from the first mismatch on
-    first_o      : out   natural;   -- Order number of the first mismatch
-    first_time_o : out   time;      -- When core B retired it
+    -- Events compared so far
+    compared_o : out   natural;
+    -- High from the first mismatch on
+    mismatch_o : out   std_logic;
+    -- Order number of the first mismatch
+    first_o : out   natural;
+    -- When core B retired it
+    first_time_o : out   time;
     field_o      : out   string(1 to 9)
   );
 end entity trace_compare;
@@ -55,17 +59,17 @@ architecture tb of trace_compare is
       v_t.rd_rdata := (others => '0');
     end if;
 
-    for lane in 0 to 3 loop
+    loop_lane : for lv_lane in 0 to 3 loop
 
-      if (v_t.mem_rmask(lane) = '0') then
-        v_t.mem_rdata(lane * 8 + 7 downto lane * 8) := (others => '0');
+      if (v_t.mem_rmask(lv_lane) = '0') then
+        v_t.mem_rdata(lv_lane * 8 + 7 downto lv_lane * 8) := (others => '0');
       end if;
 
-      if (v_t.mem_wmask(lane) = '0') then
-        v_t.mem_wdata(lane * 8 + 7 downto lane * 8) := (others => '0');
+      if (v_t.mem_wmask(lv_lane) = '0') then
+        v_t.mem_wdata(lv_lane * 8 + 7 downto lv_lane * 8) := (others => '0');
       end if;
 
-    end loop;
+    end loop loop_lane;
 
     return v_t;
 
@@ -124,7 +128,7 @@ begin
     first_o    <= 0;
     field_o    <= (others => ' ');
 
-    loop
+    loop_forever : loop
 
       wait until rising_edge(clk_i);
 
@@ -159,7 +163,7 @@ begin
         v_count          := v_count + 1;
       end if;
 
-    end loop;
+    end loop loop_forever;
 
   end process p_compare;
 

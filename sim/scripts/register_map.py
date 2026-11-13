@@ -67,7 +67,8 @@ def write_package():
     text = PACKAGE.read_text(encoding="utf-8").replace("\r\n", "\n")
     lines = text.split("\n")
     start, stop = lines.index(BEGIN), lines.index(END)
-    lines[start + 1:stop] = vhdl_lines()
+    # VSG (constant_200) wants a blank line after the last constant
+    lines[start + 1:stop] = vhdl_lines() + [""]
     PACKAGE.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 

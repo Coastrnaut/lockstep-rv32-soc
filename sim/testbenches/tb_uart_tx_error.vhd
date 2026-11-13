@@ -22,9 +22,10 @@ end entity tb_uart_tx_error;
 
 architecture rtl of tb_uart_tx_error is
 
-  constant clk_period : time := 20 ns;
-  signal   clk        : std_logic;
-  signal   rst_n      : std_logic;
+  constant c_clk_period : time := 20 ns;
+
+  signal clk   : std_logic;
+  signal rst_n : std_logic;
 
   signal bus_i     : t_rv_bus;
   signal bus_ok    : std_logic;
@@ -36,8 +37,8 @@ architecture rtl of tb_uart_tx_error is
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    clk <= '0', '1' after clk_period / 2;
-    wait for clk_period;
+    clk <= '0', '1' after c_clk_period / 2;
+    wait for c_clk_period;
 
   end process p_clk;
 
@@ -61,7 +62,7 @@ architecture rtl of tb_uart_tx_error is
     bus_ok <= '1';
     wait for 100 ns;
     rst_n  <= '1';
-    wait for clk_period * 2;
+    wait for c_clk_period * 2;
 
     -- --- Test 1: Idle baseline ---
     check(uart_busy = '0', "idle: not busy");
@@ -79,7 +80,7 @@ architecture rtl of tb_uart_tx_error is
     wait for 0 ns;
     check(uart_busy = '1', "TX in progress: busy asserted");
     -- Wait for TX to complete (baud div = 434, ~10 bits => ~4340 cycles)
-    wait for clk_period * 5000;
+    wait for c_clk_period * 5000;
     wait for 0 ns;
     check(uart_busy = '0', "TX complete: idle");
 
@@ -88,28 +89,35 @@ architecture rtl of tb_uart_tx_error is
     bus_i       <= (addr => c_uart_tx_data_addr, data => x"00000042", we => '1', valid => '1', sel => "1111");
     wait until rising_edge(clk);
     bus_i.valid <= '0';
-    wait for clk_period * 3;
+    wait for c_clk_period * 3;
     bus_ok      <= '1';
-    wait for clk_period * 5;
+    wait for c_clk_period * 5;
     check(uart_busy = '0', "safety gate: returned to idle");
 
     -- --- Test 4: Recovery after reset ---
     rst_n <= '0';
     wait for 100 ns;
     rst_n <= '1';
-    wait for clk_period * 2;
+    wait for c_clk_period * 2;
     check(uart_err = '0', "recovery: error cleared");
     check(uart_busy = '0', "recovery: not busy");
 
     -- --- Test 5: Back-to-back TX with proper wait ---
-    for dummy in 0 to 1 loop
+    loop_dummy : for lv_dummy in 0 to 1 loop
 
-      bus_i       <= (addr => c_uart_tx_data_addr, data => std_logic_vector(to_unsigned(dummy + 65, 32)), we => '1', valid => '1', sel => "1111");
+      bus_i       <=
+      (
+        addr  => c_uart_tx_data_addr,
+        data  => std_logic_vector(to_unsigned(lv_dummy + 65, 32)),
+        we    => '1',
+        valid => '1',
+        sel   => "1111"
+      );
       wait until rising_edge(clk);
       bus_i.valid <= '0';
-      wait for clk_period * 5000;
+      wait for c_clk_period * 5000;
 
-    end loop;
+    end loop loop_dummy;
 
     check(uart_busy = '0', "back-to-back: idle after all tx");
     check(uart_err = '0', "back-to-back: no error");

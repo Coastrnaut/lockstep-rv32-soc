@@ -68,7 +68,8 @@ architecture tb of tb_can is
   constant c_passive_retry_bits : natural := c_retry_bits + 8;
 
   -- 0x123 with 8 different data bytes
-  constant c_wire_8_bytes : string := "0001001000110001000001010001001000100011001101000100010101010110011001110111100010001000010001101111111111111111";
+  constant c_wire_8_bytes : string := "00010010001100010000010100010010001000110011010001000101" &
+                                      "01010110011001110111100010001000010001101111111111111111";
 
   -- Wire bits of rival frames that beat 0x123 and lose to it
   constant c_rival_win  : string := "00010010001000001010101001010101101010001100010000011111111111111";
@@ -121,7 +122,7 @@ begin
   test_runner_watchdog(runner, 10 ms);
 
   -- DUT
-  uut : entity lockstep.automotive_can_controller
+  i_uut : entity lockstep.automotive_can_controller
     generic map (
       g_clks_per_bit => c_clks_per_bit
     )
@@ -172,13 +173,13 @@ begin
 
     rival_tx <= '1';
 
-    loop
+    loop_forever : loop
 
       wait on rival_go;
 
-      for i in 1 to rival_length loop
+      loop_i : for lv_i in 1 to rival_length loop
 
-        if (rival_wire(i) = '0') then
+        if (rival_wire(lv_i) = '0') then
           rival_tx <= '0';
         else
           rival_tx <= '1';
@@ -186,11 +187,11 @@ begin
 
         wait for c_bit_time;
 
-      end loop;
+      end loop loop_i;
 
       rival_tx <= '1';
 
-    end loop;
+    end loop loop_forever;
 
   end process p_rival;
 
@@ -514,13 +515,13 @@ begin
       ack_enable <= '0';
       write_mailbox(c_id, c_dlc, c_payload);
 
-      for attempt in 1 to 16 loop
+      loop_attempt : for lv_attempt in 1 to 16 loop
 
         wait_for_frame;
         check_equal(wire_tail, c_tail_active_flag, "active error flag");
-        check_equal(tec, attempt * 8, "error counter");
+        check_equal(tec, lv_attempt * 8, "error counter");
 
-      end loop;
+      end loop loop_attempt;
 
       check_equal(can_status_o(c_status_passive), '1', "error passive at 128");
 
@@ -530,7 +531,7 @@ begin
 
     test_runner_setup(runner, runner_cfg);
 
-    while test_suite loop
+    loop_while : while test_suite loop
 
       v_seen := 0;
       reset_dut;
@@ -540,14 +541,14 @@ begin
         check(can_tx_o = '1', "recessive after reset");
 
         -- Traffic from other nodes must not start a frame
-        for dummy in 1 to 8 loop
+        loop_dummy : for lv_dummy in 1 to 8 loop
 
           force_dominant <= '1';
           wait for c_bit_time;
           force_dominant <= '0';
           wait for c_bit_time;
 
-        end loop;
+        end loop loop_dummy;
 
         check_equal(tx_falls, 0, "no frame without a mailbox write");
         check(can_busy_o = '0', "idle without a mailbox write");
@@ -555,41 +556,41 @@ begin
         -- CRC-15/CAN in the reveng catalogue: check=0x059E over ASCII "123456789"
         v_crc := (others => '0');
 
-        for i in c_crc_check_input'range loop
+        loop_i_2 : for lv_i in c_crc_check_input'range loop
 
-          for b in 7 downto 0 loop
+          loop_b : for lv_b in 7 downto 0 loop
 
-            v_crc := crc15_next(v_crc, to_unsigned(character'pos(c_crc_check_input(i)), 8)(b));
+            v_crc := crc15_next(v_crc, to_unsigned(character'pos(c_crc_check_input(lv_i)), 8)(lv_b));
 
-          end loop;
+          end loop loop_b;
 
-        end loop;
+        end loop loop_i_2;
 
         check_equal(v_crc, std_logic_vector(to_unsigned(16#059E#, 15)), "published check value");
       elsif run("frame_fields_for_every_dlc") then
 
-        for dlc in 0 to 8 loop
+        loop_dlc : for lv_dlc in 0 to 8 loop
 
-          send_and_check(16#123#, dlc, 16#A55A#);
-          send_and_check(16#6AA#, dlc, 16#1234#);
+          send_and_check(16#123#, lv_dlc, 16#A55A#);
+          send_and_check(16#6AA#, lv_dlc, 16#1234#);
 
-        end loop;
+        end loop loop_dlc;
 
       elsif run("every_identifier_bit_reaches_the_wire") then
 
-        for id_bit in 0 to 10 loop
+        loop_id_bit : for lv_id_bit in 0 to 10 loop
 
-          send_and_check(2 ** id_bit, 1, 16#00FF#);
+          send_and_check(2 ** lv_id_bit, 1, 16#00FF#);
 
-        end loop;
+        end loop loop_id_bit;
 
       elsif run("dlc_above_8_sends_8_bytes") then
 
-        for dlc in 9 to 15 loop
+        loop_dlc_2 : for lv_dlc in 9 to 15 loop
 
-          send_and_check(16#123#, dlc, 16#1234#);
+          send_and_check(16#123#, lv_dlc, 16#1234#);
 
-        end loop;
+        end loop loop_dlc_2;
 
       elsif run("wire_bits_match_reference_model") then
         check_wire(c_id, c_dlc, c_payload, c_wire);
@@ -633,7 +634,7 @@ begin
         wait_for_sof;
         v_edge := now;
 
-        while (can_busy_o = '1') loop
+        loop_while_2 : while (can_busy_o = '1') loop
 
           wait on can_tx_o, can_busy_o;
 
@@ -642,7 +643,7 @@ begin
             v_edge := now;
           end if;
 
-        end loop;
+        end loop loop_while_2;
 
         v_end := now;
         wait_for_frame;
@@ -673,15 +674,15 @@ begin
         wait for c_bit_time * 12;
 
         -- Every address one bit away from TX_REQUEST
-        for addr_bit in 0 to 31 loop
+        loop_addr_bit : for lv_addr_bit in 0 to 31 loop
 
-          v_addr           := c_can_tx_request_addr;
-          v_addr(addr_bit) := not v_addr(addr_bit);
+          v_addr              := c_can_tx_request_addr;
+          v_addr(lv_addr_bit) := not v_addr(lv_addr_bit);
           write_bus(v_addr, x"00000001");
           wait until rising_edge(clk_i);
           check(can_busy_o = '0', "write to another address ignored");
 
-        end loop;
+        end loop loop_addr_bit;
 
         write_bus(c_uart_tx_data_addr, x"00000001");
         wait until rising_edge(clk_i);
@@ -698,13 +699,13 @@ begin
         wait until rising_edge(clk_i);
         check_status(0, '0', '0', '1');
 
-        for attempt in 1 to 16 loop
+        loop_attempt_2 : for lv_attempt in 1 to 16 loop
 
           wait_for_frame;
           wait until rising_edge(clk_i);
-          check_status(attempt * 8, '0', std_logic'val(std_logic'pos('0') + attempt / 16), '1', '1');
+          check_status(lv_attempt * 8, '0', std_logic'val(std_logic'pos('0') + lv_attempt / 16), '1', '1');
 
-        end loop;
+        end loop loop_attempt_2;
 
         -- The frame gets through, which also takes 1 off the counter
         ack_enable <= '1';
@@ -727,16 +728,16 @@ begin
 
         -- STATUS is not zero now, so a stray decode would show. Every address
         -- one bit away reads zero, and the data is only there for one cycle.
-        for addr_bit in 0 to 31 loop
+        loop_addr_bit_2 : for lv_addr_bit in 0 to 31 loop
 
           -- Bits 2 and 3 select the DATA and DLC registers
-          next when addr_bit = 2 or addr_bit = 3;
-          v_addr           := c_can_status_addr;
-          v_addr(addr_bit) := not v_addr(addr_bit);
+          next when lv_addr_bit = 2 or lv_addr_bit = 3;
+          v_addr              := c_can_status_addr;
+          v_addr(lv_addr_bit) := not v_addr(lv_addr_bit);
           read_bus(v_addr);
           check_equal(v_rdata, std_logic_vector(to_unsigned(0, 32)), "another address reads zero");
 
-        end loop;
+        end loop loop_addr_bit_2;
 
         read_bus(c_can_status_addr);
         check(v_rdata /= x"00000000", "STATUS has something to report");
@@ -876,9 +877,9 @@ begin
         wait for c_bit_time * 12;
 
         -- Every combination of byte enables except a full word
-        for pattern in 0 to 14 loop
+        loop_pattern : for lv_pattern in 0 to 14 loop
 
-          v_sel := std_logic_vector(to_unsigned(pattern, 4));
+          v_sel := std_logic_vector(to_unsigned(lv_pattern, 4));
           write_bus(c_can_id_addr, x"00000123", v_sel);
           write_bus(c_can_tx_request_addr, x"00000001", v_sel);
           wait until rising_edge(clk_i);
@@ -886,7 +887,7 @@ begin
           read_bus(c_can_id_addr);
           check_equal(v_rdata, std_logic_vector'(x"00000000"), "partial store leaves ID alone");
 
-        end loop;
+        end loop loop_pattern;
 
         send_and_check(c_id, c_dlc, c_payload);
       elsif run("gate_drop_clears_the_mailbox") then
@@ -922,19 +923,19 @@ begin
         check_no_more_traffic("no dominant bit after a one clock gate drop");
       elsif run("write_during_frame_is_ignored") then
         -- 1, 4, 9 ... 64 bits in: every field, including before DLC and data are read
-        for step in 1 to 8 loop
+        loop_step : for lv_step in 1 to 8 loop
 
           wait until rising_edge(clk_i);
           write_mailbox(c_id, 8, c_payload);
           wait_for_sof;
-          wait for c_bit_time * step * step;
+          wait for c_bit_time * lv_step * lv_step;
           wait until rising_edge(clk_i);
           write_mailbox(16#321#, 2, 16#5AA5#);
           check_frame(c_id, 8, c_payload);
           check_no_more_traffic("second write not queued");
-          check_equal(rx_starts, step, "one frame per mailbox write");
+          check_equal(rx_starts, lv_step, "one frame per mailbox write");
 
-        end loop;
+        end loop loop_step;
 
       elsif run("reset_during_frame_returns_to_idle") then
         start_dominant_frame;
@@ -955,9 +956,9 @@ begin
         wait for c_bit_time * 12;
 
         -- Whatever the rival's phase, the DUT lines up with its edges
-        for phase in 1 to c_clks_per_bit loop
+        loop_phase : for lv_phase in 1 to c_clks_per_bit loop
 
-          wait for c_clk_period * phase;
+          wait for c_clk_period * lv_phase;
           start_rival(c_rival_win);
           v_edge := now;
           wait for c_bit_time * 10;
@@ -973,7 +974,7 @@ begin
           check_frame(c_id, c_dlc, c_payload);
           wait for c_bit_time * 12;
 
-        end loop;
+        end loop loop_phase;
 
       elsif run("stuck_dominant_bus_blocks_transmission") then
         force_dominant <= '1';
@@ -998,7 +999,8 @@ begin
         check_frame(16#122#, c_dlc, c_payload, false);
         check_equal(to_string(rx_frame.wire(0 to 11)), c_wire(1 to 12), "DUT sends until it loses");
         check_equal(and rx_frame.wire(12 to rx_frame.wire_length - 13), '1', "DUT recessive after losing");
-        check_equal(and rx_frame.wire(rx_frame.wire_length - 11 to rx_frame.wire_length - 1), '1', "and after the ACK");
+        check_equal(and rx_frame.wire(rx_frame.wire_length - 11 to rx_frame.wire_length - 1), '1',
+                    "and after the ACK");
         check_equal(tec, 0, "losing arbitration is not an error");
 
         -- The DUT tries again as soon as the bus is idle
@@ -1021,9 +1023,9 @@ begin
 
         -- Move the start around the DUT's bit timer, so that it sometimes sees
         -- the rival's SOF edge first and has to join it
-        for phase in 1 to c_clks_per_bit loop
+        loop_phase_2 : for lv_phase in 1 to c_clks_per_bit loop
 
-          wait for c_clk_period * phase;
+          wait for c_clk_period * lv_phase;
           wait until rising_edge(clk_i);
           write_mailbox(c_id, c_dlc, c_payload);
           start_rival(c_rival_lose);
@@ -1031,7 +1033,7 @@ begin
           check_equal(tec, 0, "no error");
           wait for c_bit_time * 12;
 
-        end loop;
+        end loop loop_phase_2;
 
       elsif run("joins_a_sof_in_the_third_intermission_bit") then
         wait for c_bit_time * 12;
@@ -1204,15 +1206,15 @@ begin
         force_recessive <= '1';
         write_mailbox(c_id, c_dlc, c_payload);
 
-        for attempt in 1 to 32 loop
+        loop_attempt_3 : for lv_attempt in 1 to 32 loop
 
-          wait until tx_falls = attempt for c_max_frame_time;
-          check_equal(tx_falls, attempt, "attempt");
-          check_equal(tec, (attempt - 1) * 8, "error counter");
-          check_equal(can_status_o(c_status_passive) = '1', attempt > 16, "error state");
+          wait until tx_falls = lv_attempt for c_max_frame_time;
+          check_equal(tx_falls, lv_attempt, "attempt");
+          check_equal(tec, (lv_attempt - 1) * 8, "error counter");
+          check_equal(can_status_o(c_status_passive) = '1', lv_attempt > 16, "error state");
           check_equal(can_status_o(c_status_bus_off), '0', "not bus-off yet");
 
-        end loop;
+        end loop loop_attempt_3;
 
         wait for c_bit_time * 8;
         check_equal(tec, 256, "error counter");
@@ -1263,7 +1265,7 @@ begin
         check_equal(tec, 8, "the gate does not clear the error counter");
       end if;
 
-    end loop;
+    end loop loop_while;
 
     test_runner_cleanup(runner);
 

@@ -81,7 +81,8 @@ analyser's resolution.
 | Item | Status |
 |------|--------|
 | Wrapper, constraints, build script, board image | Written. `check_board.py` passes: the wrapper synthesises in GHDL, and the board image prints `LS0...` on the SoC in simulation |
-| Vivado build | **Blocked.** Vivado 2026.1 is installed on the development machine, but `get_parts` lists no devices. Add the Artix-7 devices with the AMD installer, then run `build.py` |
+| Vivado build | **Blocked.** Vivado 2026.1 and its Artix-7 devices are installed on the development machine, but Vivado reports an Alveo licence and `get_parts` then lists no parts, so `build.py` stops at `set_part`. A licence that offers the xc7a100t (the free Standard edition covers it) unblocks it |
+| Vivado simulation | **Runs.** `sim/run.py` analyses every file with xvhdl, elaborates the SoC with xelab, and runs the board image bench on xsim as well as GHDL (`docs/verification/toolchain.md`) |
 | Timing, utilisation, mapped-design checks | Waiting for the build |
 | Bench (R3.2) | Needs the board and a logic analyser |
 | Compiled firmware with a pinned toolchain (R3.3) | No RISC-V compiler on the development machine. The assembled board image is the first boot profile until one is chosen |

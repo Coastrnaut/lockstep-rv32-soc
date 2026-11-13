@@ -35,8 +35,9 @@ entity automotive_can_controller is
     rst_n_i : in    std_logic;
 
     -- Internal bus from lockstep comparator (gated by safety)
-    bus_i    : in    t_rv_bus;
-    bus_ok_i : in    std_logic; -- Hardware transaction validation gate
+    bus_i : in    t_rv_bus;
+    -- Hardware transaction validation gate
+    bus_ok_i : in    std_logic;
 
     -- Register read data: valid the cycle after the strobe, otherwise zero
     rdata_o : out   std_logic_vector(c_data_width - 1 downto 0);
@@ -46,8 +47,9 @@ entity automotive_can_controller is
     can_rx_i : in    std_logic;
 
     -- Diagnostic
-    can_busy_o   : out   std_logic;
-    can_status_o : out   std_logic_vector(10 downto 0); -- 10: bus-off, 9: error passive, 8:0: TEC
+    can_busy_o : out   std_logic;
+    -- 10: bus-off, 9: error passive, 8:0: TEC
+    can_status_o : out   std_logic_vector(10 downto 0);
 
     -- CAN_ERROR interrupt: set by a failed frame until STATUS is written. A
     -- received frame raises it too, if software has enabled that.
@@ -62,13 +64,20 @@ architecture rtl of automotive_can_controller is
   attribute requirement_id of rtl : architecture is "TSR_CAN_001, TSR_CAN_002";
 
   -- Frame field lengths in bits
-  constant c_id_bits       : unsigned(7 downto 0) := to_unsigned(12, 8); -- ID + RTR
-  constant c_ctrl_bits     : unsigned(7 downto 0) := to_unsigned(6, 8);  -- IDE + r0 + DLC
+  -- ID + RTR
+  constant c_id_bits : unsigned(7 downto 0) := to_unsigned(12, 8);
+
+  -- IDE + r0 + DLC
+  constant c_ctrl_bits     : unsigned(7 downto 0) := to_unsigned(6, 8);
   constant c_max_data_bits : unsigned(7 downto 0) := to_unsigned(64, 8);
   constant c_crc_bits      : unsigned(7 downto 0) := to_unsigned(15, 8);
-  constant c_ack_bits      : unsigned(7 downto 0) := to_unsigned(3, 8);  -- CRC delim, ACK slot, ACK delim
-  constant c_eof_bits      : unsigned(7 downto 0) := to_unsigned(8, 8);  -- 7 bits, then the tick ending them
-  constant c_flag_bits     : unsigned(7 downto 0) := to_unsigned(6, 8);
+
+  -- CRC delim, ACK slot, ACK delim
+  constant c_ack_bits : unsigned(7 downto 0) := to_unsigned(3, 8);
+
+  -- 7 bits, then the tick ending them
+  constant c_eof_bits  : unsigned(7 downto 0) := to_unsigned(8, 8);
+  constant c_flag_bits : unsigned(7 downto 0) := to_unsigned(6, 8);
 
   -- RTR, IDE and r0 are dominant: a data frame in base format
   constant c_dominant : std_logic_vector(0 downto 0) := "0";
@@ -642,7 +651,8 @@ begin
         r_tx_pin      <= '1';
       elsif (w_tx_start = '1') then
         r_stuff_count <= to_unsigned(1, 3);
-        r_tx_pin      <= '0';                                                  -- SOF (dominant)
+        -- SOF (dominant)
+        r_tx_pin <= '0';
       elsif (w_arb_fail = '1') then
         r_stuff_count <= (others => '0');
         r_tx_pin      <= '1';
