@@ -328,11 +328,14 @@ MUTANTS = [
     ("ram: read data does not reach the cores", FAB, [(r"w_rdata <= ram_rdata_i;", "w_rdata <= (others => '0');")]),
     ("ram: at the wrong address", PKG, [(r'c_ram_base_addr       : std_logic_vector\(c_addr_width - 1 downto 0\) := x"20000000"', 'c_ram_base_addr       : std_logic_vector(c_addr_width - 1 downto 0) := x"30000000"')]),
     ("ram: fatal fault does not trip the comparator", LOCK, [(r"w_trip <= w_mismatch_detected or fatal_fault_i;", "w_trip <= w_mismatch_detected;")]),
-    ("ram: fatal fault not latched for the NMI", LOCK, [(r"(if \(w_fault_now = '1'\) then\s+)r_fault_latched <= '1';", r"\1null;")]),
-    ("ram: NMI waits for the latch", LOCK, [(r"nmi_fault_o  <= r_fault_latched or w_fault_now;", "nmi_fault_o  <= r_fault_latched;")]),
+    ("ram: fatal fault not latched for the NMI", LOCK, [(r"(if \(w_fault_now = '1'\) then\s+)r_fault_latched <= '1';", r"\1null;"), (r"if \(w_trip = '1' or r_fault_latched = '1'\) then", "if (w_mismatch_detected = '1') then")]),
+    ("ram: NMI waits for the latch", LOCK, [(r"nmi_fault_o  <= w_fault_reg or w_fault_now;", "nmi_fault_o  <= w_fault_reg;")]),
     # HSI FLT-01 and FLT-03
-    ("lockstep: illegal state not a fault", LOCK, [(r"w_state_illegal <= '0' when \(r_current_state = ST_SYSTEM_OK or r_current_state = ST_FAULT_TRIPPED\) else\s+'1';", "w_state_illegal <= '0';")]),
-    ("lockstep: fault output follows the compare", LOCK, [(r"fault_o      <= '1' when \(r_fault_latched = '1' or", "fault_o      <= '1' when (w_fault_now = '1' or r_fault_latched = '1' or")]),
+    ("lockstep: illegal state not a fault", LOCK, [(r"w_state_illegal <= '0' when \(r_current_state = ST_SYSTEM_OK or r_current_state = ST_FAULT_TRIPPED\) else\s+'1';", "w_state_illegal <= '0';"), (r"w_fault_reg <= '1' when \(r_fault_latched = '1' or r_current_state /= ST_SYSTEM_OK\) else", "w_fault_reg <= '1' when (r_fault_latched = '1') else")]),
+    ("lockstep: fault output follows the compare", LOCK, [(r"fault_o      <= w_fault_reg;", "fault_o      <= w_fault_reg or w_fault_now;")]),
+    # Found by the formal proof (R2.1): either of the latch and the state reports a fault
+    ("lockstep: a set latch does not trip the state", LOCK, [(r"if \(w_trip = '1' or r_fault_latched = '1'\) then", "if (w_trip = '1') then")]),
+    ("lockstep: NMI hidden by an upset of the latch", LOCK, [(r"nmi_fault_o  <= w_fault_reg or w_fault_now;", "nmi_fault_o  <= r_fault_latched or w_fault_now;")]),
     ("lockstep: safe state only in the tripped encoding", LOCK, [(r"safe_state_o <= '1' when \(r_current_state /= ST_SYSTEM_OK\) else", "safe_state_o <= '1' when (r_current_state = ST_FAULT_TRIPPED) else")]),
 
     # --- Temporal diversity

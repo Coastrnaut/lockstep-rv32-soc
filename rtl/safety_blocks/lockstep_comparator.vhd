@@ -70,6 +70,7 @@ architecture rtl of lockstep_comparator is
   signal w_trip              : std_logic;
   signal w_state_illegal     : std_logic;
   signal w_fault_now         : std_logic;
+  signal w_fault_reg         : std_logic;
   signal w_bus_open          : std_logic;
 
 begin
@@ -115,14 +116,16 @@ begin
   -- ========================================================================
   -- Decoupled combinational process for auditability.
   -- ========================================================================
-  p_fsm_next_state : process (w_trip, r_current_state) is
+  p_fsm_next_state : process (w_trip, r_fault_latched, r_current_state) is
   begin
 
     -- Strict default fallback assignment
     w_next_state <= ST_SYSTEM_OK;
 
     if (r_current_state = ST_SYSTEM_OK) then
-      if (w_trip = '1') then
+      -- A set latch with a healthy state can only be an upset. It is a fault,
+      -- so the state follows it rather than leaving the bus open.
+      if (w_trip = '1' or r_fault_latched = '1') then
         w_next_state <= ST_FAULT_TRIPPED;
       else
         w_next_state <= ST_SYSTEM_OK;
@@ -169,9 +172,13 @@ begin
   -- startup self-test checks. fault_o comes from registers alone, so the settling
   -- of the compare cannot reach a pin through it (HSI FLT-01). Anything but the
   -- healthy encoding counts as a fault for both, and as the safe state.
-  nmi_fault_o  <= r_fault_latched or w_fault_now;
-  fault_o      <= '1' when (r_fault_latched = '1' or r_current_state /= ST_SYSTEM_OK) else
-                  '0';
+  w_fault_reg <= '1' when (r_fault_latched = '1' or r_current_state /= ST_SYSTEM_OK) else
+                 '0';
+
+  -- Either one of the latch and the state is enough to report the fault, so an
+  -- upset of the other cannot hide it (found by the formal proof, R2.1)
+  nmi_fault_o  <= w_fault_reg or w_fault_now;
+  fault_o      <= w_fault_reg;
   safe_state_o <= '1' when (r_current_state /= ST_SYSTEM_OK) else
                   '0';
   bus_valid_o  <= '1' when (r_current_state = ST_SYSTEM_OK) else

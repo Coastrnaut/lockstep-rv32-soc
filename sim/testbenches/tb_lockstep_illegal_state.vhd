@@ -77,7 +77,8 @@ begin
 
   p_stim : process is
 
-    alias state is << signal i_dut.r_current_state : t_safe_state >>;
+    alias state   is << signal i_dut.r_current_state : t_safe_state >>;
+    alias latched is << signal i_dut.r_fault_latched : std_logic >>;
 
     procedure reset_dut is
     begin
@@ -163,6 +164,36 @@ begin
 
         end loop;
 
+      elsif run("an_upset_that_clears_the_latch_while_tripped_hides_nothing") then
+        -- Found by the formal proof (R2.1): the latch and the state each report
+        -- the fault, so an upset of one cannot hide it
+        reset_dut;
+        core_b_bus.data <= x"00000000";
+        wait until rising_edge(clk);
+        core_b_bus.data <= c_store.data;
+        wait until falling_edge(clk);
+        check_equal(state, st_fault_tripped, "tripped by a forced mismatch");
+        latched         <= force '0';
+        wait for 1 ns;
+        check_equal(nmi_fault, '1', "the comparator still reports the fault");
+        check_equal(fault, '1', "the registered fault still shows");
+        check_equal(safe_state, '1', "still safe");
+        check_equal(bus_valid, '0', "gate still closed");
+        wait until rising_edge(clk);
+        latched         <= release;
+      elsif run("an_upset_that_sets_the_latch_trips_the_comparator") then
+        -- A set latch with a healthy state can only be an upset: the state
+        -- follows it at the next edge rather than leaving the bus open
+        reset_dut;
+        latched <= force '1';
+        wait until rising_edge(clk);
+        latched <= release;
+        wait until falling_edge(clk);
+        check_equal(state, st_fault_tripped, "tripped");
+        check_equal(bus_valid, '0', "gate closed");
+        check_equal(safe_state, '1', "safe");
+        check_equal(fault, '1', "fault reported");
+        check_equal(sys_bus.valid, '0', "nothing passes");
       elsif run("one_bit_corruption_of_the_tripped_state_stays_tripped") then
 
         for bit_index in 0 to 7 loop
