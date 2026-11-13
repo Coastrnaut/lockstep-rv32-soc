@@ -1,10 +1,23 @@
 -- ============================================================================
--- Testbench: Lockstep Comparator — Constrained-Random Coverage-Driven
+-- Testbench: Lockstep Comparator, constrained-random and coverage-driven
 -- ============================================================================
--- Uses OSVVM RandomPType and CoveragePkg for intelligent pseudo-random
--- stimulus generation with functional coverage tracking.
--- Loop runs until the 2x3 cross-matrix (bus operation x fault vector)
--- reaches 100% bin coverage.
+-- OSVVM chooses the stimulus and tracks coverage; VUnit's checks decide the
+-- verdict. (OSVVM's own AffirmIf checks log an alert that VUnit never sees, so
+-- an earlier version of this bench passed with its expectations inverted.)
+--
+-- Each vector is a random request from core A, and core B's copy of it,
+-- either identical or with one of the 70 compared bits flipped: address 0-31,
+-- data 32-63, byte enables 64-67, write 68 and strobe 69. A flip goes to a
+-- lane the coverage model has not yet seen (intelligent coverage), so every
+-- lane is hit. The loop runs until every lane has been flipped and every
+-- combination of read or write with a matched or mismatched copy has run.
+--
+-- Checked for every vector:
+--   matched     in the same cycle, core A's request on the system bus, no fault;
+--               after the edge, still healthy
+--   mismatched  in the same cycle, the fault output high and a quiet system bus;
+--               after the edge, the safe state latched and the bus closed; then
+--               a cold reset, after which the comparator is healthy again
 --
 -- Traces to:   TSR_LOCKSTEP_001, TSR_SAFETY_GATE_001
 -- ============================================================================
@@ -13,18 +26,12 @@ library ieee;
   use ieee.std_logic_1164.all;
   use ieee.numeric_std.all;
 
--- VUnit runner support
-
 library vunit_lib;
   context vunit_lib.vunit_context;
 
--- Import OSVVM core packages
-
 library osvvm;
-  use osvvm.alertlogpkg.all;
   use osvvm.coveragepkg.all;
   use osvvm.randompkg.all;
-  use osvvm.reportpkg.all;
 
 library lockstep;
   use lockstep.package_soc_types.all;
@@ -37,23 +44,60 @@ end entity tb_lockstep_comparator;
 
 architecture behavior of tb_lockstep_comparator is
 
-  -- Declare OSVVM Randomizer (protected type — must be shared variable)
-  shared variable rv : randomptype;
+  -- The randomiser is a protected type, so a shared variable
+  shared variable v_rv : randomptype;
 
-  -- Local Clock & Timing Wires
-  signal clk_s   : std_logic;
-  signal rst_n_s : std_logic;
+  constant c_clk_period : time := 20 ns;
 
-  -- Mock CPU Bus Signals matching lockstep.package_soc_types
-  signal core_a_bus_s : t_rv_bus;
-  signal core_b_bus_s : t_rv_bus;
+  -- The compared lanes
+  constant c_lanes : positive := 70;
 
-  -- Outward-facing monitored safety outputs
+  constant c_quiet_bus : t_rv_bus :=
+  (
+    addr  => (others => '0'),
+    data  => (others => '0'),
+    we    => '0',
+    valid => '0',
+    sel   => "0000"
+  );
+
+  signal clk_s           : std_logic;
+  signal rst_n_s         : std_logic;
+  signal core_a_bus_s    : t_rv_bus;
+  signal core_b_bus_s    : t_rv_bus;
+  signal sys_bus_s       : t_rv_bus;
   signal nmi_fault_s     : std_logic;
   signal actuator_safe_s : std_logic;
   signal bus_valid_s     : std_logic;
 
-  constant clk_period : time := 20 ns; -- 50 MHz Automotive baseline
+  -- Core A's request with one compared lane flipped
+
+  function flip_lane (
+    bus_in : t_rv_bus;
+    lane   : natural
+  ) return t_rv_bus is
+
+    variable v_bus : t_rv_bus;
+
+  begin
+
+    v_bus := bus_in;
+
+    if (lane < 32) then
+      v_bus.addr(lane) := not v_bus.addr(lane);
+    elsif (lane < 64) then
+      v_bus.data(lane - 32) := not v_bus.data(lane - 32);
+    elsif (lane < 68) then
+      v_bus.sel(lane - 64) := not v_bus.sel(lane - 64);
+    elsif (lane = 68) then
+      v_bus.we := not v_bus.we;
+    else
+      v_bus.valid := not v_bus.valid;
+    end if;
+
+    return v_bus;
+
+  end function flip_lane;
 
 begin
 
@@ -61,13 +105,12 @@ begin
   begin
 
     -- "after" puts the rising edge ahead of stimulus resuming from "wait for".
-    clk_s <= '0', '1' after clk_period / 2;
-    wait for clk_period;
+    clk_s <= '0', '1' after c_clk_period / 2;
+    wait for c_clk_period;
 
   end process p_clk;
 
-  -- Unit Under Test
-  uut : entity lockstep.lockstep_comparator
+  i_uut : entity lockstep.lockstep_comparator
     port map (
       clk_i         => clk_s,
       rst_n_syn_i   => rst_n_s,
@@ -77,169 +120,125 @@ begin
       nmi_fault_o   => nmi_fault_s,
       safe_state_o  => actuator_safe_s,
       bus_valid_o   => bus_valid_s,
-      sys_bus_o     => open
+      sys_bus_o     => sys_bus_s
+    );
 
-    ); -- ========================================================================
-
-  -- CONSTRAINED-RANDOM STIMULUS & COVERAGE TRACKING LOOP
-  -- ========================================================================
   p_stimulus : process is
 
-    -- Coverage ID (record type, not protected — must be local variable)
-    variable covmatrix : coverageidtype;
-    -- Local storage variables to hold loop-generated parameters
-    variable v_rand_we    : integer;
-    variable v_rand_fault : integer;
-    variable v_rand_data  : std_logic_vector(31 downto 0);
-    variable v_rand_addr  : std_logic_vector(31 downto 0);
-    variable v_cov_point  : integer_vector(1 to 2);
+    -- Coverage models: one bin per lane, and read or write by matched or not
+    variable v_cov_lane : coverageidtype;
+    variable v_cov_kind : coverageidtype;
+
+    variable v_bus      : t_rv_bus;
+    variable v_we       : natural range 0 to 1;
+    variable v_mismatch : natural range 0 to 1;
+    variable v_lane     : natural range 0 to c_lanes - 1;
+    variable v_vectors  : natural;
+
+    procedure cold_reset is
+    begin
+
+      rst_n_s <= '0';
+      wait until rising_edge(clk_s);
+      wait until rising_edge(clk_s);
+      rst_n_s <= '1';
+      wait until rising_edge(clk_s);
+
+    end procedure cold_reset;
+
+    procedure check_bus (
+      constant actual   : in t_rv_bus;
+      constant expected : in t_rv_bus;
+      constant label_s  : in string
+    ) is
+    begin
+
+      check_equal(actual.addr, expected.addr, label_s & ": address");
+      check_equal(actual.data, expected.data, label_s & ": data");
+      check_equal(actual.sel, expected.sel, label_s & ": byte enables");
+      check_equal(actual.we, expected.we, label_s & ": write");
+      check_equal(actual.valid, expected.valid, label_s & ": strobe");
+
+    end procedure check_bus;
 
   begin
 
     test_runner_setup(runner, runner_cfg);
 
-    -- Initialize the OSVVM Alert/Log naming context
-    SetAlertLogName("tb_lockstep_randomized");
+    -- The same seed every run, so a failure repeats
+    v_rv.InitSeed(v_rv'instance_name);
 
-    -- Initialize the Random Seed Generator engine
-    RV.InitSeed(rv'instance_name);
+    v_cov_lane := NewID("compared lane flipped");
+    AddBins(v_cov_lane, GenBin(0, c_lanes - 1));
+    v_cov_kind := NewID("write by mismatch");
+    AddCross(v_cov_kind, GenBin(0, 1), GenBin(0, 1));
 
-    -- Create a unique coverage ID
-    covmatrix := NewID("CovMatrix");
+    core_a_bus_s <= c_quiet_bus;
+    core_b_bus_s <= c_quiet_bus;
+    cold_reset;
+    v_vectors    := 0;
 
-    -- ----------------------------------------------------------------
-    -- Define the Coverage Bins (Functional Matrix Geometry)
-    -- ----------------------------------------------------------------
-    -- Axis 1: Bus Operation Mode (0 = Read, 1 = Write)
-    -- Axis 2: Fault Injection Vector (0 = Safe, 1 = Address Mismatch, 2 = Data Mismatch)
-    -- Resulting Cross-Matrix total size = 6 distinct bins
-    AddCross(covmatrix, GenBin(0, 1), GenBin(0, 2));
+    loop_vector : while not (IsCovered(v_cov_lane) and IsCovered(v_cov_kind)) loop
 
-    -- System Hard Reset sequence
-    rst_n_s <= '0';
-    wait for clk_period * 2;
-    rst_n_s <= '1';
-    wait until rising_edge(clk_s);
+      v_we       := v_rv.RandInt(0, 1);
+      v_mismatch := v_rv.RandInt(0, 1);
 
-    report "Launching Intelligent Constrained-Random Simulation Framework...";
+      v_bus.addr  := v_rv.RandSlv(32);
+      v_bus.data  := v_rv.RandSlv(32);
+      v_bus.sel   := v_rv.RandSlv(4);
+      v_bus.we    := '1' when v_we = 1 else '0';
+      v_bus.valid := '1';
 
-    -- ----------------------------------------------------------------
-    -- COVERAGE-DRIVEN LOOP: Runs until all 6 cross-bins are satisfied
-    -- ----------------------------------------------------------------
-    while not IsCovered(covmatrix) loop
+      core_a_bus_s <= v_bus;
 
+      if (v_mismatch = 1) then
+        -- A lane not flipped yet, while any is left
+        v_lane       := GetRandPoint(v_cov_lane);
+        core_b_bus_s <= flip_lane(v_bus, v_lane);
+        ICover(v_cov_lane, v_lane);
+      else
+        core_b_bus_s <= v_bus;
+      end if;
+
+      ICover(v_cov_kind, (v_we, v_mismatch));
+      v_vectors := v_vectors + 1;
+
+      -- In the same cycle
+      wait for 1 ns;
+
+      if (v_mismatch = 1) then
+        check_equal(nmi_fault_s, '1', "lane " & integer'image(v_lane) & ": fault in the same cycle");
+        check_bus(sys_bus_s, c_quiet_bus, "lane " & integer'image(v_lane) & ": nothing on the system bus");
+      else
+        check_equal(nmi_fault_s, '0', "matched: no fault");
+        check_bus(sys_bus_s, v_bus, "matched: core A's request on the system bus");
+        check_equal(bus_valid_s, '1', "matched: bus open");
+      end if;
+
+      -- After the edge
       wait until rising_edge(clk_s);
+      wait for 1 ns;
 
-      -- If a previous fault locked down the ASIL core, issue a synchronous
-      -- soft-reset to restore the state machine for the next randomized vector
-      if (actuator_safe_s = '1') then
-        rst_n_s <= '0';
-        wait until rising_edge(clk_s);
-        rst_n_s <= '1';
-        wait until rising_edge(clk_s);
+      if (v_mismatch = 1) then
+        check_equal(actuator_safe_s, '1', "lane " & integer'image(v_lane) & ": safe state latched");
+        check_equal(bus_valid_s, '0', "lane " & integer'image(v_lane) & ": bus closed");
+        check_equal(nmi_fault_s, '1', "lane " & integer'image(v_lane) & ": fault held");
+
+        -- Only a cold reset ends the fault (HSI FLT-04)
+        core_b_bus_s <= v_bus;
+        cold_reset;
+        check_equal(actuator_safe_s, '0', "healthy after a cold reset");
+        check_equal(bus_valid_s, '1', "open after a cold reset");
+      else
+        check_equal(actuator_safe_s, '0', "matched: still healthy");
       end if;
 
-      -- 1. Generate pseudo-random hardware components using RV
-      v_rand_we    := RV.RandInt(0, 1);                                                                       -- Randomly chooses Read (0) or Write (1)
-      v_rand_fault := RV.RandInt(0, 2);                                                                       -- Randomly chooses Fault Injection profiles
-      v_rand_addr  := RV.RandSlv(32);                                                                         -- Random 32-bit hex address
-      v_rand_data  := RV.RandSlv(32);                                                                         -- Random 32-bit payload
+    end loop loop_vector;
 
-      -- 2. Build the structural core assignments based on the chosen random mode
-      case v_rand_fault is
-
-        when 0 =>                                                                                             -- SAFE OPERATION: Core A and Core B are perfectly matched
-
-          core_a_bus_s <=
-          (
-            addr  => v_rand_addr,
-            data  => v_rand_data,
-            we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1',
-            sel   => "1111"
-          );
-          core_b_bus_s <=
-          (
-            addr  => v_rand_addr,
-            data  => v_rand_data,
-            we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1',
-            sel   => "1111"
-          );
-
-        when 1 =>                                                                                             -- ADDRESS MISMATCH: Corrupt Core B's address line
-
-          core_a_bus_s <=
-          (
-            addr  => v_rand_addr,
-            data  => v_rand_data,
-            we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1',
-            sel   => "1111"
-          );
-          -- Bitwise flip the lowest address byte on Core B to create divergence
-          core_b_bus_s <=
-          (
-            addr  => v_rand_addr xor x"00000001",
-            data  => v_rand_data,
-            we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1',
-            sel   => "1111"
-          );
-
-        when 2 =>                                                                                             -- DATA MISMATCH: Corrupt Core B's data payload
-
-          core_a_bus_s <=
-          (
-            addr  => v_rand_addr,
-            data  => v_rand_data,
-            we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1',
-            sel   => "1111"
-          );
-          -- Bitwise flip data payload on Core B
-          core_b_bus_s <=
-          (
-            addr  => v_rand_addr,
-            data  => v_rand_data xor x"00000001",
-            we    => std_logic(to_unsigned(v_rand_we, 1)(0)),
-            valid => '1',
-            sel   => "1111"
-          );
-
-        when others =>
-
-          null;
-
-      end case;
-
-      -- Allow comparison combinational network to resolve
-      wait for clk_period * 0.5;
-
-      -- 3. Sample the active coverage matrix state
-      v_cov_point(1) := v_rand_we;
-      v_cov_point(2) := v_rand_fault;
-      ICover(covmatrix, v_cov_point);
-
-      -- 4. Check real-time structural assertions if an anomaly was injected
-      if (v_rand_fault /= 0) then
-        wait for clk_period;
-        AffirmIfEqual(nmi_fault_s, '1', "ASIL-D Failure: System failed to generate immediate NMI trap!");
-        AffirmIfEqual(actuator_safe_s, '1', "ASIL-D Failure: System failed to lock down vehicle actuators!");
-      end if;
-
-    end loop;
-
-    -- ----------------------------------------------------------------
-    -- Post-Simulation Metrics Consolidation
-    -- ----------------------------------------------------------------
-    report "Coverage block satisfied!";
-    WriteBin(covmatrix);                                                                                      -- Dump exact distribution frequencies to log
-
-    EndOfTestReports;                                                                                         -- OSVVM test report finalization
+    info("coverage closed after " & integer'image(v_vectors) & " vectors");
+    WriteBin(v_cov_kind);
 
     test_runner_cleanup(runner);
-    wait for 100 ns;
 
   end process p_stimulus;
 
