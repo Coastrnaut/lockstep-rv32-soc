@@ -8,17 +8,31 @@ from vunit import VUnit
 # ==============================================================================
 # VUnit Test Runner — lockstep-rv32-soc RISC-V SoC
 # ==============================================================================
-# Auto-detects simulator: Vivado XSim > hardcoded GHDL > GHDL on PATH
+# Simulator: GHDL with the mcode backend, chosen in one place, in this order:
+#   1. VUNIT_GHDL_PATH, the directory holding the ghdl executable
+#   2. C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin, on Windows, if it exists
+#   3. ghdl on PATH
+# Licensed simulators are not selected here. They need a job of their own,
+# with their own tool versions and evidence. The Python tools are pinned in
+# sim/requirements.txt. OSVVM is VUnit's bundled copy (vu.add_osvvm()): the
+# sim/OsvvmLibraries submodule is not compiled by this runner.
 #
-# Usage:
-#   python sim/run.py --compile    # Compile only
-#   python sim/run.py             # Run all tests
-#   python sim/run.py --test <name>  # Run a single test
-#   LOCKSTEP_NO_LINT=1 python sim/run.py  # Skip the lint gates, as mutation runs do
+# Usage, from sim/:
+#   python run.py --compile             # Compile only
+#   python run.py                       # Lint gates, then every test
+#   python run.py --lint | --vsg        # One lint gate only
+#   python run.py "sim_lib.tb_soc_ecc.*" -p 4 --xunit-xml vunit_out/out.xml
+#   LOCKSTEP_NO_LINT=1 python run.py    # Skip the lint gates, as mutation runs do
+#
+# GHDL writes its library files into the working directory (see the --workdir
+# note below), so two runs from the same directory at once are not supported.
 # ==============================================================================
 
+_WINDOWS_GHDL = Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin")
+
+
 # ---------------------------------------------------------------------------
-# Simulator auto-detection
+# Simulator selection
 # ---------------------------------------------------------------------------
 def _find_exe(name):
     """Cross-platform find: tries shutil.which first, then PATH scan."""
@@ -33,37 +47,20 @@ def _find_exe(name):
                 return candidate
     return None
 
-def find_simulator():
-    """Return ('vivado', None), ('ghdl', path), or ('ghdl', 'auto')."""
+def find_ghdl():
+    """Return (directory or None, ghdl executable or None), in the order above."""
+    explicit = os.environ.get("VUNIT_GHDL_PATH")
+    if explicit:
+        for name in ("ghdl", "ghdl.exe"):
+            exe = Path(explicit) / name
+            if exe.is_file():
+                return explicit, str(exe)
+        print(f"ERROR: VUNIT_GHDL_PATH={explicit} holds no ghdl executable.")
+        sys.exit(1)
+    if os.name == "nt" and (_WINDOWS_GHDL / "ghdl.exe").is_file():
+        return str(_WINDOWS_GHDL), str(_WINDOWS_GHDL / "ghdl.exe")
+    return None, _find_exe("ghdl")
 
-    # 1. Check for Vivado XSim on PATH
-    if _find_exe("xvlog") and _find_exe("xsim"):
-        try:
-            result = subprocess.run(
-                ["xvlog", "--version"],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0:
-                return ("vivado", None)
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            # .BAT wrappers fail without Vivado env — if the files exist, trust them
-            xvlog_path = _find_exe("xvlog")
-            xsim_path = _find_exe("xsim")
-            if xvlog_path and xsim_path:
-                return ("vivado", None)
-
-    # 2. Check for hardcoded GHDL (Windows)
-    if os.name == "nt":
-        ghdl_bin = Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin")
-        if ghdl_bin.is_dir():
-            return ("ghdl", str(ghdl_bin))
-
-    # 3. Fall back to GHDL on PATH
-    if _find_exe("ghdl"):
-        return ("ghdl", "auto")
-
-    # Nothing found
-    return (None, None)
 
 # Parse standalone lint flags: --lint runs only ghdl lint, --vsg runs only vsg.
 # When neither is present, the full pipeline (lint → compile → test) runs.
@@ -71,65 +68,24 @@ _lint_only = "--lint" in sys.argv
 _vsg_only = "--vsg" in sys.argv
 sys.argv = [a for a in sys.argv if a not in ("--lint", "--vsg")]
 
-detected_name, detected_path = find_simulator()
-
-# ---------------------------------------------------------------------------
-# Check if VUnit supports the detected simulator
-# ---------------------------------------------------------------------------
-# VUnit may not include Vivado/XSim in all builds. If Vivado was detected
-# but VUnit lacks it, fall back to GHDL.
-vivado_supported = False
-try:
-    # Try creating a minimal VUnit instance to probe available simulators
-    _test_vu = VUnit.from_argv()
-    # If we get here, check if vivado options exist
-    try:
-        _test_vu.set_compile_option("vivado.vcom_flags", [])
-        vivado_supported = True
-    except ValueError:
-        vivado_supported = False
-except Exception:
-    pass
-
-if detected_name == "vivado" and not vivado_supported:
-    print("Vivado XSim found on PATH but not supported by this VUnit build.")
-    print("Falling back to GHDL...")
-    # Re-detect GHDL
-    detected_name, detected_path = ("ghdl", None)
-    if os.name == "nt":
-        ghdl_bin = Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin")
-        if ghdl_bin.is_dir():
-            detected_path = str(ghdl_bin)
-        elif _find_exe("ghdl"):
-            detected_path = "auto"
-    elif _find_exe("ghdl"):
-        detected_path = "auto"
-    if detected_path is None:
-        print("ERROR: No simulator found.")
-        sys.exit(1)
-
-simulator_name = detected_name
-sim_path = detected_path
-
-if simulator_name is None:
-    print("ERROR: No simulator found.")
-    print("  Checked: Vivado XSim (xvlog/xsim on PATH),")
-    print("           GHDL (C:\\GIT\\ghdl-mcode-6.0.0-ucrt64\\bin),")
-    print("           GHDL (PATH)")
+ghdl_dir, ghdl_exe = find_ghdl()
+if ghdl_exe is None and not _vsg_only:
+    print("ERROR: GHDL not found. Set VUNIT_GHDL_PATH or put ghdl on PATH.")
     sys.exit(1)
 
-print(f"Using simulator: {simulator_name}" + (
-    f" ({sim_path})" if sim_path and sim_path != "auto" else ""
-))
+print(f"Using simulator: ghdl ({ghdl_exe})")
 
 # ---------------------------------------------------------------------------
-# Configure VUnit for detected simulator
+# Configure VUnit for GHDL
 # ---------------------------------------------------------------------------
 
 root = Path(__file__).parent.parent
 # GHDL 6.0.0 in MSYS bash cannot parse Windows backslash paths in -P/--workdir.
 # Monkey-patch VUnit's GHDL interface so all library directory paths are
-# converted to MSYS forward-slash paths before GHDL sees them.
+# converted to MSYS forward-slash paths before GHDL sees them. The patch applies
+# on every platform, including the Linux GHDL 4.1 in CI, where it also drops
+# --workdir. Narrowing it to Windows would move CI's library files, so that
+# waits for a CI run that checks it (docs/verification/milestone_0_1.md).
 from vunit.sim_if.ghdl import GHDLInterface
 _orig_compile_cmd = GHDLInterface.compile_vhdl_file_command
 _orig_get_command = GHDLInterface._get_command
@@ -166,15 +122,9 @@ def _fix_paths_sim(self, config, output_path, elaborate_only, ghdl_e, wave_file)
 GHDLInterface.compile_vhdl_file_command = _fix_paths_cmd
 GHDLInterface._get_command = _fix_paths_sim
 
-if simulator_name == "vivado":
-    os.environ["VUNIT_SIMULATOR"] = "vivado"
-else:
-    os.environ["VUNIT_SIMULATOR"] = "ghdl"
-    if sim_path and sim_path != "auto":
-        os.environ["VUNIT_GHDL_PATH"] = sim_path
-    elif os.name == "nt":
-        # Windows without hardcoded path — warn
-        print("WARNING: Using PATH ghdl on Windows — may not work")
+os.environ["VUNIT_SIMULATOR"] = "ghdl"
+if ghdl_dir:
+    os.environ["VUNIT_GHDL_PATH"] = ghdl_dir
 
 # Initialize VUnit testing context
 vu = VUnit.from_argv(compile_builtins=False)
@@ -382,15 +332,8 @@ def _run_vsg(vsg_exe):
     return True
 
 
-# Resolve executables
-_ghdl_for_lint = None
-if os.name == "nt":
-    _ghdl_hardcoded = Path(r"C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin\ghdl.exe")
-    if _ghdl_hardcoded.exists():
-        _ghdl_for_lint = str(_ghdl_hardcoded)
-if not _ghdl_for_lint:
-    _ghdl_for_lint = _find_exe("ghdl")
-
+# Resolve executables: the lint uses the same GHDL as the simulation
+_ghdl_for_lint = ghdl_exe
 _vsg_exe = _find_exe("vsg")
 
 # ---------------------------------------------------------------------------
@@ -398,21 +341,17 @@ _vsg_exe = _find_exe("vsg")
 # --lint : run only ghdl semantic lint, then exit
 # --vsg  : run only vsg style lint, then exit
 # (no flag) : run both, then continue to compile + test
+# A gate whose tool is missing fails rather than being skipped.
 # ---------------------------------------------------------------------------
 def _do_lint():
-    if _ghdl_for_lint:
-        if not _run_ghdl_lint(_ghdl_for_lint):
-            sys.exit(1)
-    else:
-        print("WARNING: GHDL not found — skipping semantic safety lint.")
-        print("  Install ghdl or add to PATH to enable ASIL-D lint gate.")
+    if not _ghdl_for_lint or not _run_ghdl_lint(_ghdl_for_lint):
+        sys.exit(1)
 
-    if _vsg_exe:
-        if not _run_vsg(_vsg_exe):
-            sys.exit(1)
-    else:
-        print("WARNING: vsg not found — skipping style lint.")
-        print("  pip install vsg to enable style checking.")
+    if not _vsg_exe:
+        print("ERROR: vsg not found. pip install -r sim/requirements.txt, or set LOCKSTEP_NO_LINT.")
+        sys.exit(1)
+    if not _run_vsg(_vsg_exe):
+        sys.exit(1)
 
 if _lint_only:
     if _ghdl_for_lint:
@@ -453,17 +392,12 @@ sim_lib.add_source_files(root / "sim" / "testbenches" / "*.vhd")
 sim_lib.add_source_files(root / "sim" / "generated" / "*.vhd")
 
 # ---------------------------------------------------------------------------
-# Simulator-specific options
+# GHDL options
 # ---------------------------------------------------------------------------
-if simulator_name == "vivado":
-    # XSim: relax strictness for mixed-std projects, verbose on failure
-    vu.set_compile_option("vivado.vcom_flags", ["-relax"])
-    vu.set_sim_option("vivado.xsim_flags", ["-v", "1"])
-else:
-    vu.set_sim_option("ghdl.elab_flags", ["--std=08"])
-    # Hang guard: a bench whose clock never starts otherwise simulates forever.
-    # The longest bench needs about 6 ms of simulated time.
-    vu.set_sim_option("ghdl.sim_flags", ["--stop-time=50ms"])
+vu.set_sim_option("ghdl.elab_flags", ["--std=08"])
+# Hang guard: a bench whose clock never starts otherwise simulates forever.
+# The longest bench needs about 6 ms of simulated time.
+vu.set_sim_option("ghdl.sim_flags", ["--stop-time=50ms"])
 
 # ---------------------------------------------------------------------------
 # Ensure reports/ directory exists (OSVVM writes OsvvmRun.yml here)

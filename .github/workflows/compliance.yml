@@ -1,21 +1,22 @@
-name: ISO 26262 Compliance Gate
+name: PR Safety Checklist Gate
+
+# Checks one thing: that the pull request description carries the design
+# review checklist of docs/safety/PR_CHECKLIST.md. It does not review the
+# checklist's answers. Lint, regression and the evidence checks for the same
+# pull request run in ci.yml ("VHDL Compile & Regression"), so they are not
+# repeated here. Neither workflow measures structural coverage, runs netlist
+# fault injection or proves properties.
 
 on:
   pull_request:
     branches: [ main ]
 
 jobs:
-  lint_and_test:
-    # Pinned: this image decides the GHDL version that apt installs.
+  checklist:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Verify PR Description Contains Safety Checklist
+      - name: PR description contains the safety checklist
         uses: actions/github-script@v9
         with:
           script: |
@@ -23,27 +24,3 @@ jobs:
             if (!body.includes("ISO 26262 ASIL-D / SafeVHDL Design Review Checklist")) {
               core.setFailed("PR description is missing the mandatory Automotive VHDL Safety Checklist.");
             }
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.11'
-
-      - name: Install GHDL & VUnit
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ghdl
-          pip install vunit_hdl==4.7.1
-
-      - name: Compile VHDL Sources
-        run: |
-          python3 sim/run.py --compile
-
-      - name: Run Testbenches
-        run: |
-          python3 sim/run.py
-
-      - name: Check GHDL Exit Status
-        if: always()
-        run: |
-          echo "Simulation complete. Check logs for coverage reports."

@@ -1,5 +1,9 @@
 name: VHDL Compile & Regression
 
+# Lint, regression and the cheap evidence checks, on every push to main and
+# every pull request. Each run publishes a pass/fail summary, its xUnit file
+# and a tool and submodule manifest, and its logs when it fails.
+
 on:
   push:
     branches: [ main ]
@@ -14,7 +18,7 @@ jobs:
   vhdl-regression:
     # Pinned: this image decides the GHDL version that apt installs.
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -31,11 +35,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ghdl
 
-      - name: Install VUnit & VSG
+      - name: Install pinned VUnit & VSG
         run: |
-          pip install vunit_hdl==4.7.1 vsg==3.35.0
+          pip install -r sim/requirements.txt
 
-      - name: Semantic safety lint (ghdl -Wall)
+      - name: Tool and submodule manifest
+        # Fails if GHDL, VUnit or VSG is missing
+        run: |
+          python sim/scripts/ci_report.py manifest sim/vunit_out/tool_manifest.json
+
+      - name: Generated fixtures match their generators
+        run: |
+          python sim/scripts/check_fixtures.py
+
+      - name: Mutation patterns still apply to the RTL
+        run: |
+          python sim/scripts/mutate.py --check
+
+      - name: Semantic safety lint (ghdl -Wall, ghdl --synth)
         run: |
           cd sim && python run.py --lint
 
@@ -44,10 +61,29 @@ jobs:
           cd sim && python run.py --vsg
 
       - name: Compile and run full regression
-        # Fails the step, not the job, so the logs below still get uploaded.
-        timeout-minutes: 5
+        # The lint gates ran above, so LOCKSTEP_NO_LINT skips running them twice
+        timeout-minutes: 8
+        env:
+          LOCKSTEP_NO_LINT: "1"
         run: |
-          cd sim && mkdir -p reports && python run.py -p 4
+          cd sim && mkdir -p reports vunit_out
+          python run.py -p 4 --xunit-xml vunit_out/regression.xml 2>&1 | tee vunit_out/regression.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Regression summary
+        if: always()
+        run: |
+          python sim/scripts/ci_report.py summary sim/vunit_out/regression.xml --log sim/vunit_out/regression.log
+
+      - name: Upload regression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: regression-evidence
+          path: |
+            sim/vunit_out/regression.xml
+            sim/vunit_out/tool_manifest.json
+          if-no-files-found: warn
 
       - name: Upload simulation logs on failure
         if: failure()
@@ -55,5 +91,6 @@ jobs:
         with:
           name: sim-logs
           path: |
+            sim/vunit_out/regression.log
             sim/vunit_out/test_output/**/*.txt
             sim/vunit_out/test_output/**/*.html

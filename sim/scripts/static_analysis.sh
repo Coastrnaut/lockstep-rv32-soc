@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Static Analysis Runner — SafeVHDL + GHDL lint
+# Static Analysis Runner — HEURISTIC grep checks only
 # ============================================================================
 # Usage: bash static_analysis.sh [path/to/vhdl]
+#
+# This is not a lint gate and is not evidence. Several of its checks always
+# report success. No workflow calls it. The lint gates are the real entry
+# points: cd sim && python run.py --lint (ghdl -Wall and ghdl --synth), and
+# python run.py --vsg.
 # ============================================================================
 
 set -euo pipefail
@@ -12,7 +17,7 @@ ERRORS=0
 WARNINGS=0
 
 echo "============================================"
-echo "  lockstep-rv32-soc Static Analysis Pipeline"
+echo "  lockstep-rv32-soc heuristic checks (not a lint gate)"
 echo "============================================"
 
 # 1. Check for inferred latches (incomplete assignments)
