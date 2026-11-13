@@ -19,7 +19,7 @@ current flow is in `docs/verification/toolchain.md`.
 | --- | --- | --- |
 | R0.1–R0.3 | Done | `docs/verification/milestone_0_1.md` |
 | R1.1–R1.4 | Done | `docs/verification/milestone_0_1.md`, HSI section 8 |
-| R2.1 | Done: comparator, fabric and store commit proved, with covers and broken-RTL checks; CDC not modelled | `docs/verification/formal.md` |
+| R2.1 | Done: comparator, fabric and store commit proved, and the watchdog's kick and status crossings proved with two free clocks (multiclock, up to 3:1 in any phase, metastability not modelled), each with covers and a broken-RTL check | `docs/verification/formal.md` |
 | R2.2 | Done for the core RTL: the RISC-V Architectural Certification Tests (ACT4) run in CI against NEORV32 v1.13.7, the revision both cores use, built with the pinned xPack GCC and checked against the Sail 0.16 reference model: all 347 pass. The trace comparison of both cores catches a register-only divergence. The ACT port's NEORV32 configuration is a superset of the SoC's | `docs/verification/isa_compliance.md`, `docs/verification/trace.md` |
 | R2.3 | Done for single RTL faults at 15 sites; no burst or netlist faults | `docs/verification/fault_campaign.md` |
 | R2.4 | Done as an evaluation: maximum diagnostic interval set, a latent compare failure and a reporting-path failure shown, a stuck sequencer reported. The redundant comparator it recommends is built: two comparators cross-checked every clock, with a latched disagreement (`rtl/safety/dual_comparator.vhd`); comparator B has its own reset, delay line and injection point, and the shared system clock is monitored against the watchdog clock (`rtl/safety/clock_monitor.vhd`, TSR_CLOCK_001) | `docs/verification/diagnostics.md` |

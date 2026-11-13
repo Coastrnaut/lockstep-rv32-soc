@@ -30,6 +30,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sysconfig
 import sys
 import time
 from pathlib import Path
@@ -43,6 +44,7 @@ VHDL = {
     "lockstep_comparator": [PKG, "rtl/safety/lockstep_comparator.vhd"],
     "soc_bus_fabric": [PKG, "rtl/safety/soc_bus_fabric.vhd"],
     "ecc_data_ram": [PKG, "rtl/safety/hamming_ecc_wrapper.vhd", "rtl/safety/ecc_data_ram.vhd"],
+    "watchdog_supervisor": [PKG, "rtl/safety/hardware_watchdog.vhd", "rtl/safety/watchdog_supervisor.vhd"],
 }
 
 # name, sby file, the Verilog it needs (entity, generics, free memory), and a
@@ -73,6 +75,16 @@ JOBS = [
                    r"w_commit <= '1' when \(r_write = '1' and bus_ok_i = '1' and",
                    "w_commit <= '1' when (r_write = '1' and"),
     },
+    {
+        "name": "watchdog_cdc",
+        "sby": "watchdog_cdc.sby",
+        "netlists": [("watchdog_supervisor", {}, False)],
+        # The kick taken as a level rather than an edge: one request becomes a
+        # kick in every watchdog clock until the request drops
+        "broken": ("rtl/safety/watchdog_supervisor.vhd",
+                   r"w_kick <= r_kick_sync\(1\) and not r_kick_sync\(2\);",
+                   "w_kick <= r_kick_sync(1);"),
+    },
 ]
 
 
@@ -89,13 +101,21 @@ def tool_env():
     """Environment for SymbiYosys: native tools if present, else YoWASP."""
     env = dict(os.environ)
     # pip's z3-solver puts z3 in <prefix>/bin, which is not on PATH on Windows
-    extra = [str(Path(sys.prefix) / "bin"), str(Path(sys.executable).parent)]
+    # and a user install (pip --user, or the Microsoft Store Python) puts the
+    # yowasp-* commands in the user scheme's scripts directory
+    extra = [str(Path(sys.prefix) / "bin"), str(Path(sys.executable).parent), sysconfig.get_path("scripts")]
+    try:
+        extra.append(sysconfig.get_path("scripts", f"{os.name}_user"))
+        extra.append(str(Path(sysconfig.get_path("data", f"{os.name}_user")) / "bin"))
+    except KeyError:
+        pass
     env["PATH"] = os.pathsep.join(extra + [env.get("PATH", "")])
     if shutil.which("sby", path=env["PATH"]) and shutil.which("yosys", path=env["PATH"]):
-        return env, ["sby"], "native"
+        return env, [shutil.which("sby", path=env["PATH"])], "native"
     if shutil.which("yowasp-sby", path=env["PATH"]):
         env.update(YOSYS="yowasp-yosys", SMTBMC="yowasp-yosys-smtbmc", WITNESS="yowasp-yosys-witness")
-        return env, ["yowasp-sby"], "yowasp"
+        # Windows looks a command up on this process's PATH, not env's: name it in full
+        return env, [shutil.which("yowasp-sby", path=env["PATH"])], "yowasp"
     sys.exit("SymbiYosys not found: pip install -r sim/requirements-formal.txt")
 
 
@@ -166,7 +186,7 @@ def run_job(job, ghdl, env, sby, src_root, tag):
 
 def properties(harness):
     text = (FORMAL / harness).read_text(encoding="utf-8")
-    return re.findall(r"//\s*(CMP-\d+|BUS-P\d+|COM-\d+)\s*(?:\([^)]*\))?:?\s*(.*)", text)
+    return re.findall(r"//\s*(CMP-\d+|BUS-P\d+|COM-\d+|CDC-\d+)\s*(?:\([^)]*\))?:?\s*(.*)", text)
 
 
 def broken_copy(job):

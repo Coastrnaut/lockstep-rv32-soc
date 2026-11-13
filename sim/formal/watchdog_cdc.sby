@@ -1,0 +1,27 @@
+# Roadmap R2.1: the watchdog's clock-domain crossings, two free clocks. Run
+# through sim/scripts/run_formal.py, which writes watchdog_supervisor.v from the
+# VHDL with GHDL first.
+[tasks]
+prove
+cover
+
+[options]
+multiclock on
+prove: mode prove
+prove: depth 24
+cover: mode cover
+cover: depth 40
+
+[engines]
+smtbmc z3
+
+[script]
+read_verilog watchdog_supervisor.v
+expose watchdog_supervisor/r_kick_req watchdog_supervisor/r_kick_ack watchdog_supervisor/r_kick_sync watchdog_supervisor/w_kick
+expose watchdog_supervisor/r_status_req watchdog_supervisor/r_status_ack watchdog_supervisor/r_status_sync watchdog_supervisor/r_status_toggle watchdog_supervisor/r_status_wd watchdog_supervisor/r_status_sys
+read -formal fv_watchdog_cdc.sv
+prep -top fv_watchdog_cdc
+
+[files]
+watchdog_supervisor.v
+fv_watchdog_cdc.sv

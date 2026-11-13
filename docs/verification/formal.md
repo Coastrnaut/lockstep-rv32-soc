@@ -1,8 +1,9 @@
 # Formal verification (roadmap R2.1)
 
-First formal checks of the blocks that decide whether a request may have an
-effect: the lockstep comparator, the bus response fabric, and the comparator
-in front of the ECC RAM's store commit. Each is a SymbiYosys job with a prove
+Formal checks of the blocks that decide whether a request may have an effect
+(the lockstep comparator, the bus response fabric, and the comparator in front
+of the ECC RAM's store commit), and of the watchdog's two clock-domain
+crossings. Each is a SymbiYosys job with a prove
 task, a cover task and a deliberately broken RTL that the prove task must
 reject.
 
@@ -34,11 +35,11 @@ python sim/scripts/run_formal.py --broken      # all jobs; writes sim/formal/bui
    deliberate break, and must fail. This checks that the harness is connected
    to the logic it claims to check.
 
-CI runs all three jobs with `--broken` in the `formal` job of `ci.yml`.
+CI runs all four jobs with `--broken` in the `formal` job of `ci.yml`.
 
 ## Assumptions
 
-Every job uses the same model:
+The three single-clock jobs use the same model:
 
 - one clock, and every input free in every cycle: both cores' buses, the fatal
   input, the slaves' read data, and the cold and warm resets
@@ -48,8 +49,8 @@ Every job uses the same model:
   word, including an uncorrectable one, can be read
 
 No assumption constrains the buses or the resets. The proofs are of the RTL as
-GHDL synthesises it. They say nothing about a mapped netlist (roadmap R3.1),
-about clock-domain crossings (below), or about the CPUs.
+GHDL synthesises it. They say nothing about a mapped netlist (roadmap R3.1) or
+about the CPUs. The clock-domain job has its own model, in its section below.
 
 ## Jobs and properties
 
@@ -104,6 +105,59 @@ the same at any size.
 
 Broken RTL: the commit ignores the gate. The proof fails on COM-01 and COM-02.
 
+### `watchdog_cdc` (`fv_watchdog_cdc.sv`)
+
+`watchdog_supervisor` with the watchdog in it: the bus on `clk_i`, the
+watchdog on `wd_clk_i`, a kick request handshake into the watchdog and a status
+word handshake out of it (HSI 8.4, Rule CD-02). SymbiYosys's multiclock mode
+gives the solver a global clock, and in every step of it each of the two clocks
+may rise, fall or stay.
+
+Its model:
+
+- **Clocks.** Unrelated, in any phase, each changing level at least once in
+  three steps, so either may run up to three times faster than the other.
+  Without some bound, k-induction never closes, because a stopped clock can
+  stretch any trace. A clock that stops does nothing at its edges, so it cannot
+  break these safety properties in a way that a slow one could not. Losing the
+  watchdog clock is the clock monitor's job (TSR_CLOCK_001).
+- **Metastability** is not modelled: a synchroniser flip-flop takes the value
+  its input had before the edge. That a two-flop synchroniser settles within a
+  clock is a timing property of the netlist (R3.1), not of the RTL.
+- **Resets.** Both are low at the start and are released together, once, after
+  each clock has had an edge in reset, as both come out of synchronisers in the
+  SoC. The properties are about crossings in operation.
+- The bus, the gate and the watchdog counter are free. Registers start from any
+  value.
+
+| ID | Property | Requirement |
+|----|----------|-------------|
+| CDC-01 | No kick reaches the watchdog that the bus side did not request, so one request is never counted twice | TSR_WD_001, HSI 8.4 |
+| CDC-02 | No kick is lost: a request raised while the handshake is idle has reached the watchdog by the time the handshake is idle again | TSR_WD_001, HSI 8.4 |
+| CDC-03 | The kick into the watchdog is one watchdog clock wide | TSR_WD_001 |
+| CDC-04 | The bus side takes the status word only after it has been still for two bus clocks, the synchroniser's settling time, and never in the step it changes | Rule CD-02 |
+| CDC-05 | The watchdog side changes the status word only when it answers a new request | Rule CD-02 |
+| CDC-06 | The reset into the SoC changes only at a watchdog clock edge, so it cannot glitch | TSR_WD_001, TSR_RESET_001 |
+
+A kick made while another is still crossing merges with it. That is by design
+(section 1 of the RTL) and the properties allow for it: real kicks are 40,000
+watchdog clocks apart. CDC-02 is stated for a request raised from an idle
+handshake.
+
+The harness also asserts helper invariants that make the proof inductive:
+the status handshake is a ring along which the values are the request's for a
+prefix and the old one after it, and a kick on its way through the
+synchronisers has been counted. They are proved along with the properties.
+
+Broken RTL: the kick taken as a level rather than an edge, so one request kicks
+the watchdog in every watchdog clock until it drops. The proof fails on CDC-03
+and on the invariant behind CDC-01.
+
+Writing the proof found no defect in the RTL. Each counterexample on the way
+was in the harness: a clock edge in the solver's first step counted as
+resetting the design, and a single flag tracking two back-to-back kicks that
+the RTL carried correctly.
+
 ## Result
 
 Run on 2026-11-13, from the tree of this commit:
@@ -120,6 +174,7 @@ Run on 2026-11-13, from the tree of this commit:
 | lockstep_comparator | PASS (proof) | PASS, 6 of 6 reached | Rejected | 5 s |
 | soc_bus_fabric | PASS (proof) | PASS, 8 of 8 reached | Rejected | 4 s |
 | store_commit | PASS (proof) | PASS, 4 of 4 reached | Rejected | 15 s |
+| watchdog_cdc | PASS (proof, depth 24) | PASS, 6 of 6 reached | Rejected | 17 s |
 
 ## What the proof found
 
@@ -139,7 +194,7 @@ They failed on the earlier RTL and pass now, and two mutants keep them in force.
 
 | Item | Status |
 |------|--------|
-| Clock-domain crossings (watchdog kick and status handshakes) | Planned as a separate multiclock proof with named clock assumptions |
+| Clock-domain crossings | Proved for the watchdog's kick and status handshakes (`watchdog_cdc`) under the clock model above. The clock monitor's crossing and the reset synchronisers are simulation only |
 | Comparator self-test sequencer | Planned with R2.4 |
 | Temporal-diversity delay line | Simulation only (`tb_temporal_diversity`, `tb_soc_lockstep`) |
 | Full-size RAM, CPUs, top level | Out of scope for these proofs |
