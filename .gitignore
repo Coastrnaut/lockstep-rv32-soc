@@ -45,3 +45,4 @@ sw/build/
 # Fault campaign output (sim/scripts/fault_campaign.py)
 sim/campaign/
 /sim/out
+/sim/vunit_out
