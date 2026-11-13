@@ -1,0 +1,125 @@
+name: 'RISC-V Architectural Certification Tests'
+
+# Roadmap R2.2: the RISC-V ACT (riscv-arch-test, ACT4) against the NEORV32 RTL
+# that both lockstep cores use, at the revision this repository pins in
+# rtl/core/neorv32. The tests come from stnolting/neorv32-riscv-act, pinned
+# below, which builds them with xPack GCC 15.2.0-1 (the same compiler as
+# sw/build.py), checks them against the Sail RISC-V reference model, and runs
+# each on its own NEORV32 testbench in GHDL. That testbench configures NEORV32
+# with more extensions than the SoC's cores have (rv32i_zicsr_zifencei): the
+# RTL is the same, and the SoC's subset is among what is tested.
+# docs/verification/isa_compliance.md says what this does and does not show.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rtl/core/neorv32'
+      - '.github/workflows/riscv-act.yml'
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ACT_PORT_REF: 18660530588f9f7c5751c53325d6568543cc604a
+  XPACK_VERSION: 15.2.0-1
+  SAIL_VERSION: '0.16'
+
+jobs:
+  riscv-act:
+    name: 'RISC-V ACT on the pinned NEORV32'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Test repository checkout (stnolting/neorv32-riscv-act, pinned)
+        uses: actions/checkout@v7
+        with:
+          repository: stnolting/neorv32-riscv-act
+          ref: ${{ env.ACT_PORT_REF }}
+          fetch-depth: 0
+
+      - name: Test framework checkout
+        run: git submodule update --init --recursive riscv-arch-test
+
+      - name: This repository, for its pinned NEORV32
+        uses: actions/checkout@v7
+        with:
+          path: dut
+          submodules: recursive
+
+      - name: Test the NEORV32 this repository pins
+        run: |
+          rm -rf neorv32
+          ln -s dut/rtl/core/neorv32 neorv32
+          git -C dut/rtl/core/neorv32 log --oneline -1
+          grep 'constant hw_version_c' neorv32/rtl/core/neorv32_package.vhd
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install the pinned RISC-V compiler (xPack GCC 15.2.0-1)
+        run: |
+          f=xpack-riscv-none-elf-gcc-$XPACK_VERSION-linux-x64.tar.gz
+          url=https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v$XPACK_VERSION
+          curl -fsSL -o "$f" "$url/$f"
+          curl -fsSL -o "$f.sha" "$url/$f.sha"
+          sha256sum -c "$f.sha"
+          tar -xzf "$f" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xpack-riscv-none-elf-gcc-$XPACK_VERSION/bin" >> "$GITHUB_PATH"
+
+      - name: Install the Sail RISC-V reference model
+        run: |
+          f=sail-riscv-$(uname)-$(arch).tar.gz
+          curl -fsSL -o "$f" "https://github.com/riscv/sail-riscv/releases/download/$SAIL_VERSION/$f"
+          mkdir -p "$RUNNER_TEMP/sail-riscv"
+          tar -xzf "$f" -C "$RUNNER_TEMP/sail-riscv"
+          echo "$RUNNER_TEMP/sail-riscv/sail-riscv-$(uname)-$(arch)/bin" >> "$GITHUB_PATH"
+
+      - name: Install GHDL
+        uses: ghdl/setup-ghdl@v1
+        with:
+          version: nightly
+          backend: mcode
+
+      - name: Install mise
+        run: curl https://mise.jdx.dev/install.sh | sh
+
+      - name: Check tools
+        run: make check
+
+      - name: Set up the configuration
+        run: make setup
+
+      - name: Generate tests and coverpoints
+        run: make tests
+
+      - name: Build ELFs
+        run: make elfs
+
+      - name: Set up the simulation
+        run: make sim
+
+      - name: Run the tests
+        run: make run
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f riscv-arch-test/work/neorv32/summary.log ]; then
+            tail -40 riscv-arch-test/work/neorv32/summary.log
+            tail -40 riscv-arch-test/work/neorv32/summary.log >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Archive the test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: riscv-act-summary
+          path: riscv-arch-test/work/neorv32/summary.log
+          if-no-files-found: warn
