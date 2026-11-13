@@ -143,16 +143,21 @@ coverage on: `xelab -cc_type sbct` counts statements, branches, conditions
 and toggles, into one database per snapshot (a bench, or a bench and a
 configuration). Every run of a snapshot adds to its database, so a
 snapshot's tests run one after another; different snapshots still run side
-by side. `xcrg` then merges all the databases, and `run.py` writes
-`sim/out/coverage/summary.md`: the four figures for each first-party RTL file
-(`rtl/pkg`, `rtl/safety`, `rtl/peripherals`, `rtl/soc`), and every statement
-no test executed, with its line and source. The full `xcrg` report, in text
-and HTML, is beside it.
+by side. `xcrg` then reports each database on its own, and `run.py` merges
+them line by line: a statement line is covered if any test ran it, and a
+branch outcome (true, false, or a missing else) if any test took it. `xcrg`
+can merge databases itself, but for databases with different hierarchies it
+keeps one instance per file, and a line one bench covered showed as never
+run. The summary (summary.md in sim/out/coverage, beside the `xcrg`
+reports) gives the two figures for each first-party RTL file (`rtl/pkg`,
+`rtl/safety`, `rtl/peripherals`, `rtl/soc`), every statement no test ran and
+every branch outcome no test took. `python run.py --coverage-report` builds
+it again from the last run's databases.
 
-xsim counts simulation only. Code that runs while the design is elaborated
-(a function that sizes a register from generics, an assertion on the
-generics) shows as never executed; `sim/coverage_waivers.txt` lists each such
-statement with its reason, and the summary lists the waived ones apart.
+`sim/coverage_waivers.txt` leaves out lines no passing test can run, each
+with its reason: an assertion's message and severity, which run only when
+it fails, and code that runs at elaboration, which xsim does not count. The
+summary lists the waived lines apart.
 
 GHDL's mcode backend has no coverage. Its GCC backend can write gcov data,
 but it failed 117 of the 290 tests here: it aborts in the CAN receiver bench

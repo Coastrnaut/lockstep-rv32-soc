@@ -72,6 +72,6 @@ Not measured here: condition coverage (MC/DC), FSM state and transition
 coverage, and toggle coverage of the whole SoC, which
 `docs/verification/specification.md` sets as targets for a qualified flow.
 xsim collects condition and toggle data too (`-cc_type sbct`); the full
-`xcrg` reports are in `sim/out/coverage/xcrg/`, but they are not merged
+`xcrg` reports are in sim/out/coverage/xcrg after a run, but they are not merged
 across snapshots. NEORV32 is not in the figures: its own tests and the
 RISC-V ACT (`docs/verification/isa_compliance.md`) cover it.
