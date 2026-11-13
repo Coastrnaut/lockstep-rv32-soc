@@ -107,6 +107,7 @@ when others =>
 | V-03 | Formal assertions must verify safety properties |
 | V-04 | Testbenches must check with `tb_pkg` (`check`, `check_equal`), so that a failure reaches the test result, and must compile on GHDL and Vivado's xsim |
 | V-05 | Simulation must pass with GHDL mcode backend |
+| V-06 | Every assertion in the RTL must have an `assertion_` test that breaks its property and expects its message, and every statement and branch must stay covered (`python sim/run.py --coverage`, `docs/verification/coverage.md`) |
 
 ---
 

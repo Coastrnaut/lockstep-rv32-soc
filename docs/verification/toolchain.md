@@ -60,6 +60,13 @@ severity error (GHDL runs with `--assert-level=error`; on xsim `run.py`
 looks for `Error:` lines), or no result line at all (a watchdog timeout or a
 crash) fails it.
 
+A test named `assertion_*` makes an RTL assertion fire on purpose, and says
+which with `expect_assertion("<message>")` (printed as `TB EXPECT`). `run.py`
+runs it with assertion errors allowed, and passes it only if each expected
+message appears as an assertion error and no other error does. There is one
+for each of the RTL's 34 assertions, so each is shown to work
+(`docs/verification/coverage.md`).
+
 `sim/tb/lib/tb_pkg_check.vhd` tests the framework itself: a test that passes,
 a failed `check_equal`, a failed `check`, an assertion of severity error, a
 test that never finishes, a test name the bench does not have, and a force
@@ -116,6 +123,8 @@ Found with Vivado 2026.1:
 | Limit | What the repository does about it |
 |-------|-----------------------------------|
 | VHDL-2008 `force` and `release` are "not supported yet for simulation" | Carried out through Tcl, as above |
+| An aggregate with `others` as a force value has no width once the force is a `tb_force` call | Benches force a named constant of the target's width instead |
+| Now and then, under load, xsim loads the snapshot and stops at its prompt without sourcing `-tclbatch run.tcl`, so nothing is simulated | `run.py` runs the test once more on exactly that sign (no `source run.tcl` in the output), and says so in the test's log; a test that ran and failed is never retried |
 | `time'image` gives fs on GHDL and ps on xsim | `tb_pkg` prints times as whole ns (`time_image`), and benches do the same |
 | A 64-bit record field read through an external name in a process comes out wrong (NEORV32's trace `order`, at twice its value) | `tb_soc_trace` copies the record with a concurrent assignment, which xsim reads correctly |
 | External names cannot reach the ports of an instance | The benches reach internal signals instead (`w_core_a_in.ack` for a core's bus input, the register file's `rf_we` for its write port) |
@@ -130,10 +139,10 @@ a junction to the build's one.
 
 | Run | GHDL 6.0 (Windows) | xsim, Vivado 2026.1 |
 |-----|--------------------|---------------------|
-| Tests | 298 passed of 298 | 298 passed of 298 |
-| Comparison | | All 291 tests outside the framework check gave the same verdict and the same `TB` lines |
+| Tests | 330 passed of 330 | 330 passed of 330 |
+| Comparison | | All 323 tests outside the framework check gave the same verdict and the same `TB` lines |
 
-The 298 tests are 289 in the 48 benches in `sim/tb`, 7 in the framework check
+The 330 tests are 321 in the 49 benches in `sim/tb`, 7 in the framework check
 and the board test. CI runs the GHDL half with GHDL 4.1 on Ubuntu 24.04.
 
 ## Code coverage

@@ -2,7 +2,7 @@
 
 **lockstep-rv32-soc** is an open-source, vendor-agnostic, dual-core lockstep System-on-Chip (SoC) reference architecture written in **VHDL-2008**.
 
-It is built towards **ISO 26262** functional safety for critical control units (for example steer-by-wire, brake-by-wire and safety-gate monitors). Today it is a **research prototype with simulation evidence**: no ASIL has been assessed, and the hardware metrics in `docs/safety/` are illustrative. `docs/ROADMAP.md` sets out the path to a target-backed safety case, and `docs/verification/milestone_0_1.md` records what has been verified and how.
+Its two cores are NEORV32 v1.13.7. It is built towards **ISO 26262** functional safety for control units whose safe state is to stop: its reference item is a torque-enable supervisor for an EV traction inverter (`docs/safety/item_definition.md`). A lockstep pair detects a fault and goes silent; functions that must keep working after a fault, such as steer-by-wire, need two such channels and a way to switch between them. Today it is a **research prototype with simulation evidence**: no ASIL has been assessed, and the hardware metrics in `docs/safety/` are illustrative. `docs/ROADMAP.md` sets out the path to a target-backed safety case, and `docs/verification/milestone_0_1.md` records what has been verified and how.
 
 ---
 
@@ -30,7 +30,7 @@ Two NEORV32 RISC-V cores run the same program, core B two clocks behind core A. 
 │   ├── requirements/     # Technical Safety Requirements (TSR)
 │   ├── safety/           # Item definition, HSI, safety case, FMEDA inputs, DFA, traceability, evidence index
 │   └── verification/     # Toolchain, coverage, ISA compliance, clocks, bench hardware, formal, fault campaign, diagnostics
-├── fpga/arty_a7_100t/    # Board wrapper, constraints, Vivado build and board image (no build has run yet)
+├── fpga/arty_a7_100t/    # Board wrapper, constraints, Vivado build; its README is the board setup and test guide
 ├── rtl/
 │   ├── pkg/              # Types, records, safe-state encodings and the generated register map
 │   ├── soc/              # The SoC top level and the one NEORV32 configuration both cores use
@@ -65,10 +65,10 @@ The benches are plain VHDL-2008 with no VUnit or OSVVM: `sim/tb/lib/tb_pkg.vhd` 
 
 | Simulator | Tests (2026-11-13) |
 |-----------|--------------------|
-| GHDL | 298 passed of 298: 289 in 48 benches, 7 testing the framework itself, the board image and hello world |
-| xsim | 298 passed of 298, forces included (applied through Tcl). All 291 tests outside the framework check gave the same output as on GHDL |
-| Code coverage (xsim) | 100 % of the first-party RTL's 1,131 statement lines and 850 branch outcomes, with 82 lines waived for stated reasons (`docs/verification/coverage.md`) |
-| ISA (RISC-V ACT) | 346 of 347 on the pinned NEORV32; the one failure is a counter-CSR bug the SoC's cores cannot reach (`docs/verification/isa_compliance.md`) |
+| GHDL | 330 passed of 330: 321 in 49 benches (32 of them make an RTL assertion fire on purpose), 7 testing the framework itself, the board image and hello world |
+| xsim | 330 passed of 330, forces included (applied through Tcl). All 323 tests outside the framework check gave the same output as on GHDL |
+| Code coverage (xsim) | 100 % of the first-party RTL's 1,212 statement lines and 855 branch outcomes, nothing waived; every assertion is shown to fire (`docs/verification/coverage.md`) |
+| ISA (RISC-V ACT) | All 347 on NEORV32 v1.13.7, the submodule's pin (`docs/verification/isa_compliance.md`) |
 
 ### Formal, fault campaign, mutation and board checks
 A clock monitor on the independent watchdog clock holds the SoC safe if the system clock stops or strays (TSR_CLOCK_001). A separate CI job proves properties of the comparator, the bus fabric and the RAM's store commit with YoWASP Yosys and SymbiYosys (`docs/verification/formal.md`). `sim/scripts/fault_campaign.py` runs a seeded fault campaign (`docs/verification/fault_campaign.md`). `sim/scripts/mutate.py` holds 439 RTL mutants. `fpga/arty_a7_100t/check_board.py` checks the board wrapper and image with GHDL in CI.
@@ -82,6 +82,8 @@ MC/DC, FSM and toggle coverage, gate-level simulation, and a Vivado build: the i
 ---
 
 ## 🚀 Quick Start: Running Local Verification
+
+To build the design for an Arty A7-100T, program it and test it on the bench (including the **JA4 to JB7 jumper** the actuator read-back needs), follow `fpga/arty_a7_100t/README.md`.
 
 ### Prerequisites
 ```bash

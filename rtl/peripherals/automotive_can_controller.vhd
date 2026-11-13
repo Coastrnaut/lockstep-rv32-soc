@@ -160,6 +160,7 @@ architecture rtl of automotive_can_controller is
   -- Bit-stuffing counter and the level on the TX pin
   signal r_stuff_count  : unsigned(2 downto 0);
   signal r_tx_pin       : std_logic;
+  signal w_tx_gate      : std_logic;
   signal w_stuff_insert : std_logic;
 
   -- TX shift register: left-aligned, the next bit to send is in bit 63
@@ -771,8 +772,12 @@ begin
   -- p_tx_fsm then abandons the frame, so it cannot resume when the gate
   -- returns. Receivers reject the cut-off frame on its stuff error.
   -- ========================================================================
-  can_tx_o <= (r_tx_pin and w_rx_pin) when (bus_ok_i = '1' and rst_n_i = '1') else
-              '1';
+  -- The pin is the controller's only while the safety gate is open and the
+  -- SoC is out of reset; named, so that the checks below read what gates it
+  w_tx_gate <= '1' when (bus_ok_i = '1' and rst_n_i = '1') else
+               '0';
+  can_tx_o  <= (r_tx_pin and w_rx_pin) when (w_tx_gate = '1') else
+               '1';
 
   -- Busy flag for diagnostics: a frame is in the mailbox or on the bus
   w_busy <= '1' when (r_state /= idle or r_mailbox_full = '1') else

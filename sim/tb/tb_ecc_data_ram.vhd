@@ -96,8 +96,11 @@ begin
 
   p_stim : process is
 
-    alias ram_word is << signal i_dut.r_word : std_logic_vector(71 downto 0) >>;
-    alias ram_ecc  is << signal i_dut.w_merged_ecc : std_logic_vector(7 downto 0) >>;
+    alias ram_word  is << signal i_dut.r_word : std_logic_vector(71 downto 0) >>;
+    alias ram_ecc   is << signal i_dut.w_merged_ecc : std_logic_vector(7 downto 0) >>;
+    alias ram_sbe   is << signal i_dut.w_sbe : std_logic >>;
+    alias ram_dbe   is << signal i_dut.w_dbe : std_logic >>;
+    alias ram_rdata is << signal i_dut.w_ram_rdata : std_logic_vector(31 downto 0) >>;
 
     variable v_ecc    : std_logic_vector(7 downto 0);
     variable v_clocks : natural;
@@ -569,6 +572,26 @@ begin
         check_register(c_ecc_syndrome_addr, 0, "SYNDROME");
         check_register(c_ecc_status_addr, 0, "STATUS");
         check_read(x"200000A0", x"12345678", "the RAM");
+      elsif run("assertion_an_uncorrectable_word_on_the_bus_is_reported") then
+        cold_reset;
+        expect_assertion("FORMAL FAIL: uncorrectable word on the bus");
+        ram_dbe   <= force '1';
+        ram_rdata <= force x"00000001";
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        ram_dbe   <= release;
+        ram_rdata <= release;
+        info("an uncorrectable word on the bus is reported");
+      elsif run("assertion_a_word_both_corrected_and_fatal_is_reported") then
+        cold_reset;
+        expect_assertion("FORMAL FAIL: word both corrected and fatal");
+        ram_dbe <= force '1';
+        ram_sbe <= force '1';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        ram_dbe <= release;
+        ram_sbe <= release;
+        info("a word both corrected and fatal is reported");
       end if;
 
     end loop loop_while;

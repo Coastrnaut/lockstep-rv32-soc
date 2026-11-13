@@ -63,10 +63,16 @@ architecture rtl of safe_uart is
   signal r_tx_bits  : unsigned(3 downto 0);
 
   -- UART state machine: the start bit, then the data, parity and stop bits,
-  -- shifted out of one 11-bit register in uart_data, which counts them down
-  -- to idle
+  -- shifted out of one 11-bit register in st_uart_data, which counts them down
+  -- to idle. Explicit encodings, not an enumerated type: the fourth value is
+  -- unused, and an upset into it goes back to idle with the pin at mark
+  -- (when others below), which a test can show.
 
-  type t_uart_st is (uart_idle, uart_start, uart_data);
+  subtype t_uart_st is std_logic_vector(1 downto 0);
+
+  constant st_uart_idle  : t_uart_st := "00";
+  constant st_uart_start : t_uart_st := "01";
+  constant st_uart_data  : t_uart_st := "10";
 
   signal r_uart_st : t_uart_st;
 
@@ -125,7 +131,7 @@ begin
 
         -- Mark buffer ready for TX engine
         r_tx_valid <= '1';
-      elsif (r_uart_st = uart_idle) then
+      elsif (r_uart_st = st_uart_idle) then
         r_tx_valid <= '0';
       end if;
     end if;
@@ -163,14 +169,14 @@ begin
     if rising_edge(clk_i) then
       if (w_abort = '1') then
         -- The byte on the wire is abandoned and cannot resume
-        r_uart_st  <= uart_idle;
+        r_uart_st  <= st_uart_idle;
         r_baud_cnt <= (others => '0');
         r_tx_bits  <= (others => '0');
       else
 
         case r_uart_st is
 
-          when uart_idle =>
+          when st_uart_idle =>
 
             r_baud_cnt <= (others => '0');
             if (r_tx_valid = '1' and w_parity_ok = '1') then
@@ -183,20 +189,20 @@ begin
               r_tx_shift(0) <= '0';
               -- 10 bits to shift
               r_tx_bits <= "1010";
-              r_uart_st <= uart_start;
+              r_uart_st <= st_uart_start;
             end if;
 
-          when uart_start =>
+          when st_uart_start =>
 
             r_baud_cnt <= r_baud_cnt + 1;
             if (r_baud_cnt >= c_baud_div - 1) then
               r_baud_cnt <= (others => '0');
               r_tx_shift <= '1' & r_tx_shift(10 downto 1);
               r_tx_bits  <= r_tx_bits - 1;
-              r_uart_st  <= uart_data;
+              r_uart_st  <= st_uart_data;
             end if;
 
-          when uart_data =>
+          when st_uart_data =>
 
             r_baud_cnt <= r_baud_cnt + 1;
             if (r_baud_cnt >= c_baud_div - 1) then
@@ -204,13 +210,13 @@ begin
               r_tx_shift <= '1' & r_tx_shift(10 downto 1);
               r_tx_bits  <= r_tx_bits - 1;
               if (r_tx_bits = 0) then
-                r_uart_st <= uart_idle;
+                r_uart_st <= st_uart_idle;
               end if;
             end if;
 
           when others =>
 
-            r_uart_st <= uart_idle;
+            r_uart_st <= st_uart_idle;
 
         end case;
 
@@ -226,11 +232,11 @@ begin
   -- edge, as the CAN pin goes recessive (HSI section 8.3). The reset asserts
   -- asynchronously, so this holds with the system clock stopped too.
   -- ========================================================================
-  uart_tx_o <= r_tx_shift(0) when (r_uart_st /= uart_idle and w_abort = '0') else
+  uart_tx_o <= r_tx_shift(0) when (r_uart_st /= st_uart_idle and w_abort = '0') else
                '1';
 
   -- Busy flag for diagnostics
-  w_busy <= '1' when r_uart_st /= uart_idle else
+  w_busy <= '1' when r_uart_st /= st_uart_idle else
             '0';
 
   w_error <= '1' when (r_tx_valid = '1' and w_parity_ok = '0') else
@@ -311,7 +317,7 @@ begin
             severity error;
         end if;
         -- Property: TX only starts when parity valid
-        if (r_uart_st = uart_start and r_tx_valid = '1') then
+        if (r_uart_st = st_uart_start and r_tx_valid = '1') then
           assert w_parity_ok = '1'
             report "FORMAL FAIL: TX started with parity mismatch"
             severity error;

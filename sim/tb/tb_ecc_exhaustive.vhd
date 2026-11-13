@@ -74,6 +74,10 @@ begin
 
   p_stim : process is
 
+    alias code_sbe is << signal i_dut.w_sbe : std_logic >>;
+    alias code_dbe is << signal i_dut.w_dbe : std_logic >>;
+    alias code_syn is << signal i_dut.w_syndrome : std_logic_vector(7 downto 0) >>;
+
     variable v_code : t_code;
 
     procedure encode (
@@ -179,6 +183,28 @@ begin
 
         end loop loop_value_3;
 
+      elsif run("assertion_both_error_flags_together_are_reported") then
+        expect_assertion("FORMAL FAIL: SBE and DBE both asserted");
+        code_syn <= force x"01";
+        code_sbe <= force '1';
+        code_dbe <= force '1';
+        wait for 10 ns;
+        code_sbe <= release;
+        code_dbe <= release;
+        code_syn <= release;
+        wait for 10 ns;
+        info("both error flags together are reported");
+      elsif run("assertion_an_error_flag_with_a_zero_syndrome_is_reported") then
+        expect_assertion("FORMAL FAIL: error flags set with zero syndrome");
+        code_syn <= force x"00";
+        code_sbe <= force '1';
+        code_dbe <= force '0';
+        wait for 10 ns;
+        code_sbe <= release;
+        code_dbe <= release;
+        code_syn <= release;
+        wait for 10 ns;
+        info("an error flag with a zero syndrome is reported");
       end if;
 
     end loop loop_while;

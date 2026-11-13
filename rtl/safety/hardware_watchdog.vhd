@@ -45,6 +45,7 @@ architecture rtl of hardware_watchdog is
 
   -- Internal status flags
   signal w_early_violation : std_logic;
+  signal w_sys_reset       : std_logic;
   signal w_late_violation  : std_logic;
   signal r_timeout_latched : std_logic;
 
@@ -111,7 +112,9 @@ begin
   -- ========================================================================
   -- 3. OUTPUT DRIVERS
   -- ========================================================================
-  sys_reset_o <= r_timeout_latched or w_early_violation or w_late_violation;
+  -- Named, so that its own check below reads what drives the pin
+  w_sys_reset <= r_timeout_latched or w_early_violation or w_late_violation;
+  sys_reset_o <= w_sys_reset;
 
   -- Diagnostic status: upper nibble = fault code, lower = counter MSB
   wd_status_o(7)          <= r_timeout_latched;
@@ -135,13 +138,13 @@ begin
       else
         -- Property: sys_reset asserted when timeout latched
         if (r_timeout_latched = '1') then
-          assert sys_reset_o = '1'
+          assert w_sys_reset = '1'
             report "FORMAL FAIL: sys_reset not asserted on timeout"
             severity error;
         end if;
         -- Property: early kick triggers reset
         if (w_early_violation = '1') then
-          assert sys_reset_o = '1'
+          assert w_sys_reset = '1'
             report "FORMAL FAIL: sys_reset not asserted on early kick"
             severity error;
         end if;

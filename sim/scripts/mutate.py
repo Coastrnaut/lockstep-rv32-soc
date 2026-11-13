@@ -101,10 +101,11 @@ MUTANTS = [
        "r_counter >= C_WD_MAX_COUNT - 1 and r_timeout_latched = '0') then\n      w_late_violation")]),
     # HSI section 8.3: mark at once, and nothing resumes
     ("uart: pin not forced to mark on abort", UART,
-     [(r"uart_tx_o <= r_tx_shift\(0\) when \(r_uart_st /= uart_idle and w_abort = '0'\) else", "uart_tx_o <= r_tx_shift(0) when (r_uart_st /= uart_idle) else")]),
+     [(r"uart_tx_o <= r_tx_shift\(0\) when \(r_uart_st /= st_uart_idle and w_abort = '0'\) else", "uart_tx_o <= r_tx_shift(0) when (r_uart_st /= st_uart_idle) else")]),
     ("uart: pending byte kept while the gate is closed", UART,
      [(r"elsif \(bus_ok_i = '0'\) then\s+-- The byte waiting to go is discarded, so it cannot go when the gate opens\s+r_tx_valid <= '0';", "elsif (false) then\n        null;")]),
     ("uart: serializer ignores the gate", UART, [(r"if \(w_abort = '1'\) then\s+-- The byte on the wire", "if (rst_n_i = '0') then\n        -- The byte on the wire")]),
+    ("uart: an upset into the unused state is kept", UART, [(r"when others =>\s+r_uart_st <= st_uart_idle;", "when others =>\n\n            null;")]),
     ("uart: abort ignores the reset", UART, [(r"w_abort <= '1' when \(rst_n_i = '0' or bus_ok_i = '0'\) else", "w_abort <= '1' when (bus_ok_i = '0') else")]),
     # A write with the gate closed is now stopped twice: by the branch that drops
     # the waiting byte, and by the write's own gate term. Both have to go.
@@ -517,7 +518,7 @@ MUTANTS = [
     ("rx: SOF only on an idle bus", CAN, [(r"w_sof_allowed <= '1' when \(r_recessive_run >= c_idle_bits - 1\) else", "w_sof_allowed <= '1' when (r_recessive_run >= c_idle_bits) else")]),
     ("rx: flag not timed from its end", CAN, [(r"if \(w_flag_done = '1' or w_rx_flag_done = '1'\) then", "if (w_flag_done = '1') then")]),
     ("rx: a receive error is not passive", CAN, [(r"w_error_passive <= '1' when \(r_tec >= c_tec_passive or w_rec >= c_rec_passive\) else", "w_error_passive <= '1' when (r_tec >= c_tec_passive) else")]),
-    ("rx: pin not reaching the bus", CAN, [(r"can_tx_o <= \(r_tx_pin and w_rx_pin\) when", "can_tx_o <= r_tx_pin when")]),
+    ("rx: pin not reaching the bus", CAN, [(r"can_tx_o  <= \(r_tx_pin and w_rx_pin\) when", "can_tx_o  <= r_tx_pin when")]),
     ("rx: gate does not stop reception", CAN, [(r"clear_i         => w_tx_clear,", "clear_i         => not rst_n_i,")]),
     ("rx: TX failure not passed on", CAN, [(r"tx_failed_i     => w_tx_fail,", "tx_failed_i     => '0',")]),
     ("rx: always acts as a receiver", CAN, [(r"transmitting_i  => w_transmitting,", "transmitting_i  => '0',")]),
@@ -593,8 +594,8 @@ MUTANTS = [
      [(r"elsif \(w_frame_done = '1'\) then\s+r_mailbox_full <= '0';\s+elsif", "elsif")]),
 
     # --- Safety gate
-    ("can: TX pin not gated", CAN, [(r"can_tx_o <= \(r_tx_pin and w_rx_pin\) when \(bus_ok_i = '1' and rst_n_i = '1'\) else\s+'1';", "can_tx_o <= r_tx_pin and w_rx_pin;")]),
-    ("can: TX pin not forced recessive in reset", CAN, [(r"can_tx_o <= \(r_tx_pin and w_rx_pin\) when \(bus_ok_i = '1' and rst_n_i = '1'\) else", "can_tx_o <= (r_tx_pin and w_rx_pin) when (bus_ok_i = '1') else")]),
+    ("can: TX pin not gated", CAN, [(r"can_tx_o  <= \(r_tx_pin and w_rx_pin\) when \(w_tx_gate = '1'\) else\s+'1';", "can_tx_o  <= r_tx_pin and w_rx_pin;")]),
+    ("can: TX pin not forced recessive in reset", CAN, [(r"w_tx_gate <= '1' when \(bus_ok_i = '1' and rst_n_i = '1'\) else", "w_tx_gate <= '1' when (bus_ok_i = '1') else")]),
     ("can: gate drop does not abandon the frame", CAN,
      [(CLEAR, "w_tx_clear <= '1' when (rst_n_i = '0' or r_bus_off = '1') else")]),
     ("can: TX pin survives a gate drop", CAN,

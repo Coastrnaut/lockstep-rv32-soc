@@ -61,8 +61,10 @@ begin
 
   p_stim : process is
 
-    alias counter is << signal i_wdt.r_counter : unsigned(15 downto 0) >>;
-    alias latched is << signal i_wdt.r_timeout_latched : std_logic >>;
+    alias counter  is << signal i_wdt.r_counter : unsigned(15 downto 0) >>;
+    alias latched  is << signal i_wdt.r_timeout_latched : std_logic >>;
+    alias wd_reset is << signal i_wdt.w_sys_reset : std_logic >>;
+    alias early    is << signal i_wdt.w_early_violation : std_logic >>;
 
     variable v_sampled : std_logic;
 
@@ -159,6 +161,24 @@ begin
         wait until falling_edge(wd_clk);
         check_equal(counter, to_unsigned(c_max, 16), "MAX clocks after reset");
         check_equal(sys_rst, '1', "timeout at MAX");
+      elsif run("assertion_a_timeout_that_does_not_reset_is_reported") then
+        expect_assertion("FORMAL FAIL: sys_reset not asserted on timeout");
+        latched  <= force '1';
+        wd_reset <= force '0';
+        wait until rising_edge(wd_clk);
+        wait for 1 ns;
+        latched  <= release;
+        wd_reset <= release;
+        info("a timeout without a reset is reported");
+      elsif run("assertion_an_early_kick_that_does_not_reset_is_reported") then
+        expect_assertion("FORMAL FAIL: sys_reset not asserted on early kick");
+        early    <= force '1';
+        wd_reset <= force '0';
+        wait until rising_edge(wd_clk);
+        wait for 1 ns;
+        early    <= release;
+        wd_reset <= release;
+        info("an early kick without a reset is reported");
       end if;
 
     end loop loop_while;

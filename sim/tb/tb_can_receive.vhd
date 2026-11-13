@@ -168,7 +168,10 @@ begin
     variable v_dut   : std_logic_vector(1 to c_wire_length);
     variable v_gap   : natural;
 
-    alias bus_off is << signal i_dut.r_bus_off : std_logic >>;
+    alias bus_off  is << signal i_dut.r_bus_off : std_logic >>;
+    alias rx_valid is << signal i_dut.i_receiver.r_frame_valid : std_logic >>;
+    alias rx_crc   is << signal i_dut.i_receiver.w_crc_good : std_logic >>;
+    alias rx_run   is << signal i_dut.i_receiver.r_run : unsigned(2 downto 0) >>;
 
     procedure wait_clocks (
       constant count : in natural
@@ -856,6 +859,24 @@ begin
 
         end loop loop_intermission_bit;
 
+      elsif run("assertion_a_frame_with_a_bad_crc_delivered_is_reported") then
+        reset_dut;
+        expect_assertion("FORMAL FAIL: CAN frame delivered with a bad CRC");
+        rx_valid <= force '1';
+        rx_crc   <= force '0';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        rx_valid <= release;
+        rx_crc   <= release;
+        info("a frame with a bad CRC delivered is reported");
+      elsif run("assertion_a_receive_run_too_long_is_reported") then
+        reset_dut;
+        expect_assertion("FORMAL FAIL: CAN receive run too long");
+        rx_run <= force "111";
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        rx_run <= release;
+        info("a receive run too long is reported");
       end if;
 
     end loop loop_while;

@@ -127,6 +127,9 @@ begin
     alias wd_kick      is << signal i_dut.w_kick : std_logic >>;
     alias wd_violation is << signal i_dut.w_violation : std_logic >>;
     alias wd_counter   is << signal i_dut.i_watchdog.r_counter : unsigned(15 downto 0) >>;
+    alias wd_status    is << signal i_dut.w_wd_status : std_logic_vector(7 downto 0) >>;
+    alias sup_reset    is << signal i_dut.r_reset : std_logic >>;
+    alias sup_src      is << signal i_dut.r_reset_src : std_logic_vector(1 downto 0) >>;
 
     variable v_rdata     : std_logic_vector(31 downto 0);
     variable v_violation : std_logic;
@@ -490,6 +493,26 @@ begin
         wait_wd_clocks(c_inside);
         cold_reset;
         check_late_reset;
+      elsif run("assertion_a_latched_violation_not_acted_on_is_reported") then
+        cold_reset;
+        expect_assertion("FORMAL FAIL: latched violation is not resetting the SoC");
+        wd_status(7) <= force '1';
+        sup_reset    <= force '0';
+        wait until rising_edge(wd_clk);
+        wait for 1 ns;
+        wd_status(7) <= release;
+        sup_reset    <= release;
+        info("a latched violation not acted on is reported");
+      elsif run("assertion_a_reset_with_no_reason_is_reported") then
+        cold_reset;
+        expect_assertion("FORMAL FAIL: reset pulse with no reason recorded");
+        sup_reset <= force '1';
+        sup_src   <= force "00";
+        wait until rising_edge(wd_clk);
+        wait for 1 ns;
+        sup_reset <= release;
+        sup_src   <= release;
+        info("a reset with no reason is reported");
       end if;
 
     end loop loop_while;

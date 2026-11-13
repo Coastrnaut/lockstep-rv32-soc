@@ -103,6 +103,7 @@ architecture rtl of comparator_self_test is
 
   signal w_inject  : std_logic_vector(c_fatal_lane downto 0);
   signal w_clear   : std_logic;
+  signal w_running : std_logic;
   signal w_clean   : std_logic;
   signal w_tripped : std_logic;
 
@@ -229,6 +230,10 @@ begin
              '1';
   clear_o <= w_clear;
 
+  -- Named, so that the time-limit check below reads one signal
+  w_running <= '0' when (r_step = step_done) else
+               '1';
+
   -- ========================================================================
   -- 4. THE RESULT
   -- ========================================================================
@@ -267,7 +272,7 @@ begin
             severity error;
         end if;
         if (v_at_limit) then
-          assert r_step = step_done
+          assert w_running = '0'
             report "FORMAL FAIL: self-test still running past its limit"
             severity error;
         end if;

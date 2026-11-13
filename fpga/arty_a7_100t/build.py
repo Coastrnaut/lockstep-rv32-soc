@@ -30,6 +30,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 PART = "xc7a100tcsg324-1"
+# The IMEM images sw/build.py writes, by program
+IMAGES = {"board": HERE / "board_imem_image.vhd", "hello": ROOT / "sw" / "hello" / "hello_imem_image.vhd"}
 WINDOWS_VIVADO = Path(r"C:\AMDDesignTools\2026.1\Vivado\bin\vivado.bat")
 
 
@@ -58,12 +60,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("out", nargs="?", default=str(HERE / "build"))
     parser.add_argument("--ram-addr-bits", type=int, default=15, choices=range(4, 16), metavar="4..15")
+    parser.add_argument("--program", choices=("board", "hello"), default="board",
+                        help="the program both cores boot: the board program (default) or hello, world")
     args = parser.parse_args()
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     vivado = find_vivado()
     cmd = [vivado, "-mode", "batch", "-nojournal", "-log", str(out / "vivado.log"),
-           "-source", str(HERE / "build.tcl"), "-tclargs", str(ROOT), str(out), str(args.ram_addr_bits)]
+           "-source", str(HERE / "build.tcl"), "-tclargs", str(ROOT), str(out), str(args.ram_addr_bits),
+           str(IMAGES[args.program])]
     print(" ".join(cmd), flush=True)
     r = subprocess.run(cmd, capture_output=True, text=True)
     log = r.stdout + r.stderr
@@ -91,6 +96,7 @@ def main():
         "vivado": version[0] if version else None,
         "part": PART,
         "ram_profile": {"addr_bits": args.ram_addr_bits, "bytes": 8 << args.ram_addr_bits},
+        "program": args.program,
         "wns_ns": timing.group(1) if timing else None,
         "whs_ns": timing.group(2) if timing else None,
         "utilisation": utilisation(out / "utilization.txt"),

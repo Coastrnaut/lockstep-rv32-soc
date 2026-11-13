@@ -77,8 +77,13 @@ begin
 
   p_stim : process is
 
-    alias state   is << signal i_dut.r_current_state : t_safe_state >>;
-    alias latched is << signal i_dut.r_fault_latched : std_logic >>;
+    alias state    is << signal i_dut.r_current_state : t_safe_state >>;
+    alias latched  is << signal i_dut.r_fault_latched : std_logic >>;
+    alias illegal  is << signal i_dut.w_state_illegal : std_logic >>;
+    alias trip     is << signal i_dut.w_trip : std_logic >>;
+    alias fault_nw is << signal i_dut.w_fault_now : std_logic >>;
+    alias bus_open is << signal i_dut.w_bus_open : std_logic >>;
+    alias fault_rg is << signal i_dut.w_fault_reg : std_logic >>;
 
     procedure reset_dut is
     begin
@@ -216,6 +221,52 @@ begin
 
         end loop loop_bit_index_2;
 
+      elsif run("assertion_an_illegal_state_the_outputs_ignore_is_reported") then
+        -- The comparator's own checks: an illegal state must be reported, safe
+        -- and closed in the same cycle; here the registered fault lags it
+        reset_dut;
+        expect_assertion("FORMAL FAIL: illegal state not handled as a fault");
+        illegal <= force '1';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        illegal <= release;
+        wait until rising_edge(clk);
+        info("an ignored illegal state is reported");
+      elsif run("assertion_a_trip_the_outputs_ignore_is_reported") then
+        -- A trip that reaches neither the fault pin nor the state: every check
+        -- on the trip and the two clocks after it fires
+        reset_dut;
+        expect_assertion("FORMAL FAIL: NMI not asserted on mismatch");
+        expect_assertion("FORMAL FAIL: NMI not latched within 2 cycles");
+        expect_assertion("FORMAL FAIL: bus_valid not deasserted on fault");
+        expect_assertion("FORMAL FAIL: safe_state not asserted on fault");
+        fault_nw <= force '0';
+        fault_rg <= force '0';
+        state    <= force st_system_ok;
+        trip     <= force '1';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        trip     <= release;
+        wait until rising_edge(clk);
+        wait until rising_edge(clk);
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        fault_nw <= release;
+        fault_rg <= release;
+        state    <= release;
+        info("an ignored trip is reported");
+      elsif run("assertion_a_bad_cycle_that_reaches_the_bus_is_reported") then
+        reset_dut;
+        expect_assertion("FORMAL FAIL: bad bus cycle reached the system bus");
+        trip     <= force '1';
+        bus_open <= force '1';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        trip     <= release;
+        bus_open <= release;
+        wait until rising_edge(clk);
+        wait until rising_edge(clk);
+        info("a bad cycle on the system bus is reported");
       end if;
 
     end loop loop_while;

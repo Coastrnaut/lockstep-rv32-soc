@@ -15,6 +15,8 @@
 set root [file normalize [lindex $argv 0]]
 set out  [file normalize [lindex $argv 1]]
 set ram_bits [expr {[llength $argv] > 2 ? [lindex $argv 2] : 15}]
+# The IMEM image both cores boot: the board program unless build.py names another
+set image [expr {[llength $argv] > 3 ? [file normalize [lindex $argv 3]] : "$root/fpga/arty_a7_100t/board_imem_image.vhd"}]
 set part xc7a100tcsg324-1
 set here $root/fpga/arty_a7_100t
 file mkdir $out
@@ -41,7 +43,7 @@ foreach line [split [read $fh] "\n"] {
   lappend core_files $path
 }
 close $fh
-read_vhdl -vhdl2008 -library neorv32 [concat [list $here/board_imem_image.vhd] $core_files]
+read_vhdl -vhdl2008 -library neorv32 [concat [list $image] $core_files]
 
 read_vhdl -vhdl2008 -library lockstep [concat \
   [list $root/rtl/pkg/package_soc_types.vhd] \

@@ -1,22 +1,15 @@
 # Statements that `run.py --coverage` leaves out of the statement figure,
-# each with its reason. Only two kinds belong here:
+# each with its reason. Only one kind belongs here: code xsim cannot count,
+# because it runs while the design is elaborated (a function that builds a
+# constant table from the generics). Each such line is also checked: if GHDL's
+# GCC backend is available, run.py elaborates the unit with it and counts the
+# line as covered when that elaboration ran it (docs/verification/coverage.md).
 #
-#   - code xsim cannot count: it runs while the design is elaborated
-#     (a function sizing a register from generics, a check of the generics);
-#   - an assertion's message, which runs only when the assertion fails, and so
-#     in no passing test.
-#
-# Nothing here waives a statement a test could reach. One entry per line: the
-# file ("*" for every file), the start of the statement's source as the
-# coverage report shows it, then # and the reason. A waived statement that a
-# test does reach is counted as usual.
-* report " # an assertion's message: runs only when the assertion fails
-* severity # an assertion's severity: runs only when the assertion fails
-rtl/safety/clock_monitor.vhd v_bits := 2; # div_bits sizes the divider from the generics, at elaboration
-rtl/safety/clock_monitor.vhd loop_bits : while # div_bits, at elaboration
-rtl/safety/clock_monitor.vhd v_bits := v_bits + 1; # div_bits, at elaboration
-rtl/safety/clock_monitor.vhd return v_bits; # div_bits, at elaboration
-rtl/safety/hamming_ecc_wrapper.vhd v_position   := 3; # the bit-position table, built from constants at elaboration
+# Nothing here waives a statement a simulation could reach: assertion messages
+# are covered by the assertion_ tests, which make each assertion fire. One
+# entry per line: the file ("*" for every file), the start of the statement's
+# source as the coverage report shows it, then # and the reason.
+rtl/safety/hamming_ecc_wrapper.vhd v_position   := 3; # the bit-position table, built from the data width at elaboration
 rtl/safety/hamming_ecc_wrapper.vhd v_next_check := 4; # the bit-position table, at elaboration
 rtl/safety/hamming_ecc_wrapper.vhd loop_i : for # the bit-position table, at elaboration
 rtl/safety/hamming_ecc_wrapper.vhd if (v_position = v_next_check) then # the bit-position table, at elaboration
@@ -25,5 +18,3 @@ rtl/safety/hamming_ecc_wrapper.vhd v_next_check := v_next_check * 2; # the bit-p
 rtl/safety/hamming_ecc_wrapper.vhd v_positions(lv_i) := v_position; # the bit-position table, at elaboration
 rtl/safety/hamming_ecc_wrapper.vhd v_position        := v_position + 1; # the bit-position table, at elaboration
 rtl/safety/hamming_ecc_wrapper.vhd return v_positions; # the bit-position table, at elaboration
-rtl/peripherals/safe_uart.vhd r_uart_st <= uart_idle; # the fail-safe default (when others) of a case on an enumerated state: every value of the type has its own arm, so no simulation reaches it
-rtl/peripherals/safe_uart.vhd when others => # the same fail-safe default arm: no value of the enumerated state reaches it

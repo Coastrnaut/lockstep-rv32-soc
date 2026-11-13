@@ -194,6 +194,11 @@ begin
     alias comparator_mismatch is << signal i_comparator.w_mismatch_detected : std_logic >>;
     alias test_result         is << signal i_dut.r_result : t_safe_state >>;
     alias test_lane           is << signal i_dut.r_lane : natural range 0 to c_bus_bits >>;
+    alias test_inject         is << signal i_dut.w_inject : std_logic_vector(c_bus_bits downto 0) >>;
+    alias test_running        is << signal i_dut.w_running : std_logic >>;
+
+    -- One lane flipped, as a constant: xsim's forces take no open aggregate
+    constant c_one_lane : std_logic_vector(c_bus_bits downto 0) := (0 => '1', others => '0');
 
     procedure cold_reset is
     begin
@@ -395,6 +400,48 @@ begin
         check_equal(passed, '0', "the old pass has gone");
         wait_for_the_test;
         check_equal(passed, '1', "passed again");
+      elsif run("assertion_a_pass_with_a_lane_untried_is_reported") then
+        cold_reset;
+
+        loop_early : for lv_n in 1 to 20 loop
+
+          wait until rising_edge(clk);
+
+        end loop loop_early;
+
+        expect_assertion("FORMAL FAIL: cores released with a lane untried");
+        test_result <= force st_system_ok;
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        test_result <= release;
+        info("a pass before every lane is reported");
+      elsif run("assertion_an_injection_outside_the_test_is_reported") then
+        cold_reset;
+        wait_for_the_test;
+        expect_assertion("FORMAL FAIL: comparator disturbed outside the test");
+        test_inject <= force c_one_lane;
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        test_inject <= release;
+        info("an injection after the test is reported");
+      elsif run("assertion_a_test_running_past_its_limit_is_reported") then
+        cold_reset;
+        wait_for_the_test;
+
+        -- The elapsed count stops at the limit, some clocks after the test ends
+
+        loop_to_limit : for lv_n in 1 to 40 loop
+
+          wait until rising_edge(clk);
+
+        end loop loop_to_limit;
+
+        expect_assertion("FORMAL FAIL: self-test still running past its limit");
+        test_running <= force '1';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        test_running <= release;
+        info("a test past its limit is reported");
       end if;
 
     end loop loop_while;

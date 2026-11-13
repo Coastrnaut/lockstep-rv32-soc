@@ -200,6 +200,12 @@ begin
   -- ========================================================================
   p_stim : process is
 
+    alias k_gate   is << signal i_uut.w_tx_gate : std_logic >>;
+    alias k_pin    is << signal i_uut.r_tx_pin : std_logic >>;
+    alias k_stuff  is << signal i_uut.r_stuff_count : unsigned(2 downto 0) >>;
+    alias k_full   is << signal i_uut.r_mailbox_full : std_logic >>;
+    alias k_busoff is << signal i_uut.r_bus_off : std_logic >>;
+
     constant c_crc_check_input : string := "123456789";
 
     variable v_seen  : natural;
@@ -1263,6 +1269,57 @@ begin
         bus_ok_i <= '1';
         check_no_more_traffic("frame dropped with the gate");
         check_equal(tec, 8, "the gate does not clear the error counter");
+      elsif run("assertion_a_dominant_pin_while_idle_is_reported") then
+        expect_assertion("FORMAL FAIL: CAN TX not recessive while idle");
+        k_pin <= force '0';
+        wait until rising_edge(clk_i);
+        wait for 1 ns;
+        k_pin <= release;
+        wait until rising_edge(clk_i);
+        info("a dominant pin while idle is reported");
+      elsif run("assertion_a_dominant_pin_with_the_gate_closed_is_reported") then
+        -- The receive pin follows the bus a clock later, so the idle check fires too
+        expect_assertion("FORMAL FAIL: CAN TX not recessive on safety gate drop");
+        expect_assertion("FORMAL FAIL: CAN TX not recessive while idle");
+        bus_ok_i <= '0';
+        k_gate   <= force '1';
+        k_pin    <= force '0';
+        wait until rising_edge(clk_i);
+        wait for 1 ns;
+        k_gate   <= release;
+        k_pin    <= release;
+        bus_ok_i <= '1';
+        wait until rising_edge(clk_i);
+        info("a dominant pin with the gate closed is reported");
+      elsif run("assertion_a_stuff_run_too_long_is_reported") then
+        expect_assertion("FORMAL FAIL: CAN stuff run too long");
+        k_stuff <= force "111";
+        wait until rising_edge(clk_i);
+        wait for 1 ns;
+        k_stuff <= release;
+        info("a stuff run too long is reported");
+      elsif run("assertion_a_mailbox_loaded_with_the_gate_closed_is_reported") then
+        expect_assertion("FORMAL FAIL: CAN mailbox loaded with safety gate low");
+        bus_ok_i <= '0';
+        wait until rising_edge(clk_i);
+        k_full   <= force '1';
+        wait until rising_edge(clk_i);
+        wait for 1 ns;
+        k_full   <= release;
+        bus_ok_i <= '1';
+        wait until rising_edge(clk_i);
+        info("a mailbox loaded with the gate closed is reported");
+      elsif run("assertion_a_dominant_pin_while_bus_off_is_reported") then
+        expect_assertion("FORMAL FAIL: CAN TX not recessive while bus-off");
+        expect_assertion("FORMAL FAIL: CAN TX not recessive while idle");
+        k_busoff <= force '1';
+        k_pin    <= force '0';
+        wait until rising_edge(clk_i);
+        wait for 1 ns;
+        k_busoff <= release;
+        k_pin    <= release;
+        wait until rising_edge(clk_i);
+        info("a dominant pin while bus-off is reported");
       end if;
 
     end loop loop_while;

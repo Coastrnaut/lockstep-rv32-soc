@@ -87,7 +87,7 @@ WINDOWS_GHDL = [Path("C:/GIT/ghdl-mcode-6.0.0-ucrt64/bin"), Path("C:/GIT/ghdl-mc
 VIVADO_GLOBS = [("C:/AMDDesignTools", "*/Vivado/bin"), ("C:/Xilinx/Vivado", "*/bin"), ("C:/Xilinx", "*/Vivado/bin"),
                 ("/tools/Xilinx/Vivado", "*/bin"), ("/tools/Xilinx", "*/Vivado/bin"), ("/opt/Xilinx/Vivado", "*/bin")]
 
-TB_LINE = re.compile(r"TB (INFO|PASS|FAIL|SKIP)\b.*")
+TB_LINE = re.compile(r"TB (INFO|PASS|FAIL|SKIP|EXPECT)\b.*")
 # A force or release statement, which xsim cannot simulate, on one line:
 # indent, target, force or release, value
 FORCE = re.compile(r"^([ \t]*)(?!--)([^;\n]*?)\s*<=\s*(force|release)\b\s*([^;\n]*);", re.M)
@@ -272,7 +272,7 @@ def discover():
                     configured.setdefault(test, []).append((config, generics))
             for test in tests_of(path):
                 for config, generics in configured.get(test, [("", {})]):
-                    jobs.append(Job(build, bench, test, config, generics))
+                    jobs.append(Job(build, bench, test, config, generics, test.startswith("assertion_")))
             if build == "check":
                 # A name the bench does not have must fail too
                 jobs.append(Job(build, bench, "expect_fail_a_test_the_bench_does_not_have"))
@@ -475,7 +475,15 @@ class Xsim:
         (rundir / "run.tcl").write_text(RUN_TCL.format(ms=STOP_TIME_MS), encoding="utf-8")
         # No --onfinish quit: xsim would take std.env.stop for the end, and run.tcl quits
         cmd = [self.xsim, job.unit, "--nolog", "--onerror", "quit", "-tclbatch", "run.tcl"]
-        return run_process(cmd, rundir, 1800)
+        rc, out = run_process(cmd, rundir, 1800)
+        # Now and then, under load, xsim loads the snapshot and stops at its prompt
+        # without sourcing run.tcl: nothing was simulated. That is xsim failing to
+        # start, not the test failing, so it gets one more try, and says so.
+        if rc is not None and out is not None and "source run.tcl" not in out:
+            first = out
+            rc, out = run_process(cmd, rundir, 1800)
+            out = f"run.py: xsim did not source run.tcl, so the test ran again\n{first}\n{out or ''}"
+        return rc, out
 
 
 def expected_outcome(sim, job, ok, msg):
@@ -499,7 +507,20 @@ def verdict(job, rc, out):
     fails = [l for l in lines if l.startswith("TB FAIL")]
     if fails:
         return False, fails[0][len("TB FAIL "):], lines
-    if not job.allow_errors:
+    if job.test.startswith("assertion_"):
+        # The test makes RTL assertions fire on purpose: exactly the ones it expects
+        expected = [l[len("TB EXPECT "):].strip() for l in lines if l.startswith("TB EXPECT")]
+        errors = [out[out.rfind("\n", 0, m.start()) + 1: out.find("\n", m.end())].strip()
+                  for m in ASSERT_ERROR.finditer(out or "")]
+        if not expected:
+            return False, "an assertion_ test must say what it expects with expect_assertion", lines
+        missing = [e for e in expected if not any(e in err for err in errors)]
+        if missing:
+            return False, f"expected assertion did not fire: {missing[0]}", lines
+        others = [err for err in errors if not any(e in err for e in expected)]
+        if others:
+            return False, "unexpected assertion error: " + others[0][:200], lines
+    elif not job.allow_errors:
         m = ASSERT_ERROR.search(out)
         if m:
             line = out[out.rfind("\n", 0, m.start()) + 1: out.find("\n", m.end())]
@@ -736,6 +757,63 @@ def read_xcrg(folder):
     return found
 
 
+GHDL_GCC_WSL = "~/tools/ghdl-gcc-*/bin/ghdl"
+
+
+def elaboration_lines(files):
+    """{file: lines run} when each file's entity is elaborated by GHDL's GCC
+    backend with gcov on: the code xsim cannot count. Empty when that GHDL is
+    not found. GHDL_GCC names it (and GHDL_GCC_LIBS its library path); on
+    Windows it is also looked for in each WSL distribution."""
+    if not files:
+        return {}
+    ghdl, libs, wsl = os.environ.get("GHDL_GCC"), os.environ.get("GHDL_GCC_LIBS", ""), None
+    if not ghdl and os.name == "nt" and shutil.which("wsl"):
+        listing = subprocess.run(["wsl", "-l", "-q"], capture_output=True)
+        for name in listing.stdout.decode("utf-16-le", errors="ignore").replace("\0", "").split():
+            found = subprocess.run(["wsl", "-d", name, "-e", "sh", "-c", f"ls {GHDL_GCC_WSL} 2>/dev/null | head -1"],
+                                   capture_output=True, text=True).stdout.strip()
+            if found:
+                ghdl, wsl = found, ["wsl", "-d", name, "-e"]
+                if not libs:
+                    libs = subprocess.run(wsl + ["sh", "-c", "dirname $(ls ~/tools/libgnat-*/usr/lib/*/libgnat-*.so "
+                                                 "2>/dev/null | head -1) 2>/dev/null"],
+                                          capture_output=True, text=True).stdout.strip()
+                break
+    if not ghdl:
+        print("note: no GHDL GCC backend for elaboration coverage (GHDL_GCC); elaboration lines stay waived")
+        return {}
+
+    def as_seen(path):
+        p = Path(path).resolve()
+        return "/mnt/" + p.drive[0].lower() + p.as_posix()[2:] if wsl else p.as_posix()
+
+    result = {}
+    for rel in files:
+        work = OUT / "coverage" / "elaboration" / Path(rel).stem
+        remove_tree(work)
+        work.mkdir(parents=True)
+        entity = re.search(r"^entity\s+(\w+)\s+is", (ROOT / rel).read_text(encoding="utf-8"), re.M | re.I).group(1)
+        script = (f"set -e; export LD_LIBRARY_PATH={libs}; cd {as_seen(work)}; "
+                  f"{ghdl} -a --std=08 --work=lockstep -g -fprofile-arcs -ftest-coverage {as_seen(ROOT / rel)}; "
+                  f"{ghdl} -e --std=08 --work=lockstep -Wl,-lgcov {entity}; "
+                  f"./{entity} --stop-time=0ns > /dev/null 2>&1 || true; "
+                  f"gcov -o . {Path(rel).stem} > /dev/null")
+        cmd = (wsl or []) + ["bash", "-c", script]
+        rc = subprocess.run(cmd, capture_output=True, text=True)
+        report = work / f"{Path(rel).name}.gcov"
+        if rc.returncode != 0 or not report.is_file():
+            print(f"note: elaboration coverage of {rel} failed:\n{(rc.stdout + rc.stderr)[-800:]}")
+            continue
+        lines = set()
+        for line in report.read_text(encoding="utf-8", errors="replace").splitlines():
+            m = re.match(r"\s*(\d+)\*?:\s*(\d+):", line)
+            if m and int(m.group(1)) > 0:
+                lines.add(int(m.group(2)))
+        result[rel] = lines
+    return result
+
+
 def coverage_report(sim, builds):
     """Report every snapshot's code coverage with xcrg, merge them line by line, and
     summarise the first-party RTL: a statement is covered if any test ran it, and a
@@ -784,13 +862,21 @@ def coverage_report(sim, builds):
     def waiver(rel, source):
         return next((r for wf, wp, r in waivers if wf in (rel, "*") and source.startswith(wp)), None)
 
-    rows, missed, waived, branch_missed = [], [], [], []
+    # What elaboration runs, which xsim cannot count: GHDL's GCC backend can
+    elab = elaboration_lines(sorted({wf for wf, _, _ in waivers if wf != "*"}))
+
+    rows, missed, waived, branch_missed, at_elab = [], [], [], [], []
     for rel in sorted(merged):
         stmt, branch = merged[rel]["stmt"], merged[rel]["branch"]
         counted = hit = 0
         for n in sorted(stmt):
             count, source = stmt[n]
             reason = waiver(rel, source)
+            if reason and count == 0 and n in elab.get(rel, set()):
+                counted += 1
+                hit += 1
+                at_elab.append((rel, n, source))
+                continue
             if reason and count == 0:
                 waived.append((rel, n, source, reason))
                 continue
@@ -827,12 +913,15 @@ def coverage_report(sim, builds):
     md += ["", "## Branch outcomes never taken", "", "| File | Line | Outcome |", "|------|-----:|---------|"]
     names = {"T": "true", "F": "false", "E": "the implicit else"}
     md += [f"| `{f}` | {n} | {names[k]} |" for f, n, k in branch_missed]
+    md += ["", "## Run at elaboration (counted by GHDL's GCC backend, not xsim)", "",
+           "| File | Line | Source |", "|------|-----:|--------|"]
+    md += [f"| `{f}` | {n} | `{s.replace('|', '/')}` |" for f, n, s in at_elab]
     md += ["", "## Waived", "", "| File | Line | Source | Why |", "|------|-----:|--------|-----|"]
     md += [f"| `{f}` | {n} | `{s.replace('|', '/')}` | {r} |" for f, n, s, r in waived]
     (out / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     print("\n".join(md[:len(rows) + 9]))
     print(f"\n{len(missed)} statements never executed, {len(branch_missed)} branch outcomes never taken, "
-          f"{len(waived)} waived; the report is {out / 'summary.md'}")
+          f"{len(at_elab)} counted at elaboration, {len(waived)} waived; the report is {out / 'summary.md'}")
     return True
 
 

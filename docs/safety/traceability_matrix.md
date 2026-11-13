@@ -84,10 +84,10 @@ or countable facts instead.
 | Evidence | Status | Notes |
 |----------|--------|-------|
 | RTL implementation | 18 first-party RTL files: 16 blocks, the core wrapper and the top level | Boot ROM ECC, Flash and the comparator register block are not built (HSI section 5) |
-| Testbenches | 48 benches, 289 tests, all passing on GHDL and on Vivado's xsim, with the same output | Plain VHDL-2008 on `sim/tb/lib/tb_pkg.vhd`. Tools and counts: `docs/verification/toolchain.md` |
+| Testbenches | 49 benches, 321 tests, all passing on GHDL and on Vivado's xsim, with the same output | Plain VHDL-2008 on `sim/tb/lib/tb_pkg.vhd`. Tools and counts: `docs/verification/toolchain.md` |
 | Fault injection | Directed forces in the benches, and a seeded campaign at 15 RTL sites | `docs/verification/fault_campaign.md`. No netlist-level injection |
-| Structural coverage | 100 % of statement lines (1,131) and branch outcomes (850) of the first-party RTL, 82 lines waived with reasons | xsim code coverage over every test (`docs/verification/coverage.md`); MC/DC, FSM and toggle not measured |
-| Mutation | 457 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
+| Structural coverage | 100 % of statement lines (1,212) and branch outcomes (855) of the first-party RTL, nothing waived; every assertion shown to fire | xsim code coverage over every test (`docs/verification/coverage.md`); MC/DC, FSM and toggle not measured |
+| Mutation | 458 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
 | Assertions | Clocked simulation assertions in the RTL | Checked in simulation |
 | Formal | 3 SymbiYosys jobs, 21 properties, all proved by k-induction, every cover reached, each job rejects a deliberately broken RTL | Comparator, bus fabric, and compare before the RAM commit. CDC, self-test and CPUs are not covered (`docs/verification/formal.md`) |
 | Traceability tags | Every first-party RTL file carries a `requirement_id` that this matrix resolves | |

@@ -57,6 +57,8 @@ begin
 
   p_stim : process is
 
+    alias long_stages is << signal i_dut_long.r_stages : std_logic_vector(4 downto 0) >>;
+
     procedure rising_clock is
     begin
 
@@ -174,6 +176,15 @@ begin
         check_equal(rst_syn, '0', "the edge before the pulse no longer counts");
         tick;
         check_equal(rst_syn, '1', "released two edges after the pulse");
+      elsif run("assertion_a_chain_released_out_of_order_is_reported") then
+        -- A stage released before the one ahead of it in the chain: an upset
+        -- that would release the reset early. The chain's own check reports it.
+        set_reset('1');
+        expect_assertion("FORMAL FAIL: reset chain released out of order");
+        long_stages <= force "00010";
+        tick;
+        long_stages <= release;
+        info("an out-of-order chain is reported");
       end if;
 
     end loop loop_while;

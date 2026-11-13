@@ -13,7 +13,7 @@ as achieved. Per-run evidence is in `docs/verification/milestone_0_1.md`.
 
 | Target | Today |
 |--------|-------|
-| 100% statement, branch, condition, MC/DC, toggle and FSM coverage (section 1) | Statement and branch: 100 % of the first-party RTL over the regression, on xsim, with 82 lines waived for stated reasons (`docs/verification/coverage.md`). Condition, MC/DC, toggle and FSM: not measured across the regression; a qualified tool flow is still needed for a certification claim |
+| 100% statement, branch, condition, MC/DC, toggle and FSM coverage (section 1) | Statement and branch: 100 % of the first-party RTL over the regression, on xsim, nothing waived (`docs/verification/coverage.md`). Condition, MC/DC, toggle and FSM: not measured across the regression; a qualified tool flow is still needed for a certification claim |
 | Illegal FSM recovery by forcing (section 1) | Done for the comparator state register (`tb_lockstep_illegal_state`). `tb_fsm_illegal_recovery` exercises the CAN gate and traffic, not illegal states. CAN, UART and self-test FSMs use enumerated types and have no illegal-state tests |
 | Functional coverage bins (section 2) | Bus access kind, target and spacing in `tb_soc_lockstep`. Address-space corners are directed tests in `tb_soc_bus_fabric` and `tb_soc_fabric`, not coverage bins |
 | Stuck-at and transient fault injection (section 3) | A seeded campaign of single forced bits at 15 RTL sites, classified with denominators and latencies (`docs/verification/fault_campaign.md`). No netlist injection |
@@ -21,7 +21,7 @@ as achieved. Per-run evidence is in `docs/verification/milestone_0_1.md`.
 | Comparator self-checking (section 4.A) | Startup self-test of both comparators after each cold reset, and a second comparator cross-checked every clock (`dual_comparator`, roadmap R2.4). No periodic heartbeat |
 | Gate-level netlist simulation (section 4.B) | Not done. GHDL synthesis is used as a lint and smoke test only |
 | CI blocks on coverage and FTTI (section 5) | CI blocks on lint, VSG, the regression, fixture drift and stale mutation patterns. It does not measure coverage |
-| Mutation campaign | 457 mutants. Full campaign is manual, before a release |
+| Mutation campaign | 458 mutants. Full campaign is manual, before a release |
 
 The signal names `sys_outputs_valid_o` and `core_mismatch_detected` below come
 from an early draft. The implemented equivalents are the comparator's

@@ -86,6 +86,16 @@ begin
 
   p_stim : process is
 
+    alias u_valid  is << signal i_dut.r_tx_valid : std_logic >>;
+    alias u_par_ok is << signal i_dut.w_parity_ok : std_logic >>;
+    alias u_error  is << signal i_dut.w_error : std_logic >>;
+    alias u_abort  is << signal i_dut.w_abort : std_logic >>;
+    alias u_shift  is << signal i_dut.r_tx_shift : std_logic_vector(10 downto 0) >>;
+    alias u_state  is << signal i_dut.r_uart_st : std_logic_vector(1 downto 0) >>;
+
+    -- A shift register of zeros, as a constant: xsim's forces take no open aggregate
+    constant c_shift_zero : std_logic_vector(10 downto 0) := (others => '0');
+
     alias x_r_tx_parity is << signal i_dut.r_tx_parity : std_logic >>;
 
     procedure write_bus (
@@ -221,6 +231,70 @@ begin
         settle;
         check_equal(uart_irq, '0', "reset clears the interrupt");
         check_read(c_uart_status_addr, 0, "STATUS clear");
+      elsif run("assertion_a_parity_mismatch_not_flagged_is_reported") then
+        expect_assertion("FORMAL FAIL: error not flagged on parity mismatch");
+        u_valid  <= force '1';
+        u_par_ok <= force '0';
+        u_error  <= force '0';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        u_valid  <= release;
+        u_par_ok <= release;
+        u_error  <= release;
+        info("a parity mismatch not flagged is reported");
+      elsif run("assertion_a_byte_started_with_a_parity_mismatch_is_reported") then
+        write_bus(c_uart_tx_data_addr, x"00000041");
+        wait until rising_edge(clk);
+        wait until rising_edge(clk);
+        expect_assertion("FORMAL FAIL: TX started with parity mismatch");
+        u_valid  <= force '1';
+        u_par_ok <= force '0';
+        u_error  <= force '1';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        u_valid  <= release;
+        u_par_ok <= release;
+        u_error  <= release;
+        info("a byte started with a parity mismatch is reported");
+      elsif run("assertion_a_pin_off_mark_with_the_gate_closed_is_reported") then
+        write_bus(c_uart_tx_data_addr, x"00000041");
+        wait until rising_edge(clk);
+        wait until rising_edge(clk);
+        expect_assertion("FORMAL FAIL: UART TX not at mark with the safety gate closed");
+        u_abort <= force '0';
+        u_shift <= force c_shift_zero;
+        bus_ok  <= '0';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        u_abort <= release;
+        u_shift <= release;
+        bus_ok  <= '1';
+        info("a pin off mark with the gate closed is reported");
+      elsif run("an_upset_into_the_unused_state_goes_back_to_idle_at_mark") then
+        -- A byte is going out (state data) when an upset turns the state into
+        -- its fourth value, which is no state. At the next edge the machine
+        -- must go to idle: the byte is dropped and the pin goes to mark.
+        write_bus(c_uart_tx_data_addr, x"00000041");
+
+        loop_into_data : for lv_n in 1 to 1000 loop
+
+          wait until rising_edge(clk);
+
+        end loop loop_into_data;
+
+        check_equal(u_state, std_logic_vector'("10"), "a byte in its data bits");
+        u_state <= force "11";
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        u_state <= release;
+        wait for 1 ns;
+        check_equal(u_state, std_logic_vector'("00"), "back to idle");
+        check_equal(uart_tx, '1', "the pin at mark");
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        check_equal(u_state, std_logic_vector'("00"), "and stays there");
+        check_equal(uart_tx, '1', "the byte is not resumed");
+        info("an upset into the unused state goes back to idle");
       end if;
 
     end loop loop_while;

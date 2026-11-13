@@ -83,9 +83,10 @@ architecture tb of tb_soc_bus_fabric is
   signal rsp       : t_bus_rsp;
 
   -- From the monitor
-  signal accepted : natural;
-  signal acks     : natural;
-  signal errs     : natural;
+  signal accepted   : natural;
+  signal monitor_on : boolean;
+  signal acks       : natural;
+  signal errs       : natural;
 
 begin
 
@@ -147,15 +148,18 @@ begin
 
     wait until rising_edge(clk);
 
-    if (v_pending and bus_rst_n = '1') then
-      check((rsp.ack xor rsp.err) = '1', "exactly one of ACK and ERR for an accepted request");
-    else
-      check_equal(rsp.ack, '0', "no ACK without an accepted request");
-      check_equal(rsp.err, '0', "no ERR without an accepted request");
-    end if;
+    -- Off only while a test breaks the fabric on purpose, for its own checks
+    if (monitor_on) then
+      if (v_pending and bus_rst_n = '1') then
+        check((rsp.ack xor rsp.err) = '1', "exactly one of ACK and ERR for an accepted request");
+      else
+        check_equal(rsp.ack, '0', "no ACK without an accepted request");
+        check_equal(rsp.err, '0', "no ERR without an accepted request");
+      end if;
 
-    if (rsp.err = '1') then
-      check_equal(rsp.rdata, std_logic_vector'(x"00000000"), "no data with ERR");
+      if (rsp.err = '1') then
+        check_equal(rsp.rdata, std_logic_vector'(x"00000000"), "no data with ERR");
+      end if;
     end if;
 
     if (rsp.ack = '1') then
@@ -176,8 +180,13 @@ begin
 
   p_stim : process is
 
-    alias ram_word is << signal i_ram.r_word : std_logic_vector(71 downto 0) >>;
-    alias commit   is << signal i_ram.w_commit : std_logic >>;
+    alias ram_word  is << signal i_ram.r_word : std_logic_vector(71 downto 0) >>;
+    alias commit    is << signal i_ram.w_commit : std_logic >>;
+    alias f_ack     is << signal i_fabric.w_ack : std_logic >>;
+    alias f_err     is << signal i_fabric.w_err : std_logic >>;
+    alias f_pending is << signal i_fabric.r_pending : std_logic >>;
+    alias f_target  is << signal i_fabric.r_target : std_logic_vector(4 downto 0) >>;
+    alias f_rdata   is << signal i_fabric.w_rdata : std_logic_vector(31 downto 0) >>;
 
     variable v_rdata : std_logic_vector(31 downto 0);
     variable v_ack   : std_logic;
@@ -285,6 +294,7 @@ begin
 
     loop_while : while test_suite loop
 
+      monitor_on <= true;
       reset_all;
 
       if run("each_mapped_target_answers_once_with_its_own_data") then
@@ -526,6 +536,60 @@ begin
         check_equal(errs, v_errs, "one ERR for each unmapped request");
         check_equal(acks + errs, accepted, "one response for each accepted request");
         check_equal(nmi_fault, '0', "no fault");
+      elsif run("assertion_a_response_with_no_request_is_reported") then
+        monitor_on <= false;
+        expect_assertion("FORMAL FAIL: response with no request accepted");
+        f_ack      <= force '1';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        f_ack      <= release;
+        info("a response with no request is reported");
+      elsif run("assertion_ack_and_err_together_are_reported") then
+        monitor_on <= false;
+        expect_assertion("FORMAL FAIL: ACK and ERR together");
+        f_pending  <= force '1';
+        f_target   <= force "00001";
+        f_rdata    <= force x"00000000";
+        f_ack      <= force '1';
+        f_err      <= force '1';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        f_ack      <= release;
+        f_err      <= release;
+        f_rdata    <= release;
+        f_target   <= release;
+        f_pending  <= release;
+        info("ACK and ERR together are reported");
+      elsif run("assertion_read_data_with_err_is_reported") then
+        monitor_on <= false;
+        expect_assertion("FORMAL FAIL: read data with ERR");
+        f_pending  <= force '1';
+        f_target   <= force "00001";
+        f_rdata    <= force x"12345678";
+        f_ack      <= force '0';
+        f_err      <= force '1';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        f_ack      <= release;
+        f_err      <= release;
+        f_rdata    <= release;
+        f_target   <= release;
+        f_pending  <= release;
+        info("read data with ERR is reported");
+      elsif run("assertion_a_response_target_not_one_hot_is_reported") then
+        monitor_on <= false;
+        expect_assertion("FORMAL FAIL: response target not one-hot");
+        f_pending  <= force '1';
+        f_target   <= force "00011";
+        f_ack      <= force '0';
+        f_err      <= force '0';
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        f_ack      <= release;
+        f_err      <= release;
+        f_target   <= release;
+        f_pending  <= release;
+        info("a target that is not one-hot is reported");
       end if;
 
     end loop loop_while;

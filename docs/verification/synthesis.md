@@ -55,7 +55,7 @@ equivalent-register removal.
 | Vivado honours the attributes and the build's checks pass | **Not yet run.** Vivado 2026.1 is installed on the development machine with the Artix-7 devices, but it reports an Alveo licence and `get_parts` then lists no parts, so no Vivado synthesis has run. Its simulator runs (`docs/verification/toolchain.md`). The checks run on the first build |
 | The Yosys flow keeps the encodings | No. GHDL puts the VHDL attributes on the named wire rather than on the flip-flop, so Yosys does not see them. The figures above come from this flow, as evidence of the hazard, not of the fix |
 | Other targets | An ASIC or another FPGA flow needs the same protection under its own names, and the same post-synthesis check |
-| CAN, UART and self-test sequencers | Enumerated types with no claimed state distance; a tool may re-encode them |
+| CAN and self-test sequencers | Enumerated types with no claimed state distance; a tool may re-encode them. The UART's state is an explicit 2-bit encoding now, whose unused value returns to idle |
 
 ## Resource estimates
 

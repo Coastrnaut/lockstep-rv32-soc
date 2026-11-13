@@ -108,6 +108,7 @@ begin
     alias mismatch_a is << signal i_dut.i_comparator_a.w_mismatch_detected : std_logic >>;
     alias mismatch_b is << signal i_dut.i_comparator_b.w_mismatch_detected : std_logic >>;
     alias state_b    is << signal i_dut.i_comparator_b.r_current_state : t_safe_state >>;
+    alias differ_now is << signal i_dut.w_differ : std_logic >>;
 
     procedure reset is
     begin
@@ -274,6 +275,19 @@ begin
         check_equal(disagree, '0', "a reset clears it");
         check_equal(bus_valid, '1', "and opens the bus");
         check_equal(nmi_fault, '0', "with no fault");
+      elsif run("assertion_a_request_one_comparator_stopped_is_reported_if_it_leaves") then
+        -- With the cross-check disabled, comparator B stops a request that
+        -- comparator A passes, and it leaves: the pair's own check reports it
+        core_a_bus        <= c_request;
+        core_b_bus        <= c_request;
+        wait_clocks(1);
+        expect_assertion("FORMAL FAIL: a request left that one comparator did not pass");
+        differ_now        <= force '0';
+        core_a_bus_b.addr <= force c_request.addr xor x"00000100";
+        wait_clocks(1);
+        differ_now        <= release;
+        core_a_bus_b.addr <= release;
+        info("a request one comparator stopped is reported");
       end if;
 
     end loop loop_while;

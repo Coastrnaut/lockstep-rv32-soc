@@ -21,6 +21,7 @@
 --   TB PASS <test>
 --   TB FAIL <ns> <message>
 --   TB SKIP <test>: <reason>    (a test that cannot run here)
+--   TB EXPECT <message>         (an RTL assertion the test makes fire)
 --
 -- A failed check is a report of severity failure, which stops both
 -- simulators. A bench that never reaches test_runner_cleanup has not passed.
@@ -88,6 +89,15 @@ package tb_pkg is
 
   procedure tb_release (
     constant path : in string
+  );
+
+  -- A test that checks an RTL assertion fires says which, by its message (or
+  -- the start of it). sim/run.py runs a test named assertion_* with assertion
+  -- errors allowed, and passes it only if each expected message appears as an
+  -- assertion error, and no other error does.
+
+  procedure expect_assertion (
+    constant msg : in string
   );
 
   -- Called as a concurrent procedure; it never returns
@@ -508,6 +518,15 @@ package body tb_pkg is
     tb_force_request("release " & path);
 
   end procedure tb_release;
+
+  procedure expect_assertion (
+    constant msg : in string
+  ) is
+  begin
+
+    report "TB EXPECT " & msg;
+
+  end procedure expect_assertion;
 
   procedure test_runner_watchdog (
     constant timeout : in time
