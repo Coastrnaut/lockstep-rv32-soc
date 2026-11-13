@@ -66,9 +66,31 @@ architecture rtl of clock_monitor is
 
   -- The divider's top bit changes every 2**(c_div_bits - 1) system clocks. That
   -- is at least four watchdog clocks apart, so that a two-flip-flop
-  -- synchroniser sees every change.
-  constant c_ratio    : real     := 4.0 * real(g_sys_clk_hz) / real(g_wd_clk_hz);
-  constant c_div_bits : positive := integer(ceil(log2(realmax(c_ratio, 2.0)))) + 1;
+  -- synchroniser sees every change. (A loop, not math_real's realmax and log2,
+  -- which GHDL 4.1's synthesis cannot evaluate.)
+
+  function div_bits (
+    constant sys_hz : positive;
+    constant wd_hz  : positive
+  ) return positive is
+
+    variable v_bits : positive;
+
+  begin
+
+    v_bits := 2;
+
+    loop_bits : while 2.0 ** (v_bits - 1) * real(wd_hz) < 4.0 * real(sys_hz) loop
+
+      v_bits := v_bits + 1;
+
+    end loop loop_bits;
+
+    return v_bits;
+
+  end function div_bits;
+
+  constant c_div_bits : positive := div_bits(g_sys_clk_hz, g_wd_clk_hz);
 
   -- Changes of the top bit in one window, nominal, and the accepted range
   constant c_nominal : real    := real(g_window) * real(g_sys_clk_hz) /
