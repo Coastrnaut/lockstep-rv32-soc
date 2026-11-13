@@ -4,6 +4,29 @@
 - **Review date** November 12, 2026
 - **Next release goal** A reproducible VHDL-2008 reference SoC that demonstrates fault detection and containment through an explicit hardware interface, with simulation evidence and a bench FPGA build.
 
+## Status
+
+Where each item stands on `main` (November 13, 2026). "Done" means the
+acceptance below is met in simulation or formal proof; nothing has run on
+hardware yet.
+
+| ID | Status | Record |
+| --- | --- | --- |
+| R0.1–R0.3 | Done | `docs/verification/milestone_0_1.md` |
+| R1.1–R1.4 | Done | `docs/verification/milestone_0_1.md`, HSI section 8 |
+| R2.1 | Done: comparator, fabric and store commit proved, with covers and broken-RTL checks; CDC not modelled | `docs/verification/formal.md` |
+| R2.2 | Partial: trace comparison of both cores, with a register-only divergence caught. Sail/Spike pilot and ACT4 blocked: no RISC-V compiler or reference model installed | `docs/verification/trace.md` |
+| R2.3 | Done for single RTL faults at 15 sites; no burst or netlist faults | `docs/verification/fault_campaign.md` |
+| R2.4 | Done as an evaluation: maximum diagnostic interval set, a latent compare failure and a reporting-path failure shown, a stuck sequencer reported. The redundant comparator it recommends is costed, not built | `docs/verification/diagnostics.md` |
+| R3.1 | Partial: board wrapper, constraints, build script with safety-structure checks, GHDL check in CI. No build: Vivado on this machine lists no devices | `fpga/arty_a7_100t/README.md`, `docs/verification/synthesis.md` |
+| R3.2 | Blocked: needs the board and a bench | |
+| R3.3 | Partial: a generated board image (Python) checked in simulation; no pinned compiler or ELF flow | `fpga/arty_a7_100t/README.md` |
+| R4.1 | Done in simulation: protection map, writeback, patrol with a measured bound, first-fault telemetry on an independent read-only port | `docs/verification/memory_protection.md`, HSI 8.5 |
+| R4.2 | Partial: support matrix with simulation evidence; bench validation blocked on hardware | `docs/verification/can_support.md` |
+| R4.3 | Done, but for area and timing per profile, which need a Vivado build | `docs/verification/integration.md` |
+| M5.1 | Blocked: needs an integrator, an item and a target | |
+| M5.2–M5.4 | Started: FMEDA input table and checker, dependent-failure checklist, evidence index checked in CI. Failure rates, review and assessment pending | `docs/safety/fmeda_inputs.csv`, `docs/safety/dependent_failure_analysis.md`, `docs/safety/evidence_index.md` |
+
 The repository boots two NEORV32 instances, runs firmware through the compared bus, and exercises ECC, watchdog, reset, CAN and UART behavior. The wire-level reference vectors, firmware tests and mutation harness give the next release a way to verify changes at each boundary. Prioritize the paths from fault detection to bus termination and physical output containment. The current evidence supports a research prototype. Automotive integration and any ASIL claim depend on a target implementation, a defined item and reviewed safety evidence.
 
 ## Repository evaluation
