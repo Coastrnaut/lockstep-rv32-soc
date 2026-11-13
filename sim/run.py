@@ -69,6 +69,8 @@ BUILDS = {
             "benches": lambda: sorted((SIM / "tb").glob("tb_*.vhd"))},
     "board": {"image": ROOT / "fpga" / "arty_a7_100t" / "board_imem_image.vhd",
               "benches": lambda: [ROOT / "fpga" / "arty_a7_100t" / "sim" / "tb_board_firmware.vhd"]},
+    "hello": {"image": ROOT / "sw" / "hello" / "hello_imem_image.vhd",
+              "benches": lambda: [ROOT / "sw" / "hello" / "tb_hello_world.vhd"]},
 }
 
 # Benches that run some tests under named generic configurations: (config, generics, tests)
@@ -537,7 +539,12 @@ def vsg_files():
     rtl = sorted((ROOT / "rtl" / "pkg").glob("*.vhd"))
     for folder in ("safety", "peripherals", "soc"):
         rtl += sorted((ROOT / "rtl" / folder).glob("*.vhd"))
+    rtl += [ROOT / "fpga" / "arty_a7_100t" / "arty_a7_top.vhd"]
     benches = sorted((SIM / "tb").glob("*.vhd")) + sorted((SIM / "tb" / "lib").glob("*.vhd"))
+    # The board bench and the programs' benches; not the UNISIM stand-in, which
+    # copies Xilinx's component declarations as they are
+    benches += [ROOT / "fpga" / "arty_a7_100t" / "sim" / "tb_board_firmware.vhd"]
+    benches += sorted((ROOT / "sw").glob("*/tb_*.vhd"))
     return rtl, benches
 
 

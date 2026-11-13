@@ -61,8 +61,8 @@ analyser's resolution.
 
 1. **Boot.** After a power cycle and after the reset button, the UART shows
    `LS0` and a dot about every 45 ms.
-2. **Fault to pin.** Trigger on the first edge of `probe_fault` (JA3) and
-   `probe_safe` (JA4), and on the actuator disable stage of the external
+2. **Fault to pin.** Trigger on the first edge of `probe_fault_o` (JA3) and
+   `probe_safe_o` (JA4), and on the actuator disable stage of the external
    circuit. Inject a fault through the reset-free path that the simulation
    uses: a mismatch needs a debug build that can force a core bus bit, which is
    the next firmware item.

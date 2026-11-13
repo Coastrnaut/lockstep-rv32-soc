@@ -21,7 +21,7 @@ DOCS = (sorted((ROOT / "docs").glob("*.md")) + sorted((ROOT / "docs" / "safety")
         + sorted((ROOT / "docs" / "verification").glob("*.md")) + [ROOT / "README.md"])
 BENCHES = ROOT / "sim" / "tb"
 # The board image bench, which has one unnamed test
-PLAIN_BENCHES = [ROOT / "fpga" / "arty_a7_100t" / "sim"]
+PLAIN_BENCHES = [ROOT / "fpga" / "arty_a7_100t" / "sim", ROOT / "sw" / "hello"]
 # The test framework: its packages and the names it declares
 LIB = BENCHES / "lib"
 FORMAL = ROOT / "sim" / "formal"

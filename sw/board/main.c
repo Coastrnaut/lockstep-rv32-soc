@@ -3,56 +3,89 @@
  * ============================================================================
  * Both cores run it, in lockstep, from boot mode 2:
  *
- *   1. Print "LS" and RESET_SRC as a digit on the UART: 0 after a cold start,
- *      1 after an early kick, 2 after a timeout.
- *   2. Wait for the watchdog window to open, kick, wait for the kick to land,
- *      and print "." for each kick, for ever.
+ *   1. "LS" and RESET_SRC as a digit: 0 after a cold start, 1 after an early
+ *      kick, 2 after a timeout.
+ *   2. "E" and the ECC RAM result: a pattern and its complement written to
+ *      the RAM and read back, through the comparator, with the error counts:
+ *      0 good, 1 read back wrong, 2 corrected errors, 3 an uncorrectable one.
+ *   3. "C" and the CAN result: one Classical CAN frame (ID 0x123, "LS"), sent
+ *      and waited for: 0 sent with an ACK and no errors, 1 not done in time
+ *      or with errors (no other node on the bus, or no transceiver).
+ *   4. A watchdog kick and a "." in every window, for ever.
  *
- * On a bench this shows reset release, the first instructions, the watchdog
- * window and a running program, on the UART alone. The addresses come from
- * sw/include/lockstep_soc_regs.h, which tools/register_map.py generates from
- * the same table as the RTL's. Build it with:
+ * On a bench this shows reset release, the first instructions, the RAM, the
+ * CAN bus, the watchdog window and a running program, on the UART alone.
+ * Build it with:
  *
  *     python sw/build.py
  * ========================================================================== */
 
-#include <stdint.h>
+#include "soc.h"
 
-#include "lockstep_soc_regs.h"
+#define TEST_WORDS  16u
+#define CAN_TIMEOUT 100000u
 
-#define REG(address) (*(volatile uint32_t *)(address))
-
-/* WD_STATUS 4:0 is counter 15:11, so 20 means the counter is past 40960: the
- * kick window (HSI WD-01) is open */
-#define WD_WINDOW_OPEN 20u
-
-/* Access faults taken since the start (start.S) */
-volatile uint32_t trap_count;
-
-static void uart_put(char c)
+static char ecc_check(void)
 {
-    while ((REG(LOCKSTEP_UART_STATUS) & 1u) != 0u) {
+    volatile uint32_t *ram = (volatile uint32_t *)(LOCKSTEP_RAM_BASE + 0x100u);
+    uint32_t i;
+    char result = '0';
+
+    for (i = 0u; i < TEST_WORDS; i++) {
+        ram[i] = 0xA5A55A5Au ^ (i * 0x01010101u);
     }
-    REG(LOCKSTEP_UART_TX_DATA) = (uint32_t)(unsigned char)c;
+    for (i = 0u; i < TEST_WORDS; i++) {
+        if (ram[i] != (0xA5A55A5Au ^ (i * 0x01010101u))) {
+            result = '1';
+        }
+        ram[i] = ~ram[i];
+    }
+    for (i = 0u; i < TEST_WORDS; i++) {
+        if (ram[i] != ~(0xA5A55A5Au ^ (i * 0x01010101u))) {
+            result = '1';
+        }
+    }
+    if (result == '0' && REG(LOCKSTEP_ECC_SBE_COUNT) != 0u) {
+        result = '2';
+    }
+    if (REG(LOCKSTEP_ECC_DBE_COUNT) != 0u) {
+        result = '3';
+    }
+    return result;
 }
 
-static uint32_t wd_phase(void)
+static char can_check(void)
 {
-    return REG(LOCKSTEP_WD_STATUS) & 0x1Fu;
+    uint32_t wait;
+
+    REG(LOCKSTEP_CAN_ID) = 0x123u;
+    REG(LOCKSTEP_CAN_DLC) = 2u;
+    REG(LOCKSTEP_CAN_DATA) = ((uint32_t)'L' << 24) | ((uint32_t)'S' << 16);
+    REG(LOCKSTEP_CAN_TX_REQUEST) = 1u;
+
+    /* STATUS: 0 busy, 16:8 transmit error count */
+    for (wait = 0u; wait < CAN_TIMEOUT; wait++) {
+        if ((REG(LOCKSTEP_CAN_STATUS) & 1u) == 0u) {
+            break;
+        }
+    }
+    if (wait == CAN_TIMEOUT || (REG(LOCKSTEP_CAN_STATUS) & 0x1FF00u) != 0u) {
+        return '1';
+    }
+    return '0';
 }
 
 int main(void)
 {
-    uart_put('L');
-    uart_put('S');
+    uart_puts("LS");
     uart_put((char)('0' + REG(LOCKSTEP_WD_RESET_SRC)));
+    uart_put('E');
+    uart_put(ecc_check());
+    uart_put('C');
+    uart_put(can_check());
 
     for (;;) {
-        while (wd_phase() != WD_WINDOW_OPEN) {
-        }
-        REG(LOCKSTEP_WD_KICK) = LOCKSTEP_WD_KICK_KEY;
-        while (wd_phase() == WD_WINDOW_OPEN) {
-        }
+        wd_kick_in_window();
         uart_put('.');
     }
 }

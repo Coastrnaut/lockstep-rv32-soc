@@ -1,5 +1,5 @@
 /* ============================================================================
- * Memory map for the board program (HSI section 5)
+ * Memory map for the programs in sw/ (HSI section 5)
  * ============================================================================
  * Code and constants in each core's IMEM image, which NEORV32 fills from
  * neorv32_imem_image (boot mode 2), at most 256 words. Variables and the

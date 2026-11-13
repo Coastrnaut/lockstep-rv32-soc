@@ -41,37 +41,51 @@ entity arty_a7_top is
     g_ram_addr_bits : positive range 4 to 15 := 15
   );
   port (
-    clk100mhz : in    std_logic;                    -- E3
-    ck_rst    : in    std_logic;                    -- C2, low while pressed
+    -- E3
+    clk100mhz_i : in    std_logic;
+    -- C2, low while pressed
+    ck_rst_i : in    std_logic;
 
-    uart_rxd_out : out   std_logic;                 -- D10, to the USB UART bridge
-    led          : out   std_logic_vector(3 downto 0);
+    -- D10, to the USB UART bridge
+    uart_tx_o : out   std_logic;
+    led_o     : out   std_logic_vector(3 downto 0);
 
     -- Pmod JA
-    can_tx_o      : out   std_logic;                -- JA1
-    can_rx_i      : in    std_logic;                -- JA2, pulled up
-    probe_fault   : out   std_logic;                -- JA3
-    probe_safe    : out   std_logic;                -- JA4
-    probe_uart_tx : out   std_logic;                -- JA7
-    probe_wd_clk  : out   std_logic;                -- JA8
+    -- JA1
+    can_tx_o : out   std_logic;
+    -- JA2, pulled up
+    can_rx_i : in    std_logic;
+    -- JA3
+    probe_fault_o : out   std_logic;
+    -- JA4
+    probe_safe_o : out   std_logic;
+    -- JA7
+    probe_uart_tx_o : out   std_logic;
+    -- JA8
+    probe_wd_clk_o : out   std_logic;
 
     -- Read-only diagnostic SPI port, the ECC first-fault record (HSI ECC-08)
-    diag_cs_n : in    std_logic;                    -- JB1
-    diag_sck  : in    std_logic;                    -- JB2
-    diag_sdo  : out   std_logic;                    -- JB3
+    -- JB1
+    diag_cs_n_i : in    std_logic;
+    -- JB2
+    diag_sck_i : in    std_logic;
+    -- JB3
+    diag_sdo_o : out   std_logic;
 
     -- The second actuator channel, and the first channel read back: on a
-    -- bare board, a jumper from JA4 (probe_safe) to JB7
-    actuator_en : out   std_logic;                  -- JB4
-    actuator_fb : in    std_logic                   -- JB7, pulled up: safe
+    -- bare board, a jumper from JA4 (probe_safe_o) to JB7
+    -- JB4
+    actuator_en_o : out   std_logic;
+    -- JB7, pulled up: safe
+    actuator_fb_i : in    std_logic
   );
 end entity arty_a7_top;
 
-architecture board of arty_a7_top is
+architecture rtl of arty_a7_top is
 
   -- ISO 26262 Automated Traceability Attributes
   attribute requirement_id : string;
-  attribute requirement_id of board : architecture is "TSR_LOCKSTEP_001, TSR_WD_001, TSR_RESET_001";
+  attribute requirement_id of rtl : architecture is "TSR_LOCKSTEP_001, TSR_WD_001, TSR_RESET_001";
 
   signal w_clkfb      : std_logic;
   signal w_clk50_mmcm : std_logic;
@@ -81,9 +95,9 @@ architecture board of arty_a7_top is
 
   signal w_cfgmclk     : std_logic;
   signal w_cfgmclk_buf : std_logic;
-  signal r_wd_div      : unsigned(5 downto 0) := (others => '0');
+  signal r_wd_div      : unsigned(5 downto 0);
   signal w_wd_clk      : std_logic;
-  signal r_heartbeat   : unsigned(18 downto 0) := (others => '0');
+  signal r_heartbeat   : unsigned(18 downto 0);
 
   signal w_uart_tx       : std_logic;
   signal w_nmi_fault     : std_logic;
@@ -100,15 +114,21 @@ begin
   -- ========================================================================
   -- 1. SYSTEM CLOCK: 100 MHz to 50 MHz
   -- ========================================================================
-  i_mmcm : mmcme2_base
+  -- Xilinx primitives: their own generic names, and component instantiation
+  -- from the UNISIM library (vsg_off for those two rules only)
+  -- vsg_off instantiation_034 generic_map_601
+
+  i_mmcm : component mmcme2_base
     generic map (
-      clkin1_period    => 10.0,
-      clkfbout_mult_f  => 10.0,  -- VCO 1000 MHz
-      clkout0_divide_f => 20.0,  -- 50 MHz
+      clkin1_period => 10.0,
+      -- VCO 1000 MHz
+      clkfbout_mult_f => 10.0,
+      -- 50 MHz
+      clkout0_divide_f => 20.0,
       divclk_divide    => 1
     )
     port map (
-      clkin1   => clk100mhz,
+      clkin1   => clk100mhz_i,
       clkfbin  => w_clkfb,
       clkfbout => w_clkfb,
       clkout0  => w_clk50_mmcm,
@@ -117,19 +137,19 @@ begin
       rst      => '0'
     );
 
-  i_clk50_buf : bufg
+  i_clk50_buf : component bufg
     port map (
       i => w_clk50_mmcm,
       o => w_clk50
     );
 
   -- The SoC synchronises the reset release into both of its clock domains
-  w_rst_n <= ck_rst and w_locked;
+  w_rst_n <= ck_rst_i and w_locked;
 
   -- ========================================================================
   -- 2. WATCHDOG CLOCK: the configuration oscillator, divided by 64
   -- ========================================================================
-  i_startup : startupe2
+  i_startup : component startupe2
     generic map (
       prog_usr      => "FALSE",
       sim_cclk_freq => 0.0
@@ -145,12 +165,14 @@ begin
       keyclearb => '1',
       pack      => '0',
       usrcclko  => '0',
-      usrcclkts => '1',  -- Leave the configuration clock pin alone
+      -- Leave the configuration clock pin alone
+      usrcclkts => '1',
       usrdoneo  => '1',
-      usrdonets => '1'   -- and the DONE pin
+      -- and the DONE pin
+      usrdonets => '1'
     );
 
-  i_cfgmclk_buf : bufg
+  i_cfgmclk_buf : component bufg
     port map (
       i => w_cfgmclk,
       o => w_cfgmclk_buf
@@ -165,11 +187,13 @@ begin
 
   end process p_wd_div;
 
-  i_wd_clk_buf : bufg
+  i_wd_clk_buf : component bufg
     port map (
       i => r_wd_div(5),
       o => w_wd_clk
     );
+
+  -- vsg_on
 
   -- About 0.5 s on, 0.5 s off at 1 MHz: the watchdog clock is running
   p_heartbeat : process (w_wd_clk) is
@@ -207,22 +231,22 @@ begin
       uart_tx_o       => w_uart_tx,
       nmi_fault_o     => w_nmi_fault,
       actuator_safe_o => w_actuator_safe,
-      actuator_en_o   => actuator_en,
-      actuator_fb_i   => actuator_fb,
-      diag_cs_n_i     => diag_cs_n,
-      diag_sck_i      => diag_sck,
-      diag_sdo_o      => diag_sdo
+      actuator_en_o   => actuator_en_o,
+      actuator_fb_i   => actuator_fb_i,
+      diag_cs_n_i     => diag_cs_n_i,
+      diag_sck_i      => diag_sck_i,
+      diag_sdo_o      => diag_sdo_o
     );
 
-  uart_rxd_out  <= w_uart_tx;
-  probe_uart_tx <= w_uart_tx;
-  probe_fault   <= w_nmi_fault;
-  probe_safe    <= w_actuator_safe;
-  probe_wd_clk  <= w_wd_clk;
+  uart_tx_o       <= w_uart_tx;
+  probe_uart_tx_o <= w_uart_tx;
+  probe_fault_o   <= w_nmi_fault;
+  probe_safe_o    <= w_actuator_safe;
+  probe_wd_clk_o  <= w_wd_clk;
 
-  led(0) <= w_actuator_safe;
-  led(1) <= w_nmi_fault;
-  led(2) <= w_locked;
-  led(3) <= r_heartbeat(r_heartbeat'high);
+  led_o(0) <= w_actuator_safe;
+  led_o(1) <= w_nmi_fault;
+  led_o(2) <= w_locked;
+  led_o(3) <= r_heartbeat(r_heartbeat'high);
 
-end architecture board;
+end architecture rtl;

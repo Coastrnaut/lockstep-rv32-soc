@@ -2,9 +2,11 @@
 -- Testbench: the Arty A7 board image on the SoC (roadmap R3.3)
 -- ============================================================================
 -- Runs fpga/arty_a7_100t/board_imem_image.vhd on top_automotive_soc, with a
--- fast watchdog clock so that several kick windows pass quickly. The board
--- image must print "LS0" after a cold start, then a dot for each kick, with no
--- watchdog reset and no fault. sim/run.py runs it on GHDL and xsim, and
+-- fast watchdog clock so that several kick windows pass quickly, and a CAN
+-- node on the bus that acknowledges good frames. The board image must print
+-- "LS0" after a cold start, "E0" for the ECC RAM check, "C0" for a CAN frame
+-- sent and acknowledged (and the node must have received it whole), then a
+-- dot for each kick, with no watchdog reset and no fault. sim/run.py runs it on GHDL and xsim, and
 -- check_board.py on GHDL.
 -- ============================================================================
 
@@ -16,6 +18,7 @@ library lockstep;
 
 library work;
   use work.tb_pkg.all;
+  use work.can_test_pkg.all;
 
 entity tb_board_firmware is
   generic (
@@ -26,14 +29,23 @@ end entity tb_board_firmware;
 architecture tb of tb_board_firmware is
 
   constant c_clk_period : time := 20 ns;
-  constant c_wd_period  : time := 40 ns;  -- 40,960 of these open the window
-  constant c_bit_time   : time := c_clk_period * 434;
-  constant c_expected   : string(1 to 6) := "LS0...";
+
+  -- 40,960 of these open the window
+  constant c_wd_period : time            := 40 ns;
+  constant c_bit_time  : time            := c_clk_period * 434;
+  constant c_expected  : string(1 to 10) := "LS0E0C0...";
+
+  -- 500 kbit/s at 50 MHz
+  constant c_can_bit_time : time := c_clk_period * 100;
 
   signal clk           : std_logic;
   signal wd_clk        : std_logic;
   signal rst_n         : std_logic;
   signal can_tx        : std_logic;
+  signal can_bus       : std_logic;
+  signal ack_tx        : std_logic;
+  signal rx_frame      : t_rx_frame;
+  signal rx_done       : natural;
   signal uart_tx       : std_logic;
   signal nmi_fault     : std_logic;
   signal actuator_safe : std_logic;
@@ -62,6 +74,22 @@ begin
 
   end process p_wd_clk;
 
+  -- Another node on the bus: the wired-AND of both, and it acknowledges
+  can_bus <= can_tx and ack_tx;
+
+  i_node : entity work.can_test_node
+    generic map (
+      g_bit_time => c_can_bit_time
+    )
+    port map (
+      bus_i        => can_bus,
+      dut_tx_i     => can_tx,
+      ack_enable_i => '1',
+      ack_o        => ack_tx,
+      frame_o      => rx_frame,
+      done_o       => rx_done
+    );
+
   i_soc : entity lockstep.top_automotive_soc
     generic map (
       g_boot_mode => 2,
@@ -72,7 +100,7 @@ begin
       rst_n_i         => rst_n,
       wd_clk_i        => wd_clk,
       can_tx_o        => can_tx,
-      can_rx_i        => '1',
+      can_rx_i        => can_bus,
       uart_tx_o       => uart_tx,
       nmi_fault_o     => nmi_fault,
       actuator_safe_o => actuator_safe,
@@ -93,12 +121,12 @@ begin
     wait until uart_tx = '0';
     wait for c_bit_time / 2;
 
-    for i in 0 to 7 loop
+    loop_bit : for lv_i in 0 to 7 loop
 
       wait for c_bit_time;
-      v_byte(i) := uart_tx;
+      v_byte(lv_i) := uart_tx;
 
-    end loop;
+    end loop loop_bit;
 
     wait for c_bit_time * 2;
 
@@ -120,12 +148,17 @@ begin
     wait until uart_count >= c_expected'length for 20 ms;
     check(uart_count >= c_expected'length, integer'image(uart_count) & " bytes on the UART");
 
-    for i in c_expected'range loop
+    loop_char : for lv_i in c_expected'range loop
 
-      check_equal(uart_log(i), c_expected(i), "byte " & integer'image(i));
+      check_equal(uart_log(lv_i), c_expected(lv_i), "byte " & integer'image(lv_i));
 
-    end loop;
+    end loop loop_char;
 
+    check_equal(rx_done, 1, "one CAN frame on the bus");
+    check_equal(rx_frame.crc, rx_frame.crc_expected, "with a good CRC");
+    check_equal(rx_frame.id, "00100100011", "identifier 0x123");
+    check_equal(rx_frame.dlc, "0010", "two data bytes");
+    check_equal(rx_frame.data(63 downto 48), x"4C53", "the data, LS");
     check_equal(actuator_safe, '0', "no fault or reset during the run: actuators");
     check_equal(nmi_fault, '0', "no fault or reset during the run: fault pin");
 

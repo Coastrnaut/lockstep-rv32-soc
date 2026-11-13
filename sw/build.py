@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
-"""Build the board program with the pinned compiler (roadmap R3.3).
+"""Build the programs in sw/ with the pinned compiler (roadmap R3.3).
 
-sw/board/start.S and sw/board/main.c, linked by sw/board/link.ld, become
-sw/build/board.elf with its map file, and then the Arty A7-100T build's IMEM
-image, fpga/arty_a7_100t/board_imem_image.vhd, one commented word per line.
+Each program is sw/common/start.S and its own main.c, linked by
+sw/common/link.ld, into sw/build/<program>/<program>.elf with its map file,
+and then the IMEM image that boot mode 2 runs, one commented word per line:
+
+  board  the Arty A7-100T board program  fpga/arty_a7_100t/board_imem_image.vhd
+  hello  hello, world                    sw/hello/hello_imem_image.vhd
 
 The compiler is pinned: xPack GNU RISC-V Embedded GCC 15.2.0-1. Another
-version may produce other code, so the image is only written, or checked,
+version may produce other code, so the images are only written, or checked,
 with that one. It is found from:
 
   RISCV_PREFIX  the tools' prefix, e.g. /opt/xpack/bin/riscv-none-elf-
   PATH          riscv-none-elf-gcc
   WSL           on Windows, ~/tools/xpack-riscv-none-elf-gcc-15.2.0-1/bin in
-                the default WSL distribution (RISCV_WSL_DISTRO picks another)
+                each WSL distribution (RISCV_WSL_DISTRO picks one)
 
-    python sw/build.py           build, and write the image
-    python sw/build.py --check   build, and fail if the image differs
+    python sw/build.py                build every program, and write the images
+    python sw/build.py hello          one program
+    python sw/build.py --check        build, and fail if an image differs
 """
 import argparse
 import os
@@ -28,9 +32,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SW = ROOT / "sw"
-SOURCES = [SW / "board" / "start.S", SW / "board" / "main.c"]
-LINKER_SCRIPT = SW / "board" / "link.ld"
-IMAGE = ROOT / "fpga" / "arty_a7_100t" / "board_imem_image.vhd"
+COMMON = SW / "common"
+LINKER_SCRIPT = COMMON / "link.ld"
+
+# Each program: its folder, its image, and what the image's header says it does
+PROGRAMS = {
+    "board": (SW / "board", ROOT / "fpga" / "arty_a7_100t" / "board_imem_image.vhd",
+              "The Arty A7-100T build's IMEM image, for boot mode 2: a UART banner with\n"
+              "-- RESET_SRC, the ECC RAM and CAN results, then a watchdog kick and a dot in\n"
+              "-- every window."),
+    "hello": (SW / "hello", SW / "hello" / "hello_imem_image.vhd",
+              "Hello, world, for boot mode 2: one line on the UART, then the watchdog kept\n"
+              "-- content."),
+}
 
 PINNED = "xPack GNU RISC-V Embedded GCC"
 PINNED_VERSION = "15.2.0"
@@ -94,26 +108,29 @@ class Toolchain:
     def version(self):
         first = self.run("gcc", "--version").splitlines()[0]
         if PINNED not in first or f" {PINNED_VERSION}" not in first:
-            raise SystemExit(f"ERROR: the image needs {PINNED} {PINNED_RELEASE}, found: {first}")
+            raise SystemExit(f"ERROR: the images need {PINNED} {PINNED_RELEASE}, found: {first}")
         return first
 
 
-def build(tools, out):
-    """Compile and link into out; returns the image's words with their text."""
+def build(tools, name, folder, out):
+    """Compile and link one program into out; returns the image's words with their text."""
     out.mkdir(parents=True, exist_ok=True)
     objects = []
-    for src in SOURCES:
+    for src in [COMMON / "start.S", folder / "main.c"]:
         obj = out / (src.stem + ".o")
-        tools.run("gcc", *CFLAGS, "-I" + tools.path(SW / "include"), "-c", tools.path(src), "-o", tools.path(obj))
+        tools.run("gcc", *CFLAGS, "-I" + tools.path(COMMON), "-I" + tools.path(SW / "include"),
+                  "-c", tools.path(src), "-o", tools.path(obj))
         objects.append(tools.path(obj))
-    elf = out / "board.elf"
+    elf = out / f"{name}.elf"
     tools.run("gcc", *CFLAGS, "-T", tools.path(LINKER_SCRIPT), "-Wl,--gc-sections",
-              "-Wl,-Map=" + tools.path(out / "board.map"), *objects, "-o", tools.path(elf))
-    tools.run("objcopy", "-O", "binary", "--only-section=.text", tools.path(elf), tools.path(out / "board.bin"))
-    binary = (out / "board.bin").read_bytes()
+              "-Wl,-Map=" + tools.path(out / f"{name}.map"), *objects, "-o", tools.path(elf))
+    binary_path = out / f"{name}.bin"
+    tools.run("objcopy", "-O", "binary", "--only-section=.text", tools.path(elf), tools.path(binary_path))
+    binary = binary_path.read_bytes()
     binary += b"\0" * (-len(binary) % 4)
 
-    # One comment per word: the instruction, from the disassembler
+    # One comment per word: the instruction, from the disassembler; constants
+    # in the image are "data"
     text = {}
     for line in tools.run("objdump", "-d", "-M", "no-aliases", tools.path(elf)).splitlines():
         m = re.match(r"\s*([0-9a-f]+):\s+[0-9a-f]{8}\s+(.*)", line)
@@ -122,34 +139,38 @@ def build(tools, out):
     return [(int.from_bytes(binary[i:i + 4], "little"), text.get(i, "data")) for i in range(0, len(binary), 4)]
 
 
-def write(words, path, compiler):
+def write(words, path, name, what, compiler):
     fw.write_image(words, path,
-                   "-- Generated by sw/build.py from sw/board/ (start.S, main.c, link.ld) with\n"
+                   f"-- Generated by sw/build.py from sw/{name}/main.c and sw/common/ with\n"
                    f"-- {compiler}.\n"
-                   "-- The Arty A7-100T build's IMEM image, for boot mode 2: a UART banner with\n"
-                   "-- RESET_SRC, then a watchdog kick and a dot in every window.\n\n")
+                   f"-- {what}\n\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--check", action="store_true", help="fail if the image differs from a fresh build")
+    parser.add_argument("programs", nargs="*", choices=[[]] + list(PROGRAMS), default=[],
+                        help="programs to build (all when none is named)")
+    parser.add_argument("--check", action="store_true", help="fail if an image differs from a fresh build")
     args = parser.parse_args()
 
     tools = Toolchain()
     compiler = tools.version()
-    words = build(tools, SW / "build")
-    if not args.check:
-        write(words, IMAGE, compiler)
-        print(f"board.elf and board.map in {SW / 'build'}")
-        return 0
-    with tempfile.TemporaryDirectory() as tmp:
-        fresh = Path(tmp) / IMAGE.name
-        write(words, fresh, compiler)
-        if fresh.read_text(encoding="utf-8") != IMAGE.read_text(encoding="utf-8"):
-            print(f"FAIL: {IMAGE.relative_to(ROOT)} differs from a build of sw/board/ with {compiler}")
-            return 1
-    print(f"ok: {IMAGE.relative_to(ROOT)} matches a build of sw/board/")
-    return 0
+    failed = 0
+    for name in args.programs or list(PROGRAMS):
+        folder, image, what = PROGRAMS[name]
+        words = build(tools, name, folder, SW / "build" / name)
+        if not args.check:
+            write(words, image, name, what, compiler)
+            continue
+        with tempfile.TemporaryDirectory() as tmp:
+            fresh = Path(tmp) / image.name
+            write(words, fresh, name, what, compiler)
+            if fresh.read_text(encoding="utf-8") != image.read_text(encoding="utf-8"):
+                print(f"FAIL: {image.relative_to(ROOT)} differs from a build of sw/{name}/ with {compiler}")
+                failed += 1
+            else:
+                print(f"ok: {image.relative_to(ROOT)} matches a build of sw/{name}/")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

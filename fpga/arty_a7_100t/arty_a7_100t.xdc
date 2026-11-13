@@ -4,36 +4,36 @@
 ## ============================================================================
 
 ## Clock and reset
-set_property -dict {PACKAGE_PIN E3 IOSTANDARD LVCMOS33} [get_ports clk100mhz]
-create_clock -name clk100 -period 10.000 [get_ports clk100mhz]
-set_property -dict {PACKAGE_PIN C2 IOSTANDARD LVCMOS33} [get_ports ck_rst]
+set_property -dict {PACKAGE_PIN E3 IOSTANDARD LVCMOS33} [get_ports clk100mhz_i]
+create_clock -name clk100 -period 10.000 [get_ports clk100mhz_i]
+set_property -dict {PACKAGE_PIN C2 IOSTANDARD LVCMOS33} [get_ports ck_rst_i]
 
 ## USB UART: FPGA to the bridge
-set_property -dict {PACKAGE_PIN D10 IOSTANDARD LVCMOS33} [get_ports uart_rxd_out]
+set_property -dict {PACKAGE_PIN D10 IOSTANDARD LVCMOS33} [get_ports uart_tx_o]
 
 ## LEDs: actuator-safe, fault, MMCM lock, watchdog heartbeat
-set_property -dict {PACKAGE_PIN H5  IOSTANDARD LVCMOS33} [get_ports {led[0]}]
-set_property -dict {PACKAGE_PIN J5  IOSTANDARD LVCMOS33} [get_ports {led[1]}]
-set_property -dict {PACKAGE_PIN T9  IOSTANDARD LVCMOS33} [get_ports {led[2]}]
-set_property -dict {PACKAGE_PIN T10 IOSTANDARD LVCMOS33} [get_ports {led[3]}]
+set_property -dict {PACKAGE_PIN H5  IOSTANDARD LVCMOS33} [get_ports {led_o[0]}]
+set_property -dict {PACKAGE_PIN J5  IOSTANDARD LVCMOS33} [get_ports {led_o[1]}]
+set_property -dict {PACKAGE_PIN T9  IOSTANDARD LVCMOS33} [get_ports {led_o[2]}]
+set_property -dict {PACKAGE_PIN T10 IOSTANDARD LVCMOS33} [get_ports {led_o[3]}]
 
 ## Pmod JA: CAN to an external transceiver, and probe points
 set_property -dict {PACKAGE_PIN G13 IOSTANDARD LVCMOS33} [get_ports can_tx_o]
 set_property -dict {PACKAGE_PIN B11 IOSTANDARD LVCMOS33 PULLUP TRUE} [get_ports can_rx_i]
-set_property -dict {PACKAGE_PIN A11 IOSTANDARD LVCMOS33} [get_ports probe_fault]
-set_property -dict {PACKAGE_PIN D12 IOSTANDARD LVCMOS33} [get_ports probe_safe]
-set_property -dict {PACKAGE_PIN D13 IOSTANDARD LVCMOS33} [get_ports probe_uart_tx]
-set_property -dict {PACKAGE_PIN B18 IOSTANDARD LVCMOS33} [get_ports probe_wd_clk]
+set_property -dict {PACKAGE_PIN A11 IOSTANDARD LVCMOS33} [get_ports probe_fault_o]
+set_property -dict {PACKAGE_PIN D12 IOSTANDARD LVCMOS33} [get_ports probe_safe_o]
+set_property -dict {PACKAGE_PIN D13 IOSTANDARD LVCMOS33} [get_ports probe_uart_tx_o]
+set_property -dict {PACKAGE_PIN B18 IOSTANDARD LVCMOS33} [get_ports probe_wd_clk_o]
 
 ## Pmod JB: the read-only diagnostic SPI port (HSI ECC-08). CS idles high.
-set_property -dict {PACKAGE_PIN E15 IOSTANDARD LVCMOS33 PULLUP TRUE} [get_ports diag_cs_n]
-set_property -dict {PACKAGE_PIN E16 IOSTANDARD LVCMOS33 PULLDOWN TRUE} [get_ports diag_sck]
-set_property -dict {PACKAGE_PIN D15 IOSTANDARD LVCMOS33} [get_ports diag_sdo]
+set_property -dict {PACKAGE_PIN E15 IOSTANDARD LVCMOS33 PULLUP TRUE} [get_ports diag_cs_n_i]
+set_property -dict {PACKAGE_PIN E16 IOSTANDARD LVCMOS33 PULLDOWN TRUE} [get_ports diag_sck_i]
+set_property -dict {PACKAGE_PIN D15 IOSTANDARD LVCMOS33} [get_ports diag_sdo_o]
 
 ## Second actuator channel on JB4; the actuator-safe read-back on JB7, pulled
 ## up so that an open line reads safe (and disagrees with a permit command)
-set_property -dict {PACKAGE_PIN C15 IOSTANDARD LVCMOS33} [get_ports actuator_en]
-set_property -dict {PACKAGE_PIN J17 IOSTANDARD LVCMOS33 PULLUP TRUE} [get_ports actuator_fb]
+set_property -dict {PACKAGE_PIN C15 IOSTANDARD LVCMOS33} [get_ports actuator_en_o]
+set_property -dict {PACKAGE_PIN J17 IOSTANDARD LVCMOS33 PULLUP TRUE} [get_ports actuator_fb_i]
 
 ## ----------------------------------------------------------------------------
 ## Watchdog clock: the configuration oscillator. UG470 gives CFGMCLK as about
@@ -66,15 +66,15 @@ set_property ASYNC_REG TRUE [get_cells -hier -filter {NAME =~ *i_telemetry_port/
 
 ## The reset button and the MMCM lock reach the SoC only through its reset
 ## synchronisers, which assert at once and release on a clock edge
-set_false_path -from [get_ports ck_rst]
+set_false_path -from [get_ports ck_rst_i]
 set_false_path -from [get_pins i_mmcm/LOCKED]
 
 ## The CAN receive input and the diagnostic port's inputs are synchronised
 ## inside their blocks
-set_false_path -from [get_ports {can_rx_i diag_cs_n diag_sck}]
+set_false_path -from [get_ports {can_rx_i diag_cs_n_i diag_sck_i}]
 
 ## Outputs: slow, and timed by the bench, not by the FPGA
-set_false_path -to [get_ports {uart_rxd_out led[*] can_tx_o probe_* diag_sdo}]
+set_false_path -to [get_ports {uart_tx_o led_o[*] can_tx_o probe_* diag_sdo_o}]
 
 ## Configuration
 set_property CONFIG_VOLTAGE 3.3 [current_design]

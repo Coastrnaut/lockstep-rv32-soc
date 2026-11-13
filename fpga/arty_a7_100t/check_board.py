@@ -6,7 +6,7 @@
 1. GHDL analyses the board wrapper with the board image and synthesises it,
    with the Xilinx clocking primitives as black boxes, which catches errors in
    the wrapper before a Vivado run.
-2. GHDL runs tb_board_firmware: the board image on the SoC must print "LS0"
+2. GHDL runs tb_board_firmware: the board image on the SoC must print "LS0E0C0"
    and then a dot for each watchdog kick, with no fault.
 
 Uses GHDL as sim/run.py finds it. Work files go to fpga/arty_a7_100t/build/ghdl.
@@ -74,7 +74,9 @@ def main():
     run([ghdl, "--synth", "--std=08", "arty_a7_top"], "board wrapper synthesis")
     print("ok: the board wrapper analyses and synthesises, with the clocking primitives as black boxes")
 
-    run(analyse + [posix(ROOT / "sim" / "tb" / "lib" / "tb_pkg.vhd"), posix(HERE / "sim" / "tb_board_firmware.vhd")],
+    lib = ROOT / "sim" / "tb" / "lib"
+    run(analyse + [posix(lib / f) for f in ("tb_pkg.vhd", "can_test_pkg.vhd", "can_test_node.vhd")]
+        + [posix(HERE / "sim" / "tb_board_firmware.vhd")],
         "board firmware bench")
     out = run([ghdl, "--elab-run", "--std=08", "tb_board_firmware", "--stop-time=30ms"], "board firmware run")
     if "TB PASS all" not in out:

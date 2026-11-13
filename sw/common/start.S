@@ -1,5 +1,5 @@
 /* ============================================================================
- * Startup and trap code for the board program (roadmap R3.3)
+ * Startup and trap code for the programs in sw/ (roadmap R3.3)
  * ============================================================================
  * Boot mode 2 starts both cores at address 0 in their IMEM. This sets the trap
  * vector and the stack, clears .bss, and calls main. There is no initialised
@@ -41,3 +41,9 @@ trap_entry:
     lw      t0, 0(sp)
     addi    sp, sp, 8
     mret
+
+    .section .bss
+    .globl  trap_count
+    .align  2
+trap_count:
+    .space  4
