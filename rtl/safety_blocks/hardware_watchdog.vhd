@@ -88,6 +88,10 @@ begin
   -- ========================================================================
   -- 2. VIOLATION FLAGS (Rule 2.1)
   -- ========================================================================
+  -- The window is inclusive (HSI WD-01). These take the same decision as
+  -- p_wd_counter at the same edge: a kick at MAX is accepted, and only the
+  -- count reaching MAX with no kick is late.
+  -- ========================================================================
   p_violation : process (all) is
   begin
 
@@ -98,7 +102,7 @@ begin
       w_early_violation <= '1';
     end if;
 
-    if (r_counter >= C_WD_MAX_COUNT and r_timeout_latched = '0') then
+    if (cpu_kick_i = '0' and r_counter >= C_WD_MAX_COUNT and r_timeout_latched = '0') then
       w_late_violation <= '1';
     end if;
 

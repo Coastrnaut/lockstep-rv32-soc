@@ -41,6 +41,16 @@ architecture tb of tb_watchdog_supervisor is
   constant c_src_early  : natural := 1;
   constant c_src_late   : natural := 2;
 
+  type t_naturals is array (natural range <>) of natural;
+
+  -- Watchdog half periods for the window boundary test, in nanoseconds
+  constant c_ratios : t_naturals := (c_fast, 7, 13, c_slow);
+
+  -- Counts at the kick window boundaries of HSI WD-01: MIN-1, MIN, MAX-1, MAX.
+  -- A kick at any of them from MIN up is accepted.
+  constant c_min        : natural    := to_integer(c_wd_min_count);
+  constant c_boundaries : t_naturals := (c_min - 1, c_min, c_late - 1, c_late);
+
   constant c_bus_idle : t_rv_bus :=
   (
     addr  => (others => '0'),
@@ -114,7 +124,13 @@ begin
 
   p_stim : process is
 
-    variable v_rdata : std_logic_vector(31 downto 0);
+    alias wd_kick      is << signal dut.w_kick : std_logic >>;
+    alias wd_violation is << signal dut.w_violation : std_logic >>;
+    alias wd_counter   is << signal dut.i_watchdog.r_counter : unsigned(15 downto 0) >>;
+
+    variable v_rdata     : std_logic_vector(31 downto 0);
+    variable v_violation : std_logic;
+    variable v_resets    : natural;
 
     procedure cold_reset is
     begin
@@ -224,6 +240,25 @@ begin
 
     end procedure wait_for_reset;
 
+    -- Kick on the bus, and once the kick has crossed, put the counter at count for
+    -- the watchdog edge that samples it. v_violation is what the supervisor saw
+    -- at that edge.
+
+    procedure kick_sampled_at (
+      constant count : in natural
+    ) is
+    begin
+
+      kick;
+      wait until wd_kick = '1' for c_crossing * wd_half_ns * 4 ns;
+      check_equal(wd_kick, '1', "the kick crossed");
+      wd_counter  <= force to_unsigned(count, 16);
+      wait until rising_edge(wd_clk);
+      v_violation := wd_violation;
+      wd_counter  <= release;
+
+    end procedure kick_sampled_at;
+
   begin
 
     test_runner_setup(runner, runner_cfg);
@@ -305,6 +340,46 @@ begin
         kick;
         wait_wd_clocks(c_crossing);
         check_equal(resets, 0, "the watchdog restarted from the first one");
+      elsif run("kick_sampled_at_each_window_boundary_at_every_clock_ratio") then
+        -- HSI WD-01. The crossing decides on which watchdog edge a kick lands, so
+        -- the counter is moved to the count under test once the kick has crossed,
+        -- before the edge that samples it. Half periods of 7 and 13 ns drift
+        -- against the 20 ns system clock, so the kick crosses at a different
+        -- phase each time.
+        for ratio in c_ratios'range loop
+
+          for boundary in c_boundaries'range loop
+
+            wd_half_ns <= c_ratios(ratio);
+            cold_reset;
+            v_resets   := resets;
+            kick_sampled_at(c_boundaries(boundary));
+
+            if (c_boundaries(boundary) >= c_min) then
+              check_equal(v_violation, '0', "no violation sampled at " & integer'image(c_boundaries(boundary)));
+              wait_wd_clocks(c_crossing);
+              check_equal(resets, v_resets, "no reset after a kick at " & integer'image(c_boundaries(boundary)));
+              check_reset_src(c_src_normal);
+            else
+              check_equal(v_violation, '1', "violation sampled at " & integer'image(c_boundaries(boundary)));
+              wait_for_reset;
+              check_reset_src(c_src_early);
+            end if;
+
+          end loop;
+
+          -- No kick: the count reaching MAX is the timeout, reported as late
+          cold_reset;
+          wait until falling_edge(wd_clk);
+          wd_counter <= force to_unsigned(c_late - 1, 16);
+          wait until rising_edge(wd_clk);
+          wd_counter <= release;
+          wait until sys_reset = '1' for c_crossing * wd_half_ns * 4 ns;
+          check_equal(sys_reset, '1', "timeout one clock after MAX-1");
+          check_reset_src(c_src_late);
+
+        end loop;
+
       elsif run("only_a_word_store_of_the_key_to_kick_counts") then
         cold_reset;
 
