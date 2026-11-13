@@ -55,12 +55,12 @@
 - **Verified by:** `tb_temporal_diversity`, `tb_soc_lockstep`
 
 ## TSR_LOCKSTEP_044
-- **Description:** The cores must not start unless the lockstep comparator has proved, since the last cold reset, that it can detect a fault on every line it compares, latch it, and clear it.
+- **Description:** The cores must not start unless the lockstep comparator has proved, since the last cold reset, that it can detect a fault on every line it compares, latch it, report it on the registered output that drives the fault pin, and clear it. A test that does not finish within its time limit is a failure.
 - **ASIL Allocation:** ASIL-D (intent)
 - **Mitigation:** A startup self-test trips the comparator through its real logic, and holds the cores in reset unless every step passes. A failure leaves `actuator_safe_o` and `nmi_fault_o` high.
 - **Verification Method:** Comparator Fault Injection
 - **Implemented In:** `rtl/safety_blocks/comparator_self_test.vhd`, `rtl/top_automotive_soc.vhd`
-- **Verified by:** `tb_comparator_self_test`, `tb_soc_lockstep`
+- **Verified by:** `tb_comparator_self_test`, `tb_soc_lockstep`, including the reporting path and a stuck sequencer (`docs/verification/diagnostics.md`)
 
 ## TSR_RESET_001
 - **Description:** A reset must take effect at once, with or without a clock, and be released on a clock edge, with both cores released on the same edge. Actuators must be held safe, the CAN pin recessive and the UART pin at mark during a reset.

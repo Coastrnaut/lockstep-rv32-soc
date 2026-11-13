@@ -17,6 +17,12 @@
 --               If any of that goes wrong, the cores never leave reset, which
 --               also keeps the actuators safe, and passed_o stays low.
 --
+--               It also checks the comparator's registered fault output, which
+--               drives the fault pin and MEI, so a fault in that reporting path
+--               is caught as well as one in the compare. A test that has not
+--               finished within a fixed number of clocks ends as a failure, so
+--               a sequencer stuck busy is reported rather than silent.
+--
 --               This runs once after each cold reset, so a fault that appears
 --               later stays hidden until the next one.
 --
@@ -42,6 +48,7 @@ entity comparator_self_test is
 
     -- What the comparator does about it
     nmi_fault_i  : in    std_logic;
+    fault_i      : in    std_logic; -- The registered fault, which drives the pin
     safe_state_i : in    std_logic;
     bus_valid_i  : in    std_logic;
 
@@ -64,11 +71,19 @@ architecture rtl of comparator_self_test is
   -- Clocks for the delay lines and the comparator to settle after a cold reset
   constant c_settle_clocks : natural := 4;
 
+  -- A healthy test takes the settle time and four clocks for each lane. One
+  -- still running a little after that is stuck, and ends as a failure.
+  constant c_test_clocks : natural := c_settle_clocks + 4 * (c_fatal_lane + 1);
+  constant c_limit       : natural := c_test_clocks + 8;
+
   type t_step is (step_settle, step_inject, step_hold, step_clear, step_recover, step_done);
 
   signal r_step   : t_step;
   signal r_settle : natural range 0 to c_settle_clocks - 1;
   signal r_lane   : natural range 0 to c_fatal_lane;
+
+  -- Clocks since the cold reset, which stop at the limit
+  signal r_elapsed : natural range 0 to c_limit;
 
   -- The pass result, in the safe state encoding, so that one flipped bit cannot
   -- turn a fail into a pass (Rule 3.1)
@@ -83,10 +98,10 @@ begin
   -- ========================================================================
   -- 1. WHAT THE COMPARATOR SHOULD BE SHOWING
   -- ========================================================================
-  w_clean <= '1' when (nmi_fault_i = '0' and safe_state_i = '0' and bus_valid_i = '1') else
+  w_clean <= '1' when (nmi_fault_i = '0' and fault_i = '0' and safe_state_i = '0' and bus_valid_i = '1') else
              '0';
 
-  w_tripped <= '1' when (nmi_fault_i = '1' and safe_state_i = '1' and bus_valid_i = '0') else
+  w_tripped <= '1' when (nmi_fault_i = '1' and fault_i = '1' and safe_state_i = '1' and bus_valid_i = '0') else
                '0';
 
   -- ========================================================================
@@ -100,11 +115,15 @@ begin
 
     if rising_edge(clk_i) then
       if (rst_n_i = '0') then
-        r_step   <= step_settle;
-        r_settle <= 0;
-        r_lane   <= 0;
-        r_result <= st_fault_tripped;
+        r_step    <= step_settle;
+        r_settle  <= 0;
+        r_lane    <= 0;
+        r_result  <= st_fault_tripped;
+        r_elapsed <= 0;
       else
+        if (r_elapsed /= c_limit) then
+          r_elapsed <= r_elapsed + 1;
+        end if;
 
         case r_step is
 
@@ -156,6 +175,11 @@ begin
 
         end case;
 
+        -- A test still running at the limit is stuck. It ends here with the
+        -- result still at fault, so failed_o reports it (roadmap R2.4).
+        if (r_elapsed = c_limit and r_step /= step_done) then
+          r_step <= step_done;
+        end if;
       end if;
     end if;
 
@@ -202,8 +226,12 @@ begin
   -- ========================================================================
   -- Property: The cores are only released once every lane has been tried
   -- Property: One lane is tried at a time, and none once the test is over
+  -- Property: The test is over by the clock after the limit
   -- ========================================================================
   p_formal_asserts : process (clk_i) is
+
+    variable v_at_limit : boolean;
+
   begin
 
     if rising_edge(clk_i) then
@@ -218,7 +246,14 @@ begin
             report "FORMAL FAIL: comparator disturbed outside the test"
             severity error;
         end if;
+        if (v_at_limit) then
+          assert r_step = step_done
+            report "FORMAL FAIL: self-test still running past its limit"
+            severity error;
+        end if;
       end if;
+
+      v_at_limit := rst_n_i = '1' and r_elapsed = c_limit;
     end if;
 
   end process p_formal_asserts;

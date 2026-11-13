@@ -51,12 +51,14 @@ architecture tb of tb_comparator_self_test is
   signal fatal_fault   : std_logic;
   signal compare_rst_n : std_logic;
   signal nmi_fault     : std_logic;
+  signal fault         : std_logic;
   signal safe_state    : std_logic;
   signal bus_valid     : std_logic;
   signal sys_bus       : t_rv_bus;
 
   -- What the comparator tells the self-test, which a fault can get in the way of
   signal nmi_seen   : std_logic;
+  signal fault_seen : std_logic;
   signal safe_seen  : std_logic;
   signal valid_seen : std_logic;
   signal passed     : std_logic;
@@ -67,6 +69,7 @@ architecture tb of tb_comparator_self_test is
   signal blind_fatal  : std_logic;
   signal never_clears : std_logic;
   signal nmi_stuck    : std_logic;
+  signal fault_stuck  : std_logic;
   signal safe_stuck   : std_logic;
   signal valid_stuck  : std_logic;
   signal nmi_late     : boolean;
@@ -106,6 +109,8 @@ begin
                 nmi_fault and (test_fatal or flip_bus.valid or flip_bus.we or (or flip_bus.sel) or
                                 (or flip_bus.data) or (or flip_bus.addr)) when (nmi_no_latch) else
                 nmi_fault;
+  fault_seen <= fault when (fault_stuck = 'Z') else
+                fault_stuck;
   safe_seen  <= safe_state when (safe_stuck = 'Z') else
                 safe_stuck;
   valid_seen <= bus_valid when (valid_stuck = 'Z') else
@@ -119,6 +124,7 @@ begin
       core_b_bus_i  => core_b_bus,
       fatal_fault_i => fatal_fault,
       nmi_fault_o   => nmi_fault,
+      fault_o       => fault,
       safe_state_o  => safe_state,
       bus_valid_o   => bus_valid,
       sys_bus_o     => sys_bus
@@ -132,6 +138,7 @@ begin
       fatal_fault_o => test_fatal,
       rst_n_o       => test_rst_n,
       nmi_fault_i   => nmi_seen,
+      fault_i       => fault_seen,
       safe_state_i  => safe_seen,
       bus_valid_i   => valid_seen,
       passed_o      => passed,
@@ -185,6 +192,7 @@ begin
 
     alias comparator_mismatch is << signal i_comparator.w_mismatch_detected : std_logic >>;
     alias test_result         is << signal dut.r_result : t_safe_state >>;
+    alias test_lane           is << signal dut.r_lane : natural range 0 to c_bus_bits >>;
 
     procedure cold_reset is
     begin
@@ -230,6 +238,7 @@ begin
       blind_fatal  <= '0';
       never_clears <= '0';
       nmi_stuck    <= 'Z';
+      fault_stuck  <= 'Z';
       safe_stuck   <= 'Z';
       valid_stuck  <= 'Z';
       nmi_late     <= false;
@@ -321,6 +330,15 @@ begin
         valid_stuck <= '0';
         cold_reset;
         check_cores_kept_in_reset("bus valid stuck low");
+      elsif run("a_registered_fault_stuck_either_way_stops_the_cores") then
+        -- Roadmap R2.4: a fault in the reporting path, the registered output
+        -- that drives the pin and MEI, is caught as well as one in the compare
+        fault_stuck <= '0';
+        cold_reset;
+        check_cores_kept_in_reset("registered fault stuck low");
+        fault_stuck <= '1';
+        cold_reset;
+        check_cores_kept_in_reset("registered fault stuck high");
       elsif run("an_nmi_that_comes_late_stops_the_cores") then
         nmi_late <= true;
         cold_reset;
@@ -347,6 +365,26 @@ begin
 
         end loop;
 
+      elsif run("a_sequencer_that_never_finishes_reports_a_failure") then
+        -- Roadmap R2.4: a sequencer stuck busy keeps the cores in reset, but
+        -- must not stay silent. Holding the lane at 0 makes it go round for ever.
+        test_lane <= force 0;
+        cold_reset;
+        wait_for_the_test;
+        check_equal(passed, '0', "no pass while still going round");
+
+        -- The self-test allows itself 8 clocks more than a healthy run takes
+        for dummy in 1 to 8 loop
+
+          wait until rising_edge(clk);
+
+        end loop;
+
+        wait for 1 ns;
+        check_equal(passed, '0', "no pass from a sequencer that never finished");
+        check_equal(failed, '1', "and the failure is reported");
+        check_equal(flip_bus.valid or test_fatal, '0', "and it stops disturbing the comparator");
+        test_lane <= release;
       elsif run("a_cold_reset_runs_the_test_again") then
         cold_reset;
         wait_for_the_test;

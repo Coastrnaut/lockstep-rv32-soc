@@ -233,9 +233,10 @@ begin
     alias core_a_rsp is << signal i_soc.i_cpu_master.xbus_rsp : bus_rsp_t >>;
     alias core_b_rsp is << signal i_soc.i_cpu_checker.xbus_rsp : bus_rsp_t >>;
 
-    alias can_busy is << signal i_soc.w_can_busy : std_logic >>;
-    alias ram_word is << signal i_soc.i_ecc_ram.r_word : std_logic_vector(71 downto 0) >>;
-    alias sys_bus  is << signal i_soc.w_safe_sys_bus : t_rv_bus >>;
+    alias can_busy       is << signal i_soc.w_can_busy : std_logic >>;
+    alias self_test_lane is << signal i_soc.i_comparator_self_test.r_lane : natural range 0 to 70 >>;
+    alias ram_word       is << signal i_soc.i_ecc_ram.r_word : std_logic_vector(71 downto 0) >>;
+    alias sys_bus        is << signal i_soc.w_safe_sys_bus : t_rv_bus >>;
 
     -- Each core's interrupt logic: MEI pending, MEI pending and enabled (MEIE),
     -- an interrupt being taken (which needs MIE), and trap entry with its cause
@@ -377,6 +378,18 @@ begin
         check_equal(uart_starts, 0, "nothing from the UART");
         check_equal(rx_done, 0, "nothing on the CAN bus");
         check_equal(actuator_safe, '1', "actuators still safe");
+      elsif run("a_self_test_that_never_finishes_keeps_the_soc_safe_and_reports_it") then
+        -- Roadmap R2.4: holding the lane at 0 makes the sequencer go round for ever
+        self_test_lane <= force 0;
+        cold_reset;
+        wait for c_boot;
+        check_equal(actuator_safe, '1', "actuators safe");
+        check_equal(nmi_fault, '1', "the failure is on the pin");
+        check_equal(soc_rst_n, '0', "the cores never started");
+        wait for c_uart_bit_time * 2;
+        check_equal(uart_starts, 0, "nothing from the UART");
+        check_equal(rx_done, 0, "nothing on the CAN bus");
+        self_test_lane <= release;
       elsif run("store_the_cores_disagree_on_never_reaches_a_peripheral") then
         cold_reset;
 

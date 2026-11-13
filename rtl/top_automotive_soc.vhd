@@ -882,6 +882,7 @@ begin
       fatal_fault_o => w_test_fatal,
       rst_n_o       => w_comparator_rst_n,
       nmi_fault_i   => w_nmi,
+      fault_i       => w_fault,
       safe_state_i  => w_lockstep_safe,
       bus_valid_i   => w_bus_valid,
       passed_o      => w_self_test_passed,
