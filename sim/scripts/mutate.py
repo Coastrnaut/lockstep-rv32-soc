@@ -886,7 +886,7 @@ def main():
     results, missed = Counter(), []
     with tempfile.TemporaryDirectory(prefix="lockstep_mutate_", ignore_cleanup_errors=True) as tmp:
         repo = Path(tmp)
-        for part in ("rtl", "sim", "fpga"):
+        for part in ("rtl", "sim", "fpga", "sw"):
             shutil.copytree(source / part, repo / part, ignore=COPY_IGNORE)
         fast = args.fast.split() if args.fast is not None else fast_patterns(repo)
         print(f"{len(chosen)} of {len(MUTANTS)} mutant(s), on a copy of {source} in {repo}", flush=True)
