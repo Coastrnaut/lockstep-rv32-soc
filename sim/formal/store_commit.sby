@@ -1,0 +1,28 @@
+# Roadmap R2.1: the comparator in front of the ECC RAM. Run through
+# sim/scripts/run_formal.py, which writes both Verilog files with GHDL first,
+# the RAM with g_addr_bits = 4 and its array free at the start.
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+prove: depth 4
+cover: mode cover
+cover: depth 8
+
+[engines]
+smtbmc z3
+
+[script]
+read_verilog lockstep_comparator.v
+read_verilog ecc_data_ram.v
+expose ecc_data_ram/w_commit
+read -formal fv_store_commit.sv
+prep -top fv_store_commit
+memory_map
+
+[files]
+lockstep_comparator.v
+ecc_data_ram.v
+fv_store_commit.sv

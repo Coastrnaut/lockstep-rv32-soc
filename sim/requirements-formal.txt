@@ -1,0 +1,4 @@
+# Formal tools for sim/scripts/run_formal.py, pinned. YoWASP runs Yosys and
+# SymbiYosys as WebAssembly, so no native install is needed on any platform.
+yowasp-yosys==0.71.0.0.post1285
+z3-solver==5.4.1.0

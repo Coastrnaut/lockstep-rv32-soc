@@ -40,3 +40,6 @@ __pycache__/
 .vscode/
 .idea/
 xvlog.pb
+
+# Formal build output (sim/scripts/run_formal.py)
+sim/formal/build/

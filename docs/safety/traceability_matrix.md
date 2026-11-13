@@ -13,9 +13,10 @@
 - **RTL** = RTL Block
 - **TEST** = Named VUnit bench, or bench.test
 - **STATUS** = **Sim** for implemented and checked in RTL simulation by the named
-  test, **Planned** for not implemented or not yet verified. No row claims formal,
-  gate-level, FPGA or bench evidence. Those are milestones 2 and 3 of
-  `docs/ROADMAP.md`.
+  test, **Formal** for proved by k-induction on GHDL's synthesis of the RTL
+  (`docs/verification/formal.md`), **Planned** for not implemented or not yet
+  verified. No row claims gate-level, FPGA or bench evidence. Those are
+  milestone 3 of `docs/ROADMAP.md`.
 
 Revision 1.1 retires `TSR_LOCKSTEP_042`, which was an alias of
 `TSR_LOCKSTEP_001`, and adds `TSR_BUS_001`, `TSR_TYPES_001`, `TSR_UART_001`,
@@ -59,6 +60,10 @@ but no document defined.
 | SG-05 | FSR_COMM_001   | TSR_CAN_002         | automotive_can_controller | Interoperability with an independent controller on a bench (roadmap R4.2) | Planned |
 | SG-05 | FSR_COMM_002   | TSR_UART_001        | safe_uart                 | tb_uart, tb_uart_parity_fault, tb_uart_tx_error, tb_soc_uart_error | Sim |
 | all   | all            | TSR_TYPES_001       | package_soc_types         | tb_soc_periph_decode, tb_soc_fabric | Sim |
+| SG-01 | FSR_MOTION_001 | TSR_LOCKSTEP_001    | lockstep_comparator       | fv_lockstep_comparator: CMP-01, CMP-02, CMP-03, CMP-07 | Formal |
+| SG-01 | FSR_MOTION_001 | TSR_SAFETY_GATE_001 | lockstep_comparator       | fv_lockstep_comparator: CMP-04, CMP-05, CMP-06, CMP-08 to CMP-11 | Formal |
+| SG-03 | FSR_MEM_002    | TSR_SAFETY_GATE_002 | ecc_data_ram              | fv_store_commit: COM-01 to COM-04 | Formal |
+| SG-03 | FSR_MEM_002    | TSR_BUS_001         | soc_bus_fabric            | fv_soc_bus_fabric: BUS-P1 to BUS-P6 | Formal |
 
 ---
 
@@ -74,7 +79,8 @@ or countable facts instead.
 | Fault injection | Simulation forces on named signals | Lockstep buses and state, ECC words, UART parity, watchdog counter, CAN gate. No netlist or campaign-level injection yet (roadmap R2.3) |
 | Structural coverage | Not measured | GHDL in this flow does not report statement, branch or toggle coverage |
 | Mutation | 412 hand-written RTL mutants | Historical: all 386 then present killed at `057c639` (2026-11-07). This milestone's sample is in the evidence file |
-| Assertions | Clocked simulation assertions in the RTL | These are checked in simulation only. No formal proof has been run (roadmap R2.1) |
+| Assertions | Clocked simulation assertions in the RTL | Checked in simulation |
+| Formal | 3 SymbiYosys jobs, 21 properties, all proved by k-induction, every cover reached, each job rejects a deliberately broken RTL | Comparator, bus fabric, and compare before the RAM commit. CDC, self-test and CPUs are not covered (`docs/verification/formal.md`) |
 | Traceability tags | Every first-party RTL file carries a `requirement_id` that this matrix resolves | |
 
 ---

@@ -17,7 +17,7 @@
 - **Mitigation:** Close the system bus in the cycle of the mismatch, drop `bus_valid_o` and raise `safe_state_o` at the next edge, and drive the external fault pin `nmi_fault_o` from the registered fault, independent of any interrupt mask (HSI section 8.2).
 - **Verification Method:** Fault Injection Simulation
 - **Implemented In:** `rtl/safety_blocks/lockstep_comparator.vhd`, `rtl/top_automotive_soc.vhd`
-- **Verified by:** `tb_lockstep_comparator`, `tb_lockstep_fault_inject`, `tb_lockstep_fault_inject_permanent`, `tb_soc_lockstep`
+- **Verified by:** `tb_lockstep_comparator`, `tb_lockstep_fault_inject`, `tb_lockstep_fault_inject_permanent`, `tb_soc_lockstep`; formal proofs CMP-01 to CMP-11 and COM-03, COM-04 (`docs/verification/formal.md`)
 - **Alias:** `TSR_LOCKSTEP_042` was the comparator's own tag for this requirement until revision 1.1. It is retired, and the comparator now carries `TSR_LOCKSTEP_001`.
 
 ## TSR_BUS_001
@@ -26,7 +26,7 @@
 - **Mitigation:** `soc_bus_fabric` registers the decoded target with the accepted request and drives one response record, which core B receives two clocks after core A (HSI section 8.1).
 - **Verification Method:** Directed and seeded random simulation, firmware loads and stores
 - **Implemented In:** `rtl/safety_blocks/soc_bus_fabric.vhd`, `rtl/safety_blocks/ecc_data_ram.vhd`, `rtl/top_automotive_soc.vhd`
-- **Verified by:** `tb_soc_bus_fabric`, `tb_soc_fabric`, `tb_soc_ecc`
+- **Verified by:** `tb_soc_bus_fabric`, `tb_soc_fabric`, `tb_soc_ecc`; formal proofs BUS-P1 to BUS-P6 (`docs/verification/formal.md`)
 
 ## TSR_ECC_001
 - **Description:** All memory bus transactions must be protected by SECDED Hamming code to correct single-bit errors and detect double-bit errors.
@@ -73,10 +73,10 @@
 ## TSR_SAFETY_GATE_001
 - **Description:** The lockstep comparator must use high-Hamming-distance safe state encoding to resist single-event upsets on internal FSM registers, and must treat any other value of its state register as a fault.
 - **ASIL Allocation:** ASIL-D (intent)
-- **Mitigation:** 8-bit encoded states (0x5A / 0xA5) with a Hamming distance of 8. Any other value closes the bus, latches and reports a fault, and holds the safe state (HSI FLT-03).
-- **Verification Method:** Bit-Flip Injection in simulation. Formal proof is planned (roadmap R2.1).
+- **Mitigation:** 8-bit encoded states (0x5A / 0xA5) with a Hamming distance of 8. Any other value closes the bus, latches and reports a fault, and holds the safe state (HSI FLT-03). The fault latch and the state register each report a fault on their own, so an upset of either cannot hide one.
+- **Verification Method:** Bit-Flip Injection in simulation, and a k-induction proof from arbitrary register values.
 - **Implemented In:** `config/package_soc_types.vhd`, `rtl/safety_blocks/lockstep_comparator.vhd`
-- **Verified by:** `tb_lockstep_illegal_state`, `tb_soc_lockstep`
+- **Verified by:** `tb_lockstep_illegal_state`, `tb_soc_lockstep`; formal proofs CMP-04, CMP-05, CMP-09 (`docs/verification/formal.md`)
 
 ## TSR_SAFETY_GATE_002
 - **Description:** The data RAM must accept an access only while the comparator gate is open, and must commit a store only at its commit edge while the gate is still open, the word is correctable and no reset has arrived.
@@ -84,7 +84,7 @@
 - **Mitigation:** `bus_ok_i` gates selection and the write-commit strobe `w_commit` (HSI BUS-05).
 - **Verification Method:** Functional Testbench + Gate Drop and Reset Injection
 - **Implemented In:** `rtl/safety_blocks/ecc_data_ram.vhd`
-- **Verified by:** `tb_ecc_data_ram`, `tb_soc_bus_fabric`, `tb_soc_fabric`
+- **Verified by:** `tb_ecc_data_ram`, `tb_soc_bus_fabric`, `tb_soc_fabric`; formal proofs COM-01 to COM-04 (`docs/verification/formal.md`)
 
 ## TSR_SAFETY_GATE_003
 - **Description:** The watchdog's bus side must accept a kick and serve its registers only while the comparator gate is open, and its reset must reach the SoC whatever the system clock does.

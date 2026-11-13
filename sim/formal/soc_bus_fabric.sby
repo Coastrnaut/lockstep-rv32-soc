@@ -1,0 +1,23 @@
+# Roadmap R2.1: soc_bus_fabric. Run through sim/scripts/run_formal.py, which
+# writes soc_bus_fabric.v from the VHDL with GHDL first.
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+prove: depth 4
+cover: mode cover
+cover: depth 6
+
+[engines]
+smtbmc z3
+
+[script]
+read_verilog soc_bus_fabric.v
+read -formal fv_soc_bus_fabric.sv
+prep -top fv_soc_bus_fabric
+
+[files]
+soc_bus_fabric.v
+fv_soc_bus_fabric.sv

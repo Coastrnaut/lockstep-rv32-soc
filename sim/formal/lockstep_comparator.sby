@@ -1,0 +1,24 @@
+# Roadmap R2.1: lockstep_comparator. Run through sim/formal/run_formal.py,
+# which writes lockstep_comparator.v from the VHDL with GHDL first.
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+prove: depth 4
+cover: mode cover
+cover: depth 6
+
+[engines]
+smtbmc z3
+
+[script]
+read_verilog lockstep_comparator.v
+expose lockstep_comparator/r_current_state lockstep_comparator/r_fault_latched
+read -formal fv_lockstep_comparator.sv
+prep -top fv_lockstep_comparator
+
+[files]
+lockstep_comparator.v
+fv_lockstep_comparator.sv

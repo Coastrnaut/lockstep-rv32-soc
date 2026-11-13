@@ -94,3 +94,41 @@ jobs:
             sim/vunit_out/regression.log
             sim/vunit_out/test_output/**/*.txt
             sim/vunit_out/test_output/**/*.html
+
+  formal:
+    # Roadmap R2.1: proofs of the comparator, the bus fabric and the store
+    # commit, with a deliberately broken RTL for each that must fail
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install GHDL (mcode backend)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ghdl
+
+      - name: Install pinned formal tools
+        run: |
+          pip install -r sim/requirements-formal.txt
+
+      - name: Prove, cover, and reject broken RTL
+        run: |
+          python sim/scripts/run_formal.py --broken
+
+      - name: Upload formal results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: formal-results
+          path: |
+            sim/formal/build/results.json
+            sim/formal/build/results.md
+            sim/formal/build/*/sby.log
+          if-no-files-found: warn
