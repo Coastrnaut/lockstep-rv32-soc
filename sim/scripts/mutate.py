@@ -167,7 +167,8 @@ MUTANTS = [
     ("read: UART parity bit lost", UART, [(r"r_rdata\(0\) <= w_parity_ok;", "null;")]),
 
     # --- Top-level wiring, which only the firmware bench reaches
-    ("top: NMI pin not driven", TOP, [(r"  nmi_fault_o <= \(w_nmi and w_self_test_passed\) or w_self_test_failed;\n", "  nmi_fault_o <= '0';\n")]),
+    ("top: NMI pin not driven", TOP, [(r"  nmi_fault_o <= \(w_fault and w_self_test_passed\) or w_self_test_failed;\n", "  nmi_fault_o <= '0';\n")]),
+    ("top: NMI pin follows the unregistered compare", TOP, [(r"nmi_fault_o <= \(w_fault and w_self_test_passed\)", "nmi_fault_o <= (w_nmi and w_self_test_passed)")]),
     ("top: core A gets no read data", TOP, [(r"xbus_dat_i => w_core_a_in\.rdata", "xbus_dat_i => (others => '0')")]),
     ("top: core B gets no read data", TOP, [(r"xbus_dat_i => w_core_b_in\.rdata", "xbus_dat_i => (others => '0')")]),
     ("top: UART read data dropped", TOP, [(r"w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata or w_ram_rdata;", "w_periph_rdata <= w_can_rdata or w_wd_rdata or w_ram_rdata;")]),
@@ -316,8 +317,12 @@ MUTANTS = [
     ("ram: read data does not reach the cores", TOP, [(r"w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata or w_ram_rdata;", "w_periph_rdata <= w_can_rdata or w_uart_rdata or w_wd_rdata;")]),
     ("ram: at the wrong address", PKG, [(r'c_ram_base_addr       : std_logic_vector\(c_addr_width - 1 downto 0\) := x"20000000"', 'c_ram_base_addr       : std_logic_vector(c_addr_width - 1 downto 0) := x"30000000"')]),
     ("ram: fatal fault does not trip the comparator", LOCK, [(r"w_trip <= w_mismatch_detected or fatal_fault_i;", "w_trip <= w_mismatch_detected;")]),
-    ("ram: fatal fault not latched for the NMI", LOCK, [(r"(if \(w_trip = '1'\) then\s+)r_fault_latched <= '1';", r"\1null;")]),
-    ("ram: NMI waits for the latch", LOCK, [(r"nmi_fault_o  <= r_fault_latched or w_trip;", "nmi_fault_o  <= r_fault_latched;")]),
+    ("ram: fatal fault not latched for the NMI", LOCK, [(r"(if \(w_fault_now = '1'\) then\s+)r_fault_latched <= '1';", r"\1null;")]),
+    ("ram: NMI waits for the latch", LOCK, [(r"nmi_fault_o  <= r_fault_latched or w_fault_now;", "nmi_fault_o  <= r_fault_latched;")]),
+    # HSI FLT-01 and FLT-03
+    ("lockstep: illegal state not a fault", LOCK, [(r"w_state_illegal <= '0' when \(r_current_state = ST_SYSTEM_OK or r_current_state = ST_FAULT_TRIPPED\) else\s+'1';", "w_state_illegal <= '0';")]),
+    ("lockstep: fault output follows the compare", LOCK, [(r"fault_o      <= '1' when \(r_fault_latched = '1' or", "fault_o      <= '1' when (w_fault_now = '1' or r_fault_latched = '1' or")]),
+    ("lockstep: safe state only in the tripped encoding", LOCK, [(r"safe_state_o <= '1' when \(r_current_state /= ST_SYSTEM_OK\) else", "safe_state_o <= '1' when (r_current_state = ST_FAULT_TRIPPED) else")]),
 
     # --- Temporal diversity
     ("skew: core A's bus not held back", SKEW, [(r"core_a_bus_o <= r_bus\(g_cycles\);", "core_a_bus_o <= core_a_bus_i;")]),
@@ -373,8 +378,8 @@ MUTANTS = [
     ("test: strobe flip not wired", TOP, [(r"w_core_b_compared\.valid <= w_core_b_bus\.valid xor w_test_flip\.valid;", "w_core_b_compared.valid <= w_core_b_bus.valid;")]),
     ("test: fatal input not wired", TOP, [(r"fatal_fault_i => w_ecc_fatal or w_test_fatal,", "fatal_fault_i => w_ecc_fatal,")]),
     ("test: comparator on the cold reset alone", TOP, [(r"rst_n_syn_i => w_comparator_rst_n", "rst_n_syn_i => w_cold_rst_n")]),
-    ("test: NMI pin shows the self-test", TOP, [(r"nmi_fault_o <= \(w_nmi and w_self_test_passed\) or w_self_test_failed;", "nmi_fault_o <= w_nmi or w_self_test_failed;")]),
-    ("test: NMI pin misses a failure", TOP, [(r"nmi_fault_o <= \(w_nmi and w_self_test_passed\) or w_self_test_failed;", "nmi_fault_o <= w_nmi and w_self_test_passed;")]),
+    ("test: NMI pin shows the self-test", TOP, [(r"nmi_fault_o <= \(w_fault and w_self_test_passed\) or w_self_test_failed;", "nmi_fault_o <= w_fault or w_self_test_failed;")]),
+    ("test: NMI pin misses a failure", TOP, [(r"nmi_fault_o <= \(w_fault and w_self_test_passed\) or w_self_test_failed;", "nmi_fault_o <= w_fault and w_self_test_passed;")]),
 
     # --- CAN reception
     ("rx: stuff bit after 4", RX, [(r"c_stuff_run : unsigned\(2 downto 0\)  := to_unsigned\(5, 3\)", "c_stuff_run : unsigned(2 downto 0)  := to_unsigned(4, 3)")]),

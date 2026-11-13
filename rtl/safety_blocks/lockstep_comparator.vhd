@@ -44,7 +44,8 @@ entity lockstep_comparator is
     -- --------------------------------------------------------------------
     -- Safety Supervisor & Actuator Intercept
     -- --------------------------------------------------------------------
-    nmi_fault_o  : out   std_logic; -- Latching Non-Maskable Interrupt
+    nmi_fault_o  : out   std_logic; -- Fault now or latched: follows the compare at once
+    fault_o      : out   std_logic; -- Fault latched: from registers only, for pins and MEI
     safe_state_o : out   std_logic; -- Force vehicle actuators to safe mode
     bus_valid_o  : out   std_logic; -- Hardware transaction validation gate
 
@@ -67,6 +68,8 @@ architecture rtl of lockstep_comparator is
   signal w_mismatch_detected : std_logic;
   signal r_fault_latched     : std_logic;
   signal w_trip              : std_logic;
+  signal w_state_illegal     : std_logic;
+  signal w_fault_now         : std_logic;
   signal w_bus_open          : std_logic;
 
 begin
@@ -99,6 +102,13 @@ begin
   end process p_bus_compare;
 
   w_trip <= w_mismatch_detected or fatal_fault_i;
+
+  -- A state register holding neither encoding has been upset. That is a fault
+  -- in its own right (HSI FLT-03), and is latched and reported like a trip.
+  w_state_illegal <= '0' when (r_current_state = ST_SYSTEM_OK or r_current_state = ST_FAULT_TRIPPED) else
+                     '1';
+
+  w_fault_now <= w_trip or w_state_illegal;
 
   -- ========================================================================
   -- 2. HARDENED FINITE STATE MACHINE (Rule 3.1, 3.2, 3.3)
@@ -141,8 +151,8 @@ begin
       else
         r_current_state <= w_next_state;
 
-        -- Latch the fault signal permanently on mismatch
-        if (w_trip = '1') then
+        -- Latch the fault signal permanently on mismatch or an illegal state
+        if (w_fault_now = '1') then
           r_fault_latched <= '1';
         end if;
       end if;
@@ -155,8 +165,14 @@ begin
   -- ========================================================================
   -- Unconditionally drives safety lines and isolates faulty buses.
   -- ========================================================================
-  nmi_fault_o  <= r_fault_latched or w_trip;
-  safe_state_o <= '1' when (r_current_state = ST_FAULT_TRIPPED) else
+  -- nmi_fault_o follows the compare in the cycle it trips, which is what the
+  -- startup self-test checks. fault_o comes from registers alone, so the settling
+  -- of the compare cannot reach a pin through it (HSI FLT-01). Anything but the
+  -- healthy encoding counts as a fault for both, and as the safe state.
+  nmi_fault_o  <= r_fault_latched or w_fault_now;
+  fault_o      <= '1' when (r_fault_latched = '1' or r_current_state /= ST_SYSTEM_OK) else
+                  '0';
+  safe_state_o <= '1' when (r_current_state /= ST_SYSTEM_OK) else
                   '0';
   bus_valid_o  <= '1' when (r_current_state = ST_SYSTEM_OK) else
                   '0';
@@ -199,6 +215,13 @@ begin
         v_mismatch_count := 0;
         v_mismatch_seen  := '0';
       else
+        -- Property: an illegal state is reported, safe and closed at once
+        if (w_state_illegal = '1') then
+          assert nmi_fault_o = '1' and fault_o = '1' and safe_state_o = '1' and bus_valid_o = '0'
+            report "FORMAL FAIL: illegal state not handled as a fault"
+            severity error;
+        end if;
+
         if (w_trip = '1') then
           v_mismatch_seen  := '1';
           v_mismatch_count := 0;

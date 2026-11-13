@@ -81,8 +81,10 @@ architecture structural of top_automotive_soc is
 
   signal w_safe_sys_bus : t_rv_bus;
 
-  -- Internal safety status tracking wires
+  -- Internal safety status tracking wires. w_nmi follows the compare at once,
+  -- for the self-test. w_fault is the registered fault for the pin and MEI.
   signal w_nmi       : std_logic;
+  signal w_fault     : std_logic;
   signal w_bus_valid : std_logic;
 
   -- XBus signals from each NEORV32 instance
@@ -257,7 +259,8 @@ begin
   w_core_a_in.ack   <= r_bus_ack;
   w_core_a_in.msi   <= w_can_irq;
   w_core_a_in.mti   <= w_uart_irq;
-  w_core_a_in.mei   <= w_nmi;
+  -- A maskable notification only (HSI FLT-02): containment does not need it
+  w_core_a_in.mei <= w_fault;
 
   i_temporal_diversity : entity lockstep.temporal_diversity
     port map (
@@ -851,6 +854,7 @@ begin
 
       -- Safety Monitoring Outputs
       nmi_fault_o  => w_nmi,
+      fault_o      => w_fault,
       safe_state_o => w_lockstep_safe,
 
       -- Gated System Infrastructure Connections
@@ -950,8 +954,10 @@ begin
       dbe_fatal_o => w_ecc_fatal
     );
 
-  -- The self-test trips the comparator on purpose, which is nobody else's business
-  nmi_fault_o <= (w_nmi and w_self_test_passed) or w_self_test_failed;
+  -- The self-test trips the comparator on purpose, which is nobody else's business.
+  -- The pin keeps its name, but it is the registered fault indication, not a RISC-V
+  -- NMI (HSI FLT-01).
+  nmi_fault_o <= (w_fault and w_self_test_passed) or w_self_test_failed;
 
   -- Nothing supervises the actuators during a reset, so it holds them safe too
   actuator_safe_o <= w_lockstep_safe or not w_rst_n;

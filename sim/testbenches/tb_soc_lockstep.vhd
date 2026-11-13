@@ -231,6 +231,12 @@ begin
     alias core_a_rsp is << signal i_soc.i_cpu_master.xbus_rsp : bus_rsp_t >>;
     alias core_b_rsp is << signal i_soc.i_cpu_checker.xbus_rsp : bus_rsp_t >>;
 
+    alias comparator_state is << signal i_soc.i_lockstep_gate.r_current_state : t_safe_state >>;
+    alias soc_bus_valid    is << signal i_soc.w_bus_valid : std_logic >>;
+    alias soc_rst_n        is << signal i_soc.w_rst_n : std_logic >>;
+    alias self_test_passed is << signal i_soc.w_self_test_passed : std_logic >>;
+    alias wd_counter       is << signal i_soc.i_watchdog_supervisor.i_watchdog.r_counter : unsigned(15 downto 0) >>;
+
     procedure cold_reset is
     begin
 
@@ -354,6 +360,44 @@ begin
 
         wait for c_uart_bit_time * 2;
         check_equal(uart_starts, 0, "the byte never reached the UART");
+      elsif run("illegal_comparator_state_is_reported_kept_by_a_watchdog_reset_and_cleared_cold") then
+        -- HSI FLT-03 and FLT-04, for each one-bit corruption of 0x5A
+        for bit_index in 0 to 7 loop
+
+          cold_reset;
+          wait for c_boot;
+          check_equal(nmi_fault, '0', "healthy before bit " & integer'image(bit_index));
+          wait until rising_edge(clk);
+          comparator_state <= force st_system_ok xor std_logic_vector(shift_left(to_unsigned(1, 8), bit_index));
+          wait_clocks(1);
+          comparator_state <= release;
+          wait_clocks(2);
+          check_equal(nmi_fault, '1', "bit " & integer'image(bit_index) & ": reported on the pin");
+          check_equal(actuator_safe, '1', "bit " & integer'image(bit_index) & ": actuators safe");
+          check_equal(soc_bus_valid, '0', "bit " & integer'image(bit_index) & ": bus closed");
+
+          -- A watchdog reset restarts the cores and keeps the fault
+          wd_counter <= force to_unsigned(49990, 16);
+          wait until rising_edge(wd_clk);
+          wd_counter <= release;
+          wait until soc_rst_n = '0' for c_timeout;
+          check_equal(soc_rst_n, '0', "bit " & integer'image(bit_index) & ": the watchdog reset the SoC");
+          wait until soc_rst_n = '1' for c_timeout;
+          wait_clocks(20);
+          check_equal(nmi_fault, '1', "bit " & integer'image(bit_index) & ": still reported after a watchdog reset");
+          check_equal(actuator_safe, '1', "bit " & integer'image(bit_index) & ": still safe after a watchdog reset");
+          check_equal(soc_bus_valid, '0', "bit " & integer'image(bit_index) & ": still closed after a watchdog reset");
+
+          -- A cold reset clears it, and the self-test qualifies the comparator again
+          cold_reset;
+          wait for c_boot;
+          check_equal(comparator_state, st_system_ok, "bit " & integer'image(bit_index) & ": healthy after a cold reset");
+          check_equal(nmi_fault, '0', "bit " & integer'image(bit_index) & ": cleared by a cold reset");
+          check_equal(actuator_safe, '0', "bit " & integer'image(bit_index) & ": actuators released");
+          check_equal(self_test_passed, '1', "bit " & integer'image(bit_index) & ": the self-test passed again");
+
+        end loop;
+
       end if;
 
     end loop;

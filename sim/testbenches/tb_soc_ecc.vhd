@@ -186,8 +186,13 @@ begin
 
         wait until ecc_fatal = '1' for c_timeout;
         check_equal(ecc_fatal, '1', "uncorrectable word found");
+
+        -- The pin is registered (HSI FLT-01), so it rises at the next edge
         wait for 1 ns;
-        check_equal(nmi_fault, '1', "NMI straight away");
+        check_equal(nmi_fault, '0', "no pin glitch in the cycle the error is found");
+        wait until rising_edge(clk);
+        wait for 1 ns;
+        check_equal(nmi_fault, '1', "fault pin at the next edge");
 
         wait until actuator_safe = '1' for c_ftti;
         check_equal(actuator_safe, '1', "actuators safe in time");
