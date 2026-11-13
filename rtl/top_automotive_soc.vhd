@@ -26,7 +26,9 @@ library neorv32;
 entity top_automotive_soc is
   generic (
     -- NEORV32 boot source: 0 = bootloader, 1 = custom address, 2 = IMEM image
-    g_boot_mode : natural range 0 to 2 := 0
+    g_boot_mode : natural range 0 to 2 := 0;
+    -- Both cores' execution trace ports, for verification only (roadmap R2.2)
+    g_trace_en : boolean := false
   );
   port (
     -- --------------------------------------------------------------------
@@ -295,7 +297,7 @@ begin
     generic map (
       -- General
       clock_frequency => 50_000_000,
-      trace_port_en   => false,
+      trace_port_en   => g_trace_en,
       dual_core_en    => false,
 
       -- Boot
@@ -572,7 +574,7 @@ begin
     generic map (
       -- General
       clock_frequency => 50_000_000,
-      trace_port_en   => false,
+      trace_port_en   => g_trace_en,
       dual_core_en    => false,
 
       -- Boot
