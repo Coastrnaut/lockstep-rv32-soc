@@ -92,7 +92,7 @@ sudo apt-get update && sudo apt-get install -y ghdl python3 python3-pip
 pip install -r sim/requirements.txt
 ```
 
-`sim/run.py` finds GHDL from `GHDL_BIN`, then `C:\GIT\ghdl-mcode-6.0.0-ucrt64in` or `C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64in` on Windows, then `ghdl` on `PATH`. It finds Vivado from `VIVADO_BIN`, `XILINX_VIVADO`, `xvhdl` on `PATH` or the default install folders.
+`sim/run.py` finds GHDL from `GHDL_BIN`, then on Windows the GHDL fork's mcode build in `C:\GIT\ghdl\build\install-mcode\bin`, then the 6.0.0 releases, then `ghdl` on `PATH`; `--ghdl-backend llvm|llvm-jit|gcc` runs the fork's other backends, `gcc` in WSL (`docs/verification/toolchain.md`). It finds Vivado from `VIVADO_BIN`, `XILINX_VIVADO`, `xvhdl` on `PATH` or the default install folders.
 
 ### Compiling and Executing Tests
 ```bash

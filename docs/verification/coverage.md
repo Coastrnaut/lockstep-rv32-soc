@@ -86,13 +86,20 @@ register. They were removed with no change in behaviour.
 ## GHDL's GCC backend
 
 GHDL's mcode backend, which the regression uses, has no coverage. Its GCC
-backend writes gcov data, but runs 117 of the tests wrongly: it dereferences
-NULL when a `force` targets an external name, and when an external name in a
-process is resolved before the instance it reaches is elaborated; and it
-aborts without a message in the CAN receiver bench. Most fault-injection
-tests need both forces and external names, so the backend is used only for
-elaboration, which it does correctly. The defects are GHDL's; mcode and xsim
-run every test.
+backend writes gcov data. Release 6.0.0 ran 117 of the tests wrongly: it
+dereferenced NULL when a `force` targeted an external name, and when an
+external name in a process was resolved before the instance it reaches was
+elaborated, and it aborted without a message in the CAN receiver bench. The
+cause was GHDL's: with the GCC and LLVM backends it never resolved external
+names at all.
+
+The GHDL fork at `C:\GIT\ghdl` (github.com/Coastrnaut/ghdl, commit d4ff30260,
+"support external names with the gcc and llvm backends") resolves them at
+elaboration. Its GCC backend, built in WSL as `~/ghdl-gcc`, runs all 340 tests
+(`run.py --ghdl-backend gcc`, `docs/verification/toolchain.md`), and the
+elaboration coverage above uses it. Statement coverage of the whole regression
+with gcov is now possible as a second, independent measure; it is not run
+yet.
 
 ## What this does and does not show
 

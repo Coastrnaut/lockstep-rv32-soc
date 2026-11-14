@@ -25,8 +25,14 @@ tb_pkg (TB INFO, TB PASS, TB FAIL, with simulation times) must match between
 them, or the run fails. --no-compare turns that off.
 
 Simulators are found from:
-  GHDL    GHDL_BIN (the folder), then on Windows C:/GIT/ghdl-mcode-6.0.0-ucrt64/bin or
-          C:/GIT/ghdl-mcode-6.0.0-rc2-mingw64/bin, then ghdl on PATH
+  GHDL    GHDL_BIN (the folder), then on Windows the GHDL fork's mcode build in
+          C:/GIT/ghdl/build/install-mcode/bin, then C:/GIT/ghdl-mcode-6.0.0-ucrt64/bin or
+          C:/GIT/ghdl-mcode-6.0.0-rc2-mingw64/bin, then ghdl on PATH.
+          --ghdl-backend picks another of the fork's backends: llvm or llvm-jit
+          (C:/GIT/ghdl/build/install-<backend>/bin; llvm links with MSYS2's gcc,
+          C:/msys64/ucrt64/bin), or gcc, run in WSL (~/ghdl-gcc/bin/ghdl first,
+          GHDL_GCC and GHDL_GCC_LIBS to override). Each backend's results go to
+          sim/out/ghdl-<backend>; mcode's to sim/out/ghdl.
   Vivado  VIVADO_BIN (the bin folder), XILINX_VIVADO, xvhdl on PATH, then the
           default install folders (C:/AMDDesignTools/*/Vivado/bin and others)
 
@@ -40,6 +46,7 @@ import csv
 import fnmatch
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -83,7 +90,14 @@ CONFIGS = {
 
 # The longest bench runs about 30 ms of simulated time
 STOP_TIME_MS = 50
-WINDOWS_GHDL = [Path("C:/GIT/ghdl-mcode-6.0.0-ucrt64/bin"), Path("C:/GIT/ghdl-mcode-6.0.0-rc2-mingw64/bin")]
+# The GHDL fork (github.com/Coastrnaut/ghdl), built on Windows by its
+# scripts/windows/build-msys2.sh into build/install-<backend>, then the releases before it
+GHDL_FORK = Path("C:/GIT/ghdl/build")
+GHDL_BACKENDS = ("mcode", "llvm", "llvm-jit", "gcc")
+WINDOWS_GHDL = [GHDL_FORK / "install-mcode" / "bin", Path("C:/GIT/ghdl-mcode-6.0.0-ucrt64/bin"),
+                Path("C:/GIT/ghdl-mcode-6.0.0-rc2-mingw64/bin")]
+# The llvm backend compiles and links each design with MSYS2's toolchain
+MSYS2_BIN = Path("C:/msys64/ucrt64/bin")
 VIVADO_GLOBS = [("C:/AMDDesignTools", "*/Vivado/bin"), ("C:/Xilinx/Vivado", "*/bin"), ("C:/Xilinx", "*/Vivado/bin"),
                 ("/tools/Xilinx/Vivado", "*/bin"), ("/tools/Xilinx", "*/Vivado/bin"), ("/opt/Xilinx/Vivado", "*/bin")]
 
@@ -123,7 +137,11 @@ ASSERT_ERROR = re.compile(r"\((?:assertion|report) error\)|^Error: (?!\[)", re.M
 # ---------------------------------------------------------------------------
 # Simulators
 # ---------------------------------------------------------------------------
-def find_ghdl():
+def find_ghdl(backend="mcode"):
+    """GHDL for the mcode, llvm or llvm-jit backend (gcc runs in WSL: find_ghdl_gcc)."""
+    if backend != "mcode" and not os.environ.get("GHDL_BIN"):
+        exe = GHDL_FORK / f"install-{backend}" / "bin" / ("ghdl.exe" if os.name == "nt" else "ghdl")
+        return str(exe) if exe.is_file() else None
     if os.environ.get("GHDL_BIN"):
         for name in ("ghdl", "ghdl.exe"):
             if (Path(os.environ["GHDL_BIN"]) / name).is_file():
@@ -176,11 +194,11 @@ def posix(path):
     return str(path).replace("\\", "/")
 
 
-def run_process(cmd, cwd, timeout):
+def run_process(cmd, cwd, timeout, env=None):
     """Run a command; on a timeout, stop it and everything it started."""
     group = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
     with subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                          encoding="utf-8", errors="replace", **group) as proc:
+                          encoding="utf-8", errors="replace", env=env, **group) as proc:
         try:
             out, _ = proc.communicate(timeout=timeout)
             return proc.returncode, out
@@ -293,12 +311,26 @@ def select(jobs, patterns):
 class Ghdl:
     name = "ghdl"
 
-    def __init__(self, exe):
+    def __init__(self, exe, backend="mcode"):
         self.exe = exe
+        self.backend = backend
+        self.env = None
+        if backend != "mcode":
+            self.name = f"ghdl-{backend}"
+        if backend == "llvm" and os.name == "nt":
+            self.env = dict(os.environ, PATH=os.pathsep.join([str(MSYS2_BIN), os.environ.get("PATH", "")]))
+
+    def path(self, p):
+        return posix(p)
+
+    def command(self, args, cwd, timeout):
+        return run_process([self.exe] + args, cwd, timeout, self.env)
 
     def compile(self, build, libdir):
         libdir.mkdir(parents=True, exist_ok=True)
-        for old in libdir.glob("*.cf"):
+        # The code-generating backends leave an object file per unit: start them
+        # from an empty library, so no object from an earlier analysis is used
+        for old in [*libdir.glob("*.cf"), *(libdir.glob("*.o") if self.backend != "mcode" else [])]:
             old.unlink()
         # Consecutive files of one library go to GHDL in one call
         chunks = []
@@ -308,21 +340,65 @@ class Ghdl:
             else:
                 chunks.append((lib, [posix(f)]))
         for lib, files in chunks:
-            rc, out = run_process([self.exe, "-a", "--std=08", f"--work={lib}"] + files, libdir, 900)
+            rc, out = self.command(["-a", "--std=08", f"--work={lib}"] + [self.path(f) for f in files], libdir, 1800)
             if rc != 0:
                 return False, out
         return True, ""
 
     def elaborate(self, units, libdir, jobs):
-        # mcode elaborates when it runs
+        # --elab-run elaborates each test in its own folder: mcode in memory, the
+        # other backends into an executable there
         return {}
 
     def run(self, job, libdir, rundir):
-        cmd = [self.exe, "--elab-run", "--std=08", f"--workdir={posix(libdir)}", f"-P{posix(libdir)}",
-               "--work=sim_lib", job.bench, f"--stop-time={STOP_TIME_MS}ms",
-               f"--assert-level={'failure' if job.allow_errors else 'error'}", f"-gg_test={job.test}"]
-        cmd += [f"-g{k}={v}" for k, v in job.generics.items()]
-        return run_process(cmd, rundir, 1800)
+        args = ["--elab-run", "--std=08", f"--workdir={self.path(libdir)}", f"-P{self.path(libdir)}",
+                "--work=sim_lib", job.bench, f"--stop-time={STOP_TIME_MS}ms",
+                f"--assert-level={'failure' if job.allow_errors else 'error'}", f"-gg_test={job.test}"]
+        args += [f"-g{k}={v}" for k, v in job.generics.items()]
+        return self.command(args, rundir, 1800)
+
+
+class GhdlGcc(Ghdl):
+    """GHDL's GCC backend, in WSL on Windows: the same commands, through bash there."""
+
+    def __init__(self, exe, libs, wsl):
+        super().__init__(exe, "gcc")
+        self.libs, self.wsl = libs, wsl
+
+    def path(self, p):
+        return wsl_path(p) if self.wsl else posix(p)
+
+    def compile(self, build, libdir):
+        """GHDL stamps each analysed file with the wall clock, and on elaboration
+        calls a unit obsolete if a file it depends on has a later stamp. In WSL the
+        clock can step back a few milliseconds when it is resynchronised with
+        Windows, and then a file analysed after its dependency gets the earlier
+        stamp, and the elaboration fails though the order was right. So check the
+        stamps, and analyse again the few times it happens."""
+        for _ in range(3):
+            ok, err = super().compile(build, libdir)
+            if not ok or self.stamps_in_order(build, libdir):
+                return ok, err
+            print(f"note: {self.name} {build}: the clock went back during analysis; analysing again", flush=True)
+        return False, "analysis time stamps out of order three times"
+
+    def stamps_in_order(self, build, libdir):
+        stamps = {}
+        for cf in libdir.glob("*.cf"):
+            for m in re.finditer(r'^file \S+ "([^"]+)" "[^"]*" "([^"]+)":', cf.read_text(errors="replace"), re.M):
+                stamps[m.group(1)] = m.group(2)
+        last = ""
+        for _, f in compile_order(build):
+            stamp = stamps.get(self.path(f), "")
+            if stamp and stamp < last:
+                return False
+            last = max(last, stamp)
+        return True
+
+    def command(self, args, cwd, timeout):
+        quoted = " ".join(shlex.quote(a) for a in [self.exe] + args)
+        script = f"export LD_LIBRARY_PATH={shlex.quote(self.libs)}; cd {shlex.quote(self.path(cwd))}; exec {quoted}"
+        return run_process((self.wsl or []) + ["bash", "-c", script], cwd, timeout)
 
 
 def split_target(target):
@@ -758,7 +834,38 @@ def read_xcrg(folder):
     return found
 
 
-GHDL_GCC_WSL = "~/tools/ghdl-gcc-*/bin/ghdl"
+# GHDL's GCC backend in WSL: the fork's build first, then the 6.0.0 release
+GHDL_GCC_WSL = ("~/ghdl-gcc/bin/ghdl", "~/tools/ghdl-gcc-*/bin/ghdl")
+
+
+def wsl_path(path):
+    """A Windows path as WSL sees it: C:/x becomes /mnt/c/x."""
+    p = Path(path).resolve()
+    return "/mnt/" + p.drive[0].lower() + p.as_posix()[2:]
+
+
+def find_ghdl_gcc():
+    """(ghdl, library path, command prefix) for GHDL's GCC backend, or None.
+    GHDL_GCC names it (and GHDL_GCC_LIBS its library path); on Windows it is
+    looked for in each WSL distribution, the prefix then being wsl -d <name> -e."""
+    ghdl, libs = os.environ.get("GHDL_GCC"), os.environ.get("GHDL_GCC_LIBS", "")
+    if ghdl:
+        return ghdl, libs, None
+    if os.name != "nt" or not shutil.which("wsl"):
+        return None
+    listing = subprocess.run(["wsl", "-l", "-q"], capture_output=True)
+    for name in listing.stdout.decode("utf-16-le", errors="ignore").replace("\0", "").split():
+        wsl = ["wsl", "-d", name, "-e"]
+        for pattern in GHDL_GCC_WSL:
+            found = subprocess.run(wsl + ["sh", "-c", f"ls {pattern} 2>/dev/null | head -1"],
+                                   capture_output=True, text=True).stdout.strip()
+            if found:
+                if not libs:
+                    libs = subprocess.run(wsl + ["sh", "-c", "dirname $(ls ~/tools/libgnat-*/usr/lib/*/libgnat-*.so "
+                                                 "2>/dev/null | head -1) 2>/dev/null"],
+                                          capture_output=True, text=True).stdout.strip()
+                return found, libs, wsl
+    return None
 
 
 def elaboration_lines(files):
@@ -768,26 +875,14 @@ def elaboration_lines(files):
     Windows it is also looked for in each WSL distribution."""
     if not files:
         return {}
-    ghdl, libs, wsl = os.environ.get("GHDL_GCC"), os.environ.get("GHDL_GCC_LIBS", ""), None
-    if not ghdl and os.name == "nt" and shutil.which("wsl"):
-        listing = subprocess.run(["wsl", "-l", "-q"], capture_output=True)
-        for name in listing.stdout.decode("utf-16-le", errors="ignore").replace("\0", "").split():
-            found = subprocess.run(["wsl", "-d", name, "-e", "sh", "-c", f"ls {GHDL_GCC_WSL} 2>/dev/null | head -1"],
-                                   capture_output=True, text=True).stdout.strip()
-            if found:
-                ghdl, wsl = found, ["wsl", "-d", name, "-e"]
-                if not libs:
-                    libs = subprocess.run(wsl + ["sh", "-c", "dirname $(ls ~/tools/libgnat-*/usr/lib/*/libgnat-*.so "
-                                                 "2>/dev/null | head -1) 2>/dev/null"],
-                                          capture_output=True, text=True).stdout.strip()
-                break
-    if not ghdl:
+    found = find_ghdl_gcc()
+    if not found:
         print("note: no GHDL GCC backend for elaboration coverage (GHDL_GCC); elaboration lines stay waived")
         return {}
+    ghdl, libs, wsl = found
 
     def as_seen(path):
-        p = Path(path).resolve()
-        return "/mnt/" + p.drive[0].lower() + p.as_posix()[2:] if wsl else p.as_posix()
+        return wsl_path(path) if wsl else Path(path).resolve().as_posix()
 
     result = {}
     for rel in files:
@@ -930,6 +1025,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("patterns", nargs="*", help="bench.test patterns, with * and ?")
     parser.add_argument("--sim", choices=("auto", "ghdl", "xsim", "both"), default="auto")
+    parser.add_argument("--ghdl-backend", choices=GHDL_BACKENDS, default="mcode",
+                        help="the GHDL fork's backend to simulate with (lint always uses mcode)")
     parser.add_argument("-p", "--jobs", type=int, default=os.cpu_count() or 4)
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--lint", action="store_true")
@@ -978,7 +1075,19 @@ def main():
     wanted = {"auto": ("ghdl", "xsim"), "both": ("ghdl", "xsim"), "ghdl": ("ghdl",), "xsim": ("xsim",)}[args.sim]
     sims = []
     if "ghdl" in wanted:
-        if ghdl:
+        if args.ghdl_backend == "gcc":
+            found = find_ghdl_gcc()
+            if not found:
+                print("ERROR: GHDL's GCC backend not found (GHDL_GCC, or ~/ghdl-gcc/bin/ghdl in WSL).")
+                return 1
+            sims.append(GhdlGcc(*found))
+        elif args.ghdl_backend != "mcode":
+            exe = find_ghdl(args.ghdl_backend)
+            if not exe:
+                print(f"ERROR: GHDL {args.ghdl_backend} not found in {GHDL_FORK}/install-{args.ghdl_backend}/bin.")
+                return 1
+            sims.append(Ghdl(exe, args.ghdl_backend))
+        elif ghdl:
             sims.append(Ghdl(ghdl))
         elif args.sim != "auto":
             print("ERROR: GHDL not found.")
@@ -992,7 +1101,8 @@ def main():
     if not sims:
         print("ERROR: no simulator found.")
         return 1
-    print("Simulators: " + ", ".join(f"{s.name} ({ghdl if s.name == 'ghdl' else vivado})" for s in sims), flush=True)
+    print("Simulators: " + ", ".join(f"{s.name} ({s.exe if isinstance(s, Ghdl) else vivado})" for s in sims),
+          flush=True)
 
     if not os.environ.get("LOCKSTEP_NO_LINT") and not args.patterns and not args.compile:
         if not ghdl or not ghdl_lint(ghdl) or not run_vsg():

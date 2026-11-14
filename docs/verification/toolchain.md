@@ -26,9 +26,29 @@ python run.py -p 4 -x out/regression.xml   # four jobs, with an xUnit report
 do. Every bench `sim/tb/tb_*.vhd` runs without being named: `run.py` reads
 each bench's tests from its `run("...")` calls.
 
-GHDL is found from `GHDL_BIN` (the folder holding `ghdl`), then on Windows
-`C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin` or `C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin`,
-then `ghdl` on PATH, which is how CI finds it on Linux. Vivado is found from
+GHDL is found from `GHDL_BIN` (the folder holding `ghdl`), then on Windows the
+GHDL fork's mcode build, `C:\GIT\ghdl\build\install-mcode\bin`, then the 6.0.0
+releases `C:\GIT\ghdl-mcode-6.0.0-ucrt64\bin` or
+`C:\GIT\ghdl-mcode-6.0.0-rc2-mingw64\bin`, then `ghdl` on PATH, which is how CI
+finds it on Linux.
+
+`--ghdl-backend` runs the tests on another of the fork's backends; each writes
+to `sim/out/ghdl-<backend>`:
+
+| Backend | Where | Notes |
+|---------|-------|-------|
+| `mcode` (default) | `C:\GIT\ghdl\build\install-mcode\bin` | The lint always uses it |
+| `llvm-jit` | `C:\GIT\ghdl\build\install-llvm-jit\bin` | |
+| `llvm` | `C:\GIT\ghdl\build\install-llvm\bin` | Compiles and links each test with MSYS2's gcc (`C:\msys64\ucrt64\bin`) |
+| `gcc` | `~/ghdl-gcc/bin/ghdl` in WSL, else `~/tools/ghdl-gcc-*` | `GHDL_GCC` and `GHDL_GCC_LIBS` override; run through `wsl -d <distribution>` |
+
+The code-generating backends analyse into a fresh library each run. In WSL the
+clock sometimes steps back a few milliseconds when it is resynchronised with
+Windows. GHDL stamps each analysed file with the wall clock, and a file then
+stamped earlier than one analysed before it makes that one look obsolete, so
+elaboration fails although the order was right. `run.py` checks the stamps
+after the GCC backend's analysis and analyses again when they are out of
+order: once or twice in each of three full runs on 2026-11-14. Vivado is found from
 `VIVADO_BIN` (its bin folder), `XILINX_VIVADO`, `xvhdl` on PATH, then the
 default install folders (`C:\AMDDesignTools\*\Vivado\bin`, `C:\Xilinx\...`,
 `/tools/Xilinx/...`, `/opt/Xilinx/...`).
@@ -145,6 +165,22 @@ a junction to the build's one.
 The 340 tests are 331 in the 50 benches in `sim/tb`, 7 in the framework check
 and the board test. CI runs the GHDL half with GHDL 4.1 on Ubuntu 24.04.
 
+### Every backend of the GHDL fork, 2026-11-14
+
+The fork at `C:\GIT\ghdl`: Windows builds at `6.0.0.r746.g6545a6290`, the WSL
+GCC build at `6.0.0.r737.gd5e8573bc`; both have the external-name support of
+commit d4ff30260.
+
+| Backend | Result |
+|---------|--------|
+| mcode, with xsim | 340 passed of 340 on each; all 333 compared tests the same on both |
+| llvm-jit | 340 passed of 340 |
+| llvm | 340 passed of 340 |
+| GCC, in WSL | 340 passed of 340, in each of three runs from a clean library |
+
+Release 6.0.0's GCC backend failed 117 of 290 here. Lint, VSG, the board check
+and the four formal jobs also pass with the fork's mcode build.
+
 ## Code coverage
 
 `python run.py --coverage` runs the tests on xsim with Vivado's code
@@ -168,10 +204,10 @@ with its reason: an assertion's message and severity, which run only when
 it fails, and code that runs at elaboration, which xsim does not count. The
 summary lists the waived lines apart.
 
-GHDL's mcode backend has no coverage. Its GCC backend can write gcov data,
-but it failed 117 of the 290 tests here: it aborts in the CAN receiver bench
-and dereferences NULL on external names declared before the instance they
-reach, which most SoC benches use. xsim runs every test.
+GHDL's mcode backend has no coverage. Its GCC backend can write gcov data.
+Release 6.0.0 failed 117 of the 290 tests here, on external names, which it
+never resolved; the GHDL fork's GCC backend runs all 340
+(`docs/verification/coverage.md`).
 
 The figures are in `docs/verification/coverage.md`.
 

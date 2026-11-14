@@ -60,6 +60,11 @@ first two need the user or hardware; the rest can be done in simulation.
    supplies, and arbitration of the outputs.
 8. **A fault-injection build for the board,** so the bench can show a trip and
    measure the reaction time on the real pins.
+9. **GHDL fork follow-ups.** Make GHDL's analysis time stamps monotonic, so a
+   clock that steps back cannot make a correctly ordered library look obsolete
+   (`run.py` works around it for the GCC backend today); upstream the
+   external-name support; then run statement coverage of the whole regression
+   with the GCC backend and gcov, as a second measure beside xsim's.
 
 The repository boots two NEORV32 instances, runs firmware through the compared bus, and exercises ECC, watchdog, reset, CAN and UART behavior. The wire-level reference vectors, firmware tests and mutation harness give the next release a way to verify changes at each boundary. Prioritize the paths from fault detection to bus termination and physical output containment. The current evidence supports a research prototype. Automotive integration and any ASIL claim depend on a target implementation, a defined item and reviewed safety evidence.
 
