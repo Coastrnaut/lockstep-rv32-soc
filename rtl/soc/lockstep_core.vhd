@@ -22,9 +22,7 @@ library neorv32;
 entity lockstep_core is
   generic (
     -- NEORV32 boot source: 0 = bootloader, 1 = custom address, 2 = IMEM image
-    g_boot_mode : natural range 0 to 2 := 0;
-    -- Execution trace port, for verification only (roadmap R2.2)
-    g_trace_en : boolean := false
+    g_boot_mode : natural range 0 to 2 := 0
   );
   port (
     clk_i  : in    std_ulogic;
@@ -62,8 +60,9 @@ begin
     generic map (
       -- General
       clock_frequency => 50_000_000,
-      trace_port_en   => g_trace_en,
-      dual_core_en    => false,
+      -- The retirement comparator needs it in every build (TSR_LOCKSTEP_046)
+      trace_port_en => true,
+      dual_core_en  => false,
 
       -- Boot
       boot_mode_select => g_boot_mode,

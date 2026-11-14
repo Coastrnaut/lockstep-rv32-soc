@@ -27,8 +27,6 @@ entity top_automotive_soc is
   generic (
     -- NEORV32 boot source: 0 = bootloader, 1 = custom address, 2 = IMEM image
     g_boot_mode : natural range 0 to 2 := 0;
-    -- Both cores' execution trace ports, for verification only (roadmap R2.2)
-    g_trace_en : boolean := false;
     -- RAM size profile, in 64-bit words: 15 is the 256 KB of HSI section 5, and
     -- a board too small for it takes fewer. The window above the RAM answers ERR.
     g_ram_addr_bits : positive range 4 to 15 := 15;
@@ -175,9 +173,14 @@ architecture structural of top_automotive_soc is
   signal w_core_a_xbus_sel  : std_logic_vector(3 downto 0);
   signal w_core_b_xbus_sel  : std_logic_vector(3 downto 0);
 
-  -- Each core's retirement trace, for the benches (roadmap R2.2)
+  -- Each core's retirement trace, and the two compared (TSR_LOCKSTEP_046)
   signal w_core_a_trace : trace_port_t;
   signal w_core_b_trace : trace_port_t;
+  signal w_retire_fault : std_logic;
+
+  -- A reset of the cores that nothing asked for (TSR_RESET_002)
+  signal r_rst_n_seen    : std_logic;
+  signal r_reset_unasked : std_logic;
 
   -- Peripheral diagnostic signals
   signal w_cold_rst_n    : std_logic;
@@ -243,6 +246,32 @@ begin
       rst_n_i     => w_rst_n_request,
       rst_n_syn_o => w_rst_n
     );
+
+  -- Every reset of the cores has a cause that holds w_rst_n_request low for many
+  -- clocks: the cold reset for two at least, the watchdog's for 16 of its own,
+  -- the self-test and the clock monitor until a cold reset. So w_rst_n falling
+  -- while the request is still high at the next edge is the synchroniser itself:
+  -- an upset of one of its stages. The cores restart from it with the outputs
+  -- safe meanwhile, which is fail-safe, but it is a hardware fault, and it is
+  -- reported as one: a fatal input to the comparators (HSI RST-01). Only a cold
+  -- reset clears it, and a cold reset holds this check in reset.
+  p_reset_check : process (clk_i) is
+  begin
+
+    if rising_edge(clk_i) then
+      if (w_cold_rst_n = '0') then
+        r_rst_n_seen    <= '0';
+        r_reset_unasked <= '0';
+      else
+        r_rst_n_seen <= w_rst_n;
+
+        if (r_rst_n_seen = '1' and w_rst_n = '0' and w_rst_n_request = '1') then
+          r_reset_unasked <= '1';
+        end if;
+      end if;
+    end if;
+
+  end process p_reset_check;
 
   -- ========================================================================
   -- 2. BUS RECORD PACKAGING
@@ -325,8 +354,7 @@ begin
   -- written once (rtl/soc/lockstep_core.vhd) and cannot drift apart.
   i_cpu_master : entity lockstep.lockstep_core
     generic map (
-      g_boot_mode => g_boot_mode,
-      g_trace_en  => g_trace_en
+      g_boot_mode => g_boot_mode
     )
     port map (
       clk_i      => clk_i,
@@ -350,8 +378,7 @@ begin
   -- ========================================================================
   i_cpu_checker : entity lockstep.lockstep_core
     generic map (
-      g_boot_mode => g_boot_mode,
-      g_trace_en  => g_trace_en
+      g_boot_mode => g_boot_mode
     )
     port map (
       clk_i      => clk_i,
@@ -392,7 +419,8 @@ begin
       -- Both cores read the same data from the RAM, so they cannot see a bad
       -- word, nor a bad response on its way to them; and an actuator line that
       -- does not follow its command is no shutdown path
-      fatal_fault_i => w_ecc_fatal or w_test_fatal or w_actuator_fault or w_rsp_parity_fault,
+      fatal_fault_i => w_ecc_fatal or w_test_fatal or w_actuator_fault or w_rsp_parity_fault or w_retire_fault or
+                       r_reset_unasked,
 
       -- Safety Monitoring Outputs
       nmi_fault_o  => w_nmi,
@@ -410,6 +438,25 @@ begin
       test_bus_valid_o  => w_test_bus_valid,
 
       disagree_o => w_comparators_disagree
+    );
+
+  -- ========================================================================
+  -- 6a. RETIREMENT COMPARATOR
+  -- ========================================================================
+  -- A fault in a core's registers or control state shows on the bus only when
+  -- an access uses it. The two cores' retirements are compared every clock as
+  -- well, core A's two clocks late, and a difference trips the comparators
+  -- above (HSI FLT-05). Core B's reset, which follows core A's by the same two
+  -- clocks, says when there is something to compare.
+  -- ========================================================================
+  i_retire_comparator : entity lockstep.retire_comparator
+    port map (
+      clk_i          => clk_i,
+      rst_n_i        => w_cold_rst_n,
+      core_b_rst_n_i => w_core_b_in.rst_n,
+      trace_a_i      => w_core_a_trace,
+      trace_b_i      => w_core_b_trace,
+      fault_o        => w_retire_fault
     );
 
   -- ========================================================================

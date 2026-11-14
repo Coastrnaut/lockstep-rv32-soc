@@ -1,11 +1,12 @@
 -- ============================================================================
 -- Testbench: Retirement Trace Comparison on the Running SoC (roadmap R2.2)
 -- ============================================================================
--- Runs sim/scripts/soc_firmware.py with both cores' trace ports on, and
--- compares their retirements with trace_compare. The XBus comparator only
--- sees what reaches the bus, so a divergence in a register that no access
--- uses stays hidden from it. The trace comparison sees it at the instruction
--- that wrote the register.
+-- Runs sim/scripts/soc_firmware.py and compares both cores' retirements with
+-- trace_compare, a bench model independent of the RTL's retire_comparator.
+-- The XBus comparator only sees what reaches the bus, so a divergence in a
+-- register that no access uses stays hidden from it. Both retirement
+-- comparisons see it at the instruction that wrote the register, and the
+-- RTL's trips the SoC (TSR_LOCKSTEP_046).
 -- ============================================================================
 
 library ieee;
@@ -94,8 +95,7 @@ begin
 
   i_soc : entity lockstep.top_automotive_soc
     generic map (
-      g_boot_mode => 2,
-      g_trace_en  => true
+      g_boot_mode => 2
     )
     port map (
       clk_i           => clk,
@@ -169,11 +169,37 @@ begin
       : std_ulogic_vector(31 downto 0) >>;
     alias trace_a    is << signal i_soc.w_core_a_trace : trace_port_t >>;
     alias status_sys is << signal i_soc.i_watchdog_supervisor.r_status_sys : std_logic_vector(9 downto 0) >>;
-
-    variable v_traps : natural;
+    alias retire     is << signal i_soc.w_retire_fault : std_logic >>;
 
     variable v_order : natural;
     variable v_time  : time;
+
+    -- Corrupt core A's write of 0 to s5 at the start of the program, and wait
+    -- for core A to retire it: v_order and v_time are its order number and time
+
+    procedure corrupt_s5 is
+    begin
+
+      wait until a_rd_we = '1' and a_rd_addr = c_s5 for c_timeout;
+      check_equal(a_rd_addr, c_s5, "core A writes s5");
+      -- From here, p_s5 records the order number of that instruction, from
+      -- core A's own trace
+      s5_watch <= '1';
+      a_wdata  <= force x"DEADBEEF";
+      wait until rising_edge(clk);
+      a_wdata  <= release;
+
+      if (s5_seen /= '1') then
+        wait until s5_seen = '1' for c_clk_period * 8;
+      end if;
+
+      check_equal(s5_seen, '1', "core A retired the corrupted write");
+      v_order := s5_order;
+      v_time  := s5_time;
+
+    end procedure corrupt_s5;
+
+    variable v_traps : natural;
 
   begin
 
@@ -215,25 +241,32 @@ begin
         check_equal(v_traps, 11, "11 trap handler entries on core A");
         check_equal(mismatch, '0', "no retirement differs, traps included");
         info("trap entries: " & integer'image(v_traps) & ", retirements compared: " & integer'image(compared));
-      elsif run("a_register_only_divergence_is_caught_by_the_trace_and_not_by_the_bus") then
-        -- Core A's write of 0 to s5 at the start of the program writes another
-        -- value instead. Core B's does not.
-        wait until a_rd_we = '1' and a_rd_addr = c_s5 for c_timeout;
-        check_equal(a_rd_addr, c_s5, "core A writes s5");
-        -- From here, p_s5 records the order number of that instruction, from
-        -- core A's own trace
-        s5_watch <= '1';
-        a_wdata  <= force x"DEADBEEF";
-        wait until rising_edge(clk);
-        a_wdata  <= release;
+      elsif run("a_register_only_divergence_is_caught_by_the_retirement_comparator") then
+        corrupt_s5;
 
-        if (s5_seen /= '1') then
-          wait until s5_seen = '1' for c_clk_period * 8;
+        -- Core B retires its own write two clocks later; the difference is
+        -- registered, latched by the comparators, and the pin is registered
+        if (nmi_fault /= '1') then
+          wait until nmi_fault = '1' for c_clk_period * 8;
         end if;
 
-        check_equal(s5_seen, '1', "core A retired the corrupted write");
-        v_order := s5_order;
-        v_time  := s5_time;
+        check_equal(nmi_fault, '1', "the fault pin rises");
+        check(now - v_time <= c_clk_period * 6,
+              "within 6 clocks of core A retiring it: " & integer'image((now - v_time) / 1 ns) & " ns");
+        check_equal(actuator_safe, '1', "the actuators are safe");
+        check_equal(mismatch, '1', "the bench's own comparison sees it too");
+        check_equal(first, v_order, "at that instruction");
+        info("divergence at order " & integer'image(v_order) & ", core A retired it at " &
+             integer'image(v_time / 1 ns) & " ns, fault pin at " & integer'image(now / 1 ns) & " ns");
+
+        -- The bus is closed, so the program never gets to send its CAN frame
+        wait until rx_done = 1 for 1 ms;
+        check_equal(rx_done, 0, "no CAN frame after the trip");
+      elsif run("without_the_retirement_comparator_the_bus_comparator_never_sees_it") then
+        -- The same divergence with the retirement comparator's output held at
+        -- 0: what the SoC had before it, and why it was added
+        retire <= force '0';
+        corrupt_s5;
 
         if (mismatch /= '1') then
           wait until mismatch = '1' for 1 us;
@@ -244,8 +277,6 @@ begin
         check_equal(field, string'("rd       "), "in the register write");
         check(first_time - v_time <= c_clk_period * 4,
               "within 4 clocks of core A retiring it: " & integer'image((first_time - v_time) / 1 ns) & " ns");
-        info("divergence at order " & integer'image(v_order) & ", core A retired it at " &
-             integer'image(v_time / 1 ns) & " ns, trace mismatch at " & integer'image(first_time / 1 ns) & " ns");
 
         -- The bus comparator never sees it: the program runs to the end
         wait until rx_done = 1 for c_timeout;
@@ -255,6 +286,7 @@ begin
         check_equal(actuator_safe, '0', "the actuators were never made safe");
         info("retirements compared by the end: " & integer'image(compared) & ", fault pin still " &
              std_logic'image(nmi_fault));
+        retire <= release;
       end if;
 
     end loop loop_while;

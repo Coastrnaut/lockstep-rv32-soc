@@ -43,35 +43,48 @@ not count.
 
 ## Result: seed 2026, 12 trials per site
 
-GHDL 6.0, 240 trials and the reference, 2 min 28 s on 16 cores, with the read
-data parity of HSI 8.6 in the RTL. Sites 1 to 15 are the first campaign's;
-sites 16 to 20 were added after it, at the end of the draw, so the seed draws
-the same trials for the first fifteen. "Detected of effective" counts detected
-trials out of those that reached the pins or were detected.
+GHDL 6.0, 240 trials and the reference, about 2.5 minutes on 16 cores, with the
+read data parity (HSI 8.6), the retirement comparator (HSI FLT-05) and the
+unasked-reset check (HSI RST-01) in the RTL. Sites 1 to 15 are the first campaign's; sites 16 to 20 were added after
+it, at the end of the draw, so the seed draws the same trials for the first
+fifteen. "Detected of effective" counts detected trials out of those that
+reached the pins or were detected.
 
 | Class | Site | In time | Late | Undet. corrupted | Undet. missing | Corrected | Latent | Masked | Invalid | Wrong output first | Detected of effective | Latency µs (min / median / max) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Burst | ECC RAM word, three-bit burst, at an access | 0 | 0 | 2 | 0 | 0 | 0 | 10 | 0 | 2 | 0 of 2 | - |
 | Burst | core A XBus write data, four-bit burst, at a store | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 of 12 | 0.06 / 0.06 / 0.06 |
-| CPU-private | core A instruction fetch data, at a fetch | 2 | 0 | 0 | 0 | 0 | 1 | 9 | 0 | 0 | 2 of 2 | 0.16 / 0.21 / 0.26 |
-| CPU-private | core A register write data, at a write | 1 | 0 | 0 | 0 | 0 | 10 | 1 | 0 | 0 | 1 of 1 | 0.18 / 0.18 / 0.18 |
-| CPU-private | core B register write data, at a write | 0 | 0 | 0 | 0 | 0 | 12 | 0 | 0 | 0 | - | - |
-| Common cause | both cores' instruction fetch data, same bit at once | 3 | 0 | 0 | 0 | 0 | 1 | 8 | 0 | 0 | 3 of 3 | 0.12 / 0.16 / 0.16 |
-| Common cause | both cores' register write data, same bit at once | 0 | 0 | 1 | 0 | 0 | 11 | 0 | 0 | 1 | 0 of 1 | - |
+| CPU-private | core A instruction fetch data, at a fetch | 3 | 0 | 0 | 0 | 0 | 0 | 9 | 0 | 0 | 3 of 3 | 0.16 / 0.26 / 0.28 |
+| CPU-private | core A register write data, at a write | 11 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 11 of 11 | 0.10 / 0.10 / 0.10 |
+| CPU-private | core B register write data, at a write | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 of 12 | 0.06 / 0.06 / 0.06 |
+| Common cause | both cores' instruction fetch data, same bit at once | 4 | 0 | 0 | 0 | 0 | 0 | 8 | 0 | 0 | 4 of 4 | 0.12 / 0.16 / 0.24 |
+| Common cause | both cores' register write data, same bit at once | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 of 12 | 0.06 / 0.10 / 0.10 |
 | Comparator | comparator state register | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 of 12 | 0.00 / 0.00 / 0.00 |
 | Delay line | core A bus after the delay line, at a store | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 of 12 | 0.02 / 0.02 / 0.02 |
 | ECC word | ECC RAM word, one bit, at an access | 0 | 0 | 0 | 0 | 3 | 0 | 9 | 0 | 0 | - | - |
 | ECC word | ECC RAM word, two bits, at an access | 4 | 0 | 0 | 0 | 0 | 0 | 8 | 0 | 0 | 4 of 4 | 0.02 / 0.02 / 0.02 |
 | Output logic | CAN TX bit register | 0 | 0 | 6 | 0 | 0 | 0 | 6 | 0 | 6 | 0 of 6 | - |
 | Output logic | UART shift register | 0 | 0 | 3 | 0 | 0 | 0 | 9 | 0 | 3 | 0 of 3 | - |
-| Reset | reset synchroniser stage | 0 | 0 | 12 | 0 | 0 | 0 | 0 | 0 | 12 | 0 of 12 | - |
+| Reset | reset synchroniser stage | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 of 12 | 0.04 / 0.04 / 0.06 |
 | Self-test | self-test result register | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 of 12 | 0.00 / 0.00 / 0.00 |
 | Shared response | shared bus response data, at a response | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 of 12 | 0.02 / 0.02 / 0.02 |
 | Shared response | shared bus response data, stuck from a response on | 4 | 0 | 0 | 0 | 0 | 0 | 8 | 0 | 0 | 4 of 4 | 0.02 / 0.02 / 0.02 |
 | Watchdog | watchdog counter | 0 | 0 | 0 | 0 | 0 | 0 | 12 | 0 | 0 | - | - |
 | XBus | core A XBus address | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 of 12 | 0.06 / 0.06 / 0.06 |
 | XBus | core A XBus write data, at a store | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 of 12 | 0.06 / 0.06 / 0.06 |
-| **All** | | 98 | 0 | 24 | 0 | 3 | 35 | 80 | 0 | 24 | 98 of 122 | |
+| **All** | | 146 | 0 | 11 | 0 | 3 | 0 | 80 | 0 | 11 | 146 of 157 | |
+
+How the three mechanisms changed it, on the same 240 trials:
+
+| RTL | Detected of effective | Latent | Undetected, corrupted |
+|-----|-----------------------|--------|-----------------------|
+| Bus comparator only (before the bench fix below) | 82 of 110 | 35 | 28 |
+| With read data parity | 98 of 122 | 35 | 24 |
+| With parity and the retirement comparator | 134 of 157 | 0 | 23 |
+| With all three, and the unasked-reset check | 146 of 157 | 0 | 11 |
+
+"Effective" grows as detection improves: a latent fault the retirement
+comparator catches is now a detected one.
 
 ## What it shows
 
@@ -80,43 +93,44 @@ trials out of those that reached the pins or were detected.
   data, double-bit RAM errors, and upsets of the comparator's state or the
   self-test result were all detected, well inside the budget, with no wrong
   output first.
+- **Faults inside the cores are now caught at the instruction.** Before the
+  retirement comparator, most corrupted register writes stayed latent: the
+  cores' registers differed and no bus access used the value within the run,
+  35 trials in all. Each one is now detected within 0.1 µs, when the corrupted
+  instruction retires on core B and differs from core A's.
 - **The shared read data is now covered.** Both cores read the same data, so a
   fault in it after the slave reaches both alike and lockstep cannot see it.
-  Before the parity of HSI 8.6, a bit of the response stuck from one response
-  on corrupted the outputs in 4 of 12 trials, and nothing noticed. With it,
-  every one of those is detected 20 ns after the injection, and so is every
+  Before the parity, a bit of the response stuck from one response on
+  corrupted the outputs in 4 of 12 trials, and nothing noticed. With it, every
+  one of those is detected 20 ns after the injection, and so is every
   transient flip of the response (12 of 12). The other 8 stuck trials held a
   bit at 0 that was never read as 1: no effect, and nothing to detect.
-- **A common disturbance is mostly caught by the two-clock offset, but not
-  always.** The same bit flipped in both cores' fetched instruction at the same
-  instant was detected 3 times out of 3 that mattered: core B is two clocks
-  behind, so the flip hit different instructions in the two cores. The same flip
-  in both cores' register write data hit different instructions too, but in
-  one trial they were a dependent `lui` and `addi` writing the same register,
-  so both cores ended with the same wrong value and identical bus traffic. The
-  UART printed `m` for `M` and nothing noticed. The retirement trace comparison
-  saw the two cores diverge before the wrong byte started: a retirement comparator in
-  hardware would catch this; the bus comparator cannot. The other 11 were
-  latent: the cores diverged in registers and never on the bus within the run.
-- **CPU-private faults are often latent.** Most corrupted register writes
-  never reached the bus within the run, which the trace comparison saw and the
-  bus comparator did not (`docs/verification/trace.md`). They become dangerous
-  only if a later access uses the value, and the bus comparator then catches
-  them.
+- **A common disturbance is caught.** The same bit flipped in both cores at the
+  same instant meets different instructions, because core B is two clocks
+  behind. With the bus comparator alone that was not always enough: in one
+  trial the flips hit a dependent `lui` and `addi` writing the same register,
+  both cores ended with the same wrong value and identical bus traffic, and the
+  UART printed `m` for `M` with nothing noticing. The retirement comparator
+  sees the two instructions' results differ, and now detects all 12 register
+  trials and every fetch trial that mattered.
 - **A three-bit RAM burst is beyond SECDED.** In 2 of 12 trials the decoder took
   it for a single-bit error and "corrected" it: the firmware's SBE count went
   from 0 to 1, and the data the cores read was wrong. Nothing else in these runs
   used it. The FMEDA's ECC coverage assumes faults of at most two bits per word;
   adjacent-bit upsets are why RAMs interleave the bits of a word physically, a
   property of the target RAM, not of this RTL.
-- **The output paths and the reset synchroniser are not covered.** Upsets in
+- **An upset in the reset synchroniser is now reported.** It restarts the cores
+  with the outputs safe for the reset, a lost function rather than a wrong one,
+  and before the check of HSI RST-01 nothing said why: 12 of 12 were
+  undetected restarts. The cores' reset now falling while every reset request
+  is still high is a fault, and all 12 are detected within 0.06 µs.
+- **The output registers after the comparator are not covered.** Upsets in
   the UART and CAN output registers corrupted the bytes and frames on the pins,
   and nothing in the SoC saw it: nothing checks the output after the comparator.
   A CAN receiver rejects a corrupted frame on its CRC, and the item adds
   end-to-end protection (`docs/safety/item_definition.md`); the UART is
-  diagnostic only. An upset in the reset synchroniser restarted the cores with
-  no fault reported. The outputs went safe for the reset, so the effect is a
-  lost function, not a wrong one.
+  diagnostic only. These 9 and the two three-bit bursts are the 11 undetected
+  trials left.
 - **The watchdog counter** upsets would show only after the run, which ends
   long before the 50,000-clock timeout.
 

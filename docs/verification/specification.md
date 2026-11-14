@@ -21,7 +21,7 @@ as achieved. Per-run evidence is in `docs/verification/milestone_0_1.md`.
 | Comparator self-checking (section 4.A) | Startup self-test of both comparators after each cold reset, and a second comparator cross-checked every clock (`dual_comparator`, roadmap R2.4). No periodic heartbeat |
 | Gate-level netlist simulation (section 4.B) | Not done. GHDL synthesis is used as a lint and smoke test only |
 | CI blocks on coverage and FTTI (section 5) | CI blocks on lint, VSG, the regression, fixture drift and stale mutation patterns. It does not measure coverage |
-| Mutation campaign | 463 mutants. Full campaign is manual, before a release |
+| Mutation campaign | 472 mutants. Full campaign is manual, before a release |
 
 The signal names `sys_outputs_valid_o` and `core_mismatch_detected` below come
 from an early draft. The implemented equivalents are the comparator's

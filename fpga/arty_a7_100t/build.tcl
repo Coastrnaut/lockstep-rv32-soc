@@ -49,7 +49,7 @@ read_vhdl -vhdl2008 -library lockstep [concat \
   [list $root/rtl/pkg/package_soc_types.vhd] \
   [glob $root/rtl/safety/*.vhd] \
   [glob $root/rtl/peripherals/*.vhd] \
-  [list $root/rtl/soc/lockstep_core.vhd $root/rtl/soc/top_automotive_soc.vhd]]
+  [list $root/rtl/soc/retire_comparator.vhd $root/rtl/soc/lockstep_core.vhd $root/rtl/soc/top_automotive_soc.vhd]]
 read_vhdl -vhdl2008 [list $here/arty_a7_top.vhd]
 read_xdc $here/arty_a7_100t.xdc
 

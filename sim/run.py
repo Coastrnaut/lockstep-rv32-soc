@@ -201,7 +201,8 @@ def rtl_files():
     for folder in ("safety", "peripherals"):
         for f in sorted((ROOT / "rtl" / folder).glob("*.vhd"), key=lambda f: (f.stem in WRAPPERS, f.stem)):
             before.append(("lockstep", f))
-    after = [("lockstep", ROOT / "rtl" / "soc" / "lockstep_core.vhd"),
+    after = [("lockstep", ROOT / "rtl" / "soc" / "retire_comparator.vhd"),
+             ("lockstep", ROOT / "rtl" / "soc" / "lockstep_core.vhd"),
              ("lockstep", ROOT / "rtl" / "soc" / "top_automotive_soc.vhd")]
     return before, after
 

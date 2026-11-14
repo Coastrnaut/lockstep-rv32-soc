@@ -71,6 +71,7 @@ TEL = "rtl/safety/telemetry_port.vhd"
 DUAL = "rtl/safety/dual_comparator.vhd"
 CLOCK = "rtl/safety/clock_monitor.vhd"
 ACT = "rtl/safety/actuator_monitor.vhd"
+RET = "rtl/soc/retire_comparator.vhd"
 
 CLEAR = r"w_tx_clear <= '1' when \(rst_n_i = '0' or bus_ok_i = '0' or r_bus_off = '1'\) else"
 
@@ -361,11 +362,22 @@ MUTANTS = [
     ("skew: acknowledge always high", TOP, [(r"w_core_a_in\.ack   <= w_bus_rsp\.ack;", "w_core_a_in.ack   <= w_bus_valid;")]),
     ("skew: acknowledge a clock late", FAB, [(r"rsp_o\.ack   <= w_ack;", "rsp_o.ack   <= r_ack_late;"), (r"r_pending <= bus_i\.valid;", "r_pending <= bus_i.valid; r_ack_late <= w_ack;"), (r"signal w_ack   : std_logic;", "signal w_ack   : std_logic; signal r_ack_late : std_logic;")]),
     # --- Bus responses (HSI section 8.1)
+    # Unasked reset (HSI RST-01, TSR_RESET_002)
+    ("reset: an unasked reset is not fatal", TOP, [(r" or\s+r_reset_unasked,", ",")]),
+    ("reset: the check ignores the reset request", TOP, [(r"w_rst_n = '0' and w_rst_n_request = '1'\)", "w_rst_n = '0')")]),
+    ("reset: the check never arms", TOP, [(r"r_rst_n_seen <= w_rst_n;", "r_rst_n_seen <= '0';")]),
+    # Retirement comparator (TSR_LOCKSTEP_046)
+    ("retire: core A's record not delayed", RET, [(r"w_a <= r_a_late\(g_cycles\);", "w_a <= r_a_late(1);")]),
+    ("retire: register write data not compared", RET, [(r"v_r\.rd_wdata := std_logic_vector\(t\.rd_wdata\);", "v_r.rd_wdata := (others => '0');")]),
+    ("retire: whether an instruction retired not compared", RET, [(r"w_a\.valid /= w_b\.valid or ", "")]),
+    ("retire: compares while core B is in reset", RET, [(r"core_b_rst_n_i = '1' and\s+", "")]),
+    ("retire: compares the fields between retirements", RET, [(r"\(w_b\.valid = '1' and w_a /= w_b\)", "(w_a /= w_b)")]),
+    ("retire: a difference is not fatal", TOP, [(r" or w_retire_fault or", " or")]),
     # Read data parity (HSI 8.6, TSR_BUS_002)
     ("parity: taken from the selected data", FAB, [(r"w_rpar <= '0';\n\n    if \(w_ack = '1' and r_we = '0'\) then", "w_rpar <= xor w_rdata;\n\n    if (false) then")]),
     ("parity: core A's copy not checked", TOP, [(r"w_rsp_parity_a <= \(xor w_core_a_in\.rdata\) xor w_core_a_in\.rpar;", "w_rsp_parity_a <= '0';")]),
     ("parity: core B's copy not checked", TOP, [(r"w_rsp_parity_b <= \(xor w_core_b_in\.rdata\) xor w_core_b_in\.rpar;", "w_rsp_parity_b <= '0';")]),
-    ("parity: a mismatch is not fatal", TOP, [(r" or w_rsp_parity_fault,", ",")]),
+    ("parity: a mismatch is not fatal", TOP, [(r" or w_rsp_parity_fault or", " or")]),
     ("parity: core B's copy checked against core A's parity", TOP, [(r"xor w_core_b_in\.rpar;", "xor w_core_a_in.rpar;")]),
     ("bus: holes acknowledged", FAB, [(r"\(r_target\(c_tgt_none\) = '1' or \(", "(false or (")]),
     ("bus: double-bit error acknowledged", FAB, [(r" or \(r_target\(c_tgt_ram\) = '1' and ram_fatal_i = '1'\)", "")]),

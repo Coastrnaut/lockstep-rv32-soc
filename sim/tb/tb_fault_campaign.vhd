@@ -111,8 +111,7 @@ begin
 
   i_soc : entity lockstep.top_automotive_soc
     generic map (
-      g_boot_mode => 2,
-      g_trace_en  => true
+      g_boot_mode => 2
     )
     port map (
       clk_i           => clk,

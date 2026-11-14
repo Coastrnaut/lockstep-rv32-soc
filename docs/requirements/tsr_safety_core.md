@@ -79,6 +79,15 @@
 - **Verified by:** `tb_dual_comparator`, `tb_dual_comparator_faults`, `tb_soc_lockstep.comparator_b_stuck_at_no_error_also_fails_the_self_test`, `tb_soc_lockstep.comparator_b_stuck_tripped_fails_the_self_test`, `tb_soc_lockstep.a_comparator_that_stops_comparing_after_startup_is_found_at_the_first_divergence`, `tb_soc_lockstep.a_reset_of_comparator_b_alone_is_found_and_held`, `tb_soc_lockstep.a_fault_on_comparator_b_copy_of_core_a_bus_is_found`, `tb_soc_lockstep.a_fault_on_comparator_b_copy_of_core_b_bus_is_found`, `tb_soc_lockstep.comparator_b_reset_released_a_clock_late_still_starts_the_pair_together`
 - **Open:** both comparators still share the `rst_n_i` pin, the cores' buses before the copies split, and the clock, which TSR_CLOCK_001 monitors (DFA DF-15).
 
+## TSR_LOCKSTEP_046
+- **Description:** A divergence between the cores in architectural state that has not reached the bus (a register, the program counter, control state) must be detected at the instruction it first changes, and must trip the comparators.
+- **ASIL Allocation:** ASIL-D (intent)
+- **Mitigation:** `retire_comparator` compares the two cores' retirement records every clock, core A's delayed by the cores' offset, while core B is out of reset; a difference is a fatal input to the comparators (HSI FLT-05).
+- **Verification Method:** Directed and seeded simulation, fault campaign
+- **Implemented In:** `rtl/soc/retire_comparator.vhd`, `rtl/soc/top_automotive_soc.vhd`
+- **Verified by:** `tb_retire_comparator`, `tb_soc_trace.a_register_only_divergence_is_caught_by_the_retirement_comparator`, `tb_soc_trace.without_the_retirement_comparator_the_bus_comparator_never_sees_it`; fault campaign (`docs/verification/fault_campaign.md`)
+- **Open:** the comparator is not self-tested; a stuck "no difference" output is latent (FMEDA FM-26).
+
 ## TSR_CLOCK_001
 - **Description:** A system clock that stops, or runs more than the configured tolerance (25 % by default) away from its nominal rate as measured against the independent watchdog clock, must be detected within two monitor windows, must raise the fault pin, and must hold the SoC in reset until a cold reset, without depending on the system clock.
 - **ASIL Allocation:** ASIL-D (intent)
@@ -104,6 +113,14 @@
 - **Verification Method:** Functional Testbench + Reset Pulse Injection
 - **Implemented In:** `rtl/safety/reset_synchronizer.vhd`, `rtl/soc/top_automotive_soc.vhd`
 - **Verified by:** `tb_reset_synchronizer`, `tb_soc_reset_network`, `tb_soc_reset_timing`
+
+## TSR_RESET_002
+- **Description:** A reset of the cores that no reset source requested must be reported as a fault.
+- **ASIL Allocation:** ASIL-D (intent)
+- **Mitigation:** The top level registers the cores' reset and flags a fall while the reset request is still high at the next edge; the flag is a fatal input to the comparators and only a cold reset clears it (HSI RST-01).
+- **Verification Method:** Fault injection simulation, fault campaign
+- **Implemented In:** `rtl/soc/top_automotive_soc.vhd`
+- **Verified by:** `tb_soc_reset_network.an_upset_in_the_cores_reset_synchroniser_is_reported`; fault campaign site 13 (`docs/verification/fault_campaign.md`)
 
 ## TSR_SAFETY_GATE_001
 - **Description:** The lockstep comparator must use high-Hamming-distance safe state encoding to resist single-event upsets on internal FSM registers, and must treat any other value of its state register as a fault.

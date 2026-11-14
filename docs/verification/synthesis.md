@@ -47,6 +47,14 @@ equivalent-register removal.
   `keep_hierarchy`). The build checks that the delay line (at least 140
   flip-flops) and the synchroniser (2) are still there, and the clock
   monitor's fault latch.
+- The read data parity is checked by recomputing, at each core's input, a
+  parity the fabric computed from the same slave data. Synthesis could prove
+  the two equal and remove the check, so both check nets carry `dont_touch`
+  (HSI 8.6). The build does not yet check them after routing.
+- The retirement comparator compares core A's delayed record with core B's.
+  They come from different cores, so synthesis cannot merge them, but nothing
+  checks yet that the delay line (2 × 168 flip-flops) survives; the first build
+  should add it.
 
 ## Status and limits
 

@@ -20,8 +20,8 @@ current flow is in `docs/verification/toolchain.md`.
 | R0.1–R0.3 | Done | `docs/verification/milestone_0_1.md` |
 | R1.1–R1.4 | Done | `docs/verification/milestone_0_1.md`, HSI section 8 |
 | R2.1 | Done: comparator, fabric and store commit proved, and the watchdog's kick and status crossings proved with two free clocks (multiclock, up to 3:1 in any phase, metastability not modelled), each with covers and a broken-RTL check | `docs/verification/formal.md` |
-| R2.2 | Done for the core RTL: the RISC-V Architectural Certification Tests (ACT4) run in CI against NEORV32 v1.13.7, the revision both cores use, built with the pinned xPack GCC and checked against the Sail 0.16 reference model: all 347 pass. The trace comparison of both cores catches a register-only divergence. The ACT port's NEORV32 configuration is a superset of the SoC's | `docs/verification/isa_compliance.md`, `docs/verification/trace.md` |
-| R2.3 | Done in RTL simulation at 20 sites, with four- and three-bit bursts, a persistent fault on the shared read data and the same disturbance in both cores at once. The campaign found the shared read data unprotected, now covered by parity (HSI 8.6), and one common disturbance that the two-clock offset does not separate. No netlist or timing faults | `docs/verification/fault_campaign.md` |
+| R2.2 | Done for the core RTL: the RISC-V Architectural Certification Tests (ACT4) run in CI against NEORV32 v1.13.7, the revision both cores use, built with the pinned xPack GCC and checked against the Sail 0.16 reference model: all 347 pass. Both cores' retirements are compared in the RTL as well, every clock (`rtl/soc/retire_comparator.vhd`, HSI FLT-05), so a register-only divergence trips the SoC at the instruction. The ACT port's NEORV32 configuration is a superset of the SoC's | `docs/verification/isa_compliance.md`, `docs/verification/trace.md` |
+| R2.3 | Done in RTL simulation at 20 sites, with four- and three-bit bursts, a persistent fault on the shared read data and the same disturbance in both cores at once. The campaign found the shared read data unprotected, now covered by parity (HSI 8.6), and faults inside the cores that stayed latent, now caught at the instruction by a retirement comparator in the RTL (HSI FLT-05), and reset-synchroniser upsets that restarted the cores unreported, now a fault (HSI RST-01): 146 of 157 effective faults detected, none latent. No netlist or timing faults | `docs/verification/fault_campaign.md` |
 | R2.4 | Done as an evaluation: maximum diagnostic interval set, a latent compare failure and a reporting-path failure shown, a stuck sequencer reported. The redundant comparator it recommends is built: two comparators cross-checked every clock, with a latched disagreement (`rtl/safety/dual_comparator.vhd`); comparator B has its own reset, delay line and injection point, and the shared system clock is monitored against the watchdog clock (`rtl/safety/clock_monitor.vhd`, TSR_CLOCK_001) | `docs/verification/diagnostics.md` |
 | R3.1 | Partial: board wrapper, constraints, build script with safety-structure checks, GHDL check in CI, and every bench run on Vivado's xsim as well as GHDL, with the two compared test by test. No build yet: the installed Vivado is the Enterprise edition with only an Alveo licence; adding Vivado ML Standard, or its free licence, unblocks it | `docs/verification/bench_hardware.md`, `fpga/arty_a7_100t/README.md` |
 | R3.2 | Blocked on hardware; the bench equipment is listed | `docs/verification/bench_hardware.md` |
@@ -31,6 +31,35 @@ current flow is in `docs/verification/toolchain.md`.
 | R4.3 | Done, but for area and timing per profile, which need a Vivado build | `docs/verification/integration.md` |
 | M5.1 | Done as a reference item: a torque-enable supervisor for an EV traction inverter, with options considered, hazard analysis, safety goals, FTTI and assumptions of use; a real product replaces it | `docs/safety/item_definition.md` |
 | M5.2–M5.4 | Started: FMEDA input table and checker, with no single-point failure mode left (the actuator line has a read-back and a second channel; CAN is covered by the protocol and the item's end-to-end protection; the UART is diagnostic only); dependent-failure checklist; evidence index checked in CI; statement and branch coverage at 100 %. Failure rates, review and assessment pending | `docs/safety/fmeda_inputs.csv`, `docs/safety/dependent_failure_analysis.md`, `docs/safety/evidence_index.md`, `docs/verification/coverage.md` |
+
+
+### Next, in order
+
+What the fault campaign and the evidence leave open, most valuable first. The
+first two need the user or hardware; the rest can be done in simulation.
+
+1. **A Vivado build (R3.1).** Add Vivado ML Standard, or its free licence, and
+   run `fpga/arty_a7_100t/build.py`. It gives area and timing per profile
+   (R4.3), checks that synthesis kept both cores, the delay lines, the parity
+   check and the retirement comparator, and makes the bitstream for the board.
+2. **Board bring-up and bench tests (R3.2, R4.2)** with the board guide.
+3. **Self-test of the retirement comparator.** Its output stuck at "no
+   difference" is latent until a proof test (FMEDA FM-26). The startup self-test
+   could inject a difference into core B's record, as it does on the bus.
+4. **Instruction memory ECC.** A fault stored in an instruction both cores fetch
+   is a common-cause fault; the cores' 16 KB IMEMs have no ECC (HSI section 5).
+5. **The output registers after the comparator.** Upsets in the UART and CAN
+   output registers corrupt the pins unseen (campaign sites 11, 12). CAN is left
+   to the protocol and the item's end-to-end protection, and the UART is
+   diagnostic only; a read-back of CAN TX against a second copy of the bit
+   would close it in the SoC.
+6. **FMEDA failure rates** from a named source for the target, then the metrics
+   (M5.2).
+7. **A fail-operational study** if the item must keep working after a fault:
+   two of these SoCs as a dual-duplex pair with independent clocks, resets and
+   supplies, and arbitration of the outputs.
+8. **A fault-injection build for the board,** so the bench can show a trip and
+   measure the reaction time on the real pins.
 
 The repository boots two NEORV32 instances, runs firmware through the compared bus, and exercises ECC, watchdog, reset, CAN and UART behavior. The wire-level reference vectors, firmware tests and mutation harness give the next release a way to verify changes at each boundary. Prioritize the paths from fault detection to bus termination and physical output containment. The current evidence supports a research prototype. Automotive integration and any ASIL claim depend on a target implementation, a defined item and reviewed safety evidence.
 

@@ -2,7 +2,7 @@
 
 Statement and branch coverage of every first-party RTL file (`rtl/pkg`,
 `rtl/safety`, `rtl/peripherals`, `rtl/soc`) over the whole regression,
-2026-11-13: 333 tests on Vivado 2026.1's xsim, all passing, on NEORV32 v1.13.7.
+2026-11-14: 340 tests on Vivado 2026.1's xsim, all passing, on NEORV32 v1.13.7.
 
     python sim/run.py --coverage          # every test, then the summary
     python sim/run.py --coverage-report   # the summary again, from the last run's databases
@@ -26,18 +26,29 @@ Statement and branch coverage of every first-party RTL file (`rtl/pkg`,
 | `rtl/safety/hardware_watchdog.vhd` | 38 of 38 (100.0 %) | 27 of 27 (100.0 %) |
 | `rtl/safety/lockstep_comparator.vhd` | 66 of 66 (100.0 %) | 49 of 49 (100.0 %) |
 | `rtl/safety/reset_synchronizer.vhd` | 12 of 12 (100.0 %) | 8 of 8 (100.0 %) |
-| `rtl/safety/soc_bus_fabric.vhd` | 57 of 57 (100.0 %) | 40 of 40 (100.0 %) |
+| `rtl/safety/soc_bus_fabric.vhd` | 69 of 69 (100.0 %) | 50 of 50 (100.0 %) |
 | `rtl/safety/telemetry_port.vhd` | 16 of 16 (100.0 %) | 14 of 14 (100.0 %) |
 | `rtl/safety/temporal_diversity.vhd` | 9 of 9 (100.0 %) | 3 of 3 (100.0 %) |
 | `rtl/safety/watchdog_supervisor.vhd` | 75 of 75 (100.0 %) | 52 of 52 (100.0 %) |
 | `rtl/soc/lockstep_core.vhd` | - | - |
-| `rtl/soc/top_automotive_soc.vhd` | 32 of 32 (100.0 %) | - |
-| **All** | 1212 of 1212 (100.0 %) | 855 of 855 (100.0 %) |
+| `rtl/soc/retire_comparator.vhd` | 24 of 24 (100.0 %) | 9 of 9 (100.0 %) |
+| `rtl/soc/top_automotive_soc.vhd` | 44 of 44 (100.0 %) | 8 of 8 (100.0 %) |
+| **All** | 1260 of 1260 (100.0 %) | 882 of 882 (100.0 %) |
+| `rtl/safety/hamming_ecc_wrapper.vhd` | 70 | `v_position   := 3;` |
+| `rtl/safety/hamming_ecc_wrapper.vhd` | 71 | `v_next_check := 4;` |
+| `rtl/safety/hamming_ecc_wrapper.vhd` | 73 | `loop_i : for lv_i in t_positions'rang ...` |
+| `rtl/safety/hamming_ecc_wrapper.vhd` | 75 | `if (v_position = v_next_check) then` |
+| `rtl/safety/hamming_ecc_wrapper.vhd` | 76 | `v_position   := v_position + 1;` |
+| `rtl/safety/hamming_ecc_wrapper.vhd` | 77 | `v_next_check := v_next_check * 2;` |
+| `rtl/safety/hamming_ecc_wrapper.vhd` | 80 | `v_positions(lv_i) := v_position;` |
+| `rtl/safety/hamming_ecc_wrapper.vhd` | 81 | `v_position        := v_position + 1;` |
+| `rtl/safety/hamming_ecc_wrapper.vhd` | 85 | `return v_positions;` |
 | `rtl/safety/hamming_ecc_wrapper.vhd` | 70 | `v_position   := 3;` |
 
 `package_soc_types.vhd` holds types and constants only, and `lockstep_core.vhd`
 only instantiates NEORV32, so neither has a statement of its own. The top
-level's statements are concurrent assignments, with no branches.
+level's statements are mostly concurrent assignments; its branches are the
+unasked-reset check (HSI RST-01).
 
 ## How it is measured
 
@@ -88,7 +99,7 @@ run every test.
 It shows that every statement and branch outcome of the first-party RTL is
 run by some passing test, and that every assertion in it fires when its
 property is broken. It does not show that each test checks the effect of
-every line it runs: the mutation harness (`sim/scripts/mutate.py`, 463
+every line it runs: the mutation harness (`sim/scripts/mutate.py`, 472
 mutants) is the measure of that.
 
 Not measured: condition coverage (MC/DC), FSM state and transition coverage,

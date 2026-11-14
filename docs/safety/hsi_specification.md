@@ -382,6 +382,7 @@ after the two-clock delay that aligns it with core B's at the comparator.
 | FLT-02 | **MEI is a maskable notification.** The same registered fault reaches both cores as the machine external interrupt, core B two clocks after core A. Software may mask it with `mstatus.MIE` or `mie.MEIE`. Bus isolation, `actuator_safe_o`, `nmi_fault_o` and the CAN and UART pins never depend on an interrupt being taken, a trap handler or any MMIO access. |
 | FLT-03 | **Illegal comparator state. Changed.** Any value of the comparator's state register other than `0x5A` (`SYSTEM_OK`) or `0xA5` (`FAULT_TRIPPED`) is a fault. So is a set fault latch with a healthy state, which moves the state to `FAULT_TRIPPED` at the next edge, and either register on its own is enough to report the fault (found by the formal proof, `docs/verification/formal.md`). The bus closes at once, the fault latches, and the next edge moves the state to `FAULT_TRIPPED`. Revision 1.0 closed the bus and later made the actuators safe without ever raising `nmi_fault_o`. |
 | FLT-04 | **Sticky until cold reset.** A latched fault survives a watchdog reset. Only a cold reset clears it, after which the startup self-test qualifies the comparator again before the cores start. |
+| FLT-05 | **Retirements compared (revision 1.3).** Each core's retirement record from NEORV32's trace port is compared, core A's delayed by the two clocks core B runs behind: whether an instruction retired and, for one that did, the instruction, both program counters, the trap and interrupt flags, the destination register, its write data and the CSR write data. A difference while core B is out of reset is a fatal input to the comparators one clock later, so a fault in a register, the program counter or control state trips the SoC at the instruction it first changes, without waiting for a bus access that may never come. It detects only; the bus comparator still contains every access (TSR_LOCKSTEP_046). |
 
 ### 8.3 Safe outputs
 
@@ -403,6 +404,10 @@ system clock. A lockstep trip needs system clock edges, because the comparator
 is synchronous. A stopped system clock is caught by the watchdog, which resets
 the SoC from `wd_clk_i` alone and keeps the outputs safe while the clock stays
 stopped.
+
+| ID | Decision |
+|----|----------|
+| RST-01 | **A reset nobody asked for is a fault (revision 1.3).** Every reset of the cores has a cause that holds the reset request low for many clocks: the cold reset, the watchdog's 16-clock pulse, the self-test and the clock monitor. If the cores' reset falls while the request is still high at the next edge, the synchroniser itself has failed, an upset of one of its stages. The cores restart from it with the outputs safe, but it is reported as a fault: a fatal input to the comparators, held until a cold reset (TSR_RESET_002). |
 
 ### 8.4 Watchdog window
 

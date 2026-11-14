@@ -116,6 +116,7 @@ begin
   p_stim : process is
 
     alias x_w_core_b_xbus_data is << signal i_soc.w_core_b_xbus_data : std_logic_vector(31 downto 0) >>;
+    alias reset_stages         is << signal i_soc.i_reset_sync.r_stages : std_logic_vector(1 downto 0) >>;
 
     -- Called just after a rising clock edge, and over long before the next
 
@@ -206,6 +207,29 @@ begin
         check_equal(nmi_fault, '0', "fault cleared");
         wait for c_self_test;
         check_equal(actuator_safe, '0', "actuators released");
+      elsif run("an_upset_in_the_cores_reset_synchroniser_is_reported") then
+        -- A reset that the pin asks for is not a fault
+        wait for c_self_test;
+        short_reset;
+        wait for c_after_reset + c_self_test;
+        check_equal(nmi_fault, '0', "a short reset on the pin is no fault");
+
+        -- One stage of the cores' synchroniser upset for a clock, with nothing
+        -- asking for a reset: the cores restart, and the fault pin says why
+        wait until rising_edge(clk);
+        reset_stages(1) <= force '0';
+        wait until rising_edge(clk);
+        reset_stages(1) <= release;
+        wait for c_after_reset;
+        check_equal(nmi_fault, '1', "an unasked reset is reported");
+        check_equal(actuator_safe, '1', "actuators safe");
+
+        -- Held until a cold reset
+        wait for c_self_test;
+        check_equal(nmi_fault, '1', "still reported");
+        short_reset;
+        wait for c_after_reset;
+        check_equal(nmi_fault, '0', "cleared by a cold reset");
       end if;
 
     end loop loop_while;

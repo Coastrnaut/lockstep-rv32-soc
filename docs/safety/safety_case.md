@@ -16,7 +16,7 @@ systems. That claim is withdrawn. What exists today is:
 1. Hardware safety mechanisms in RTL: lockstep with a startup self-test,
    temporal diversity, ECC on the shared data RAM, a windowed watchdog, an
    explicit bus response contract and safety-gated CAN and UART pins
-2. Simulation evidence: 49 benches with 324 tests, each run on GHDL and
+2. Simulation evidence: 50 benches with 331 tests, each run on GHDL and
    on Vivado's xsim with identical output, directed fault
    injection by forcing named signals, clocked simulation assertions and a
    mutation harness
@@ -108,7 +108,7 @@ The twelve new ones (five `dual:` for the shared causes, seven `clock:`) and
 the nine whose patterns had to follow the RTL were run, and all 21 killed.
 
 After the actuator channels, the move to NEORV32 v1.13.7, the explicit UART
-state encoding and the assertion tests, there are 463 mutants; every one
+state encoding and the assertion tests, there are 472 mutants; every one
 still applies, and the UART, CAN, self-test, watchdog and clock monitor
 mutants, whose code changed, were all rerun and killed.
 
@@ -156,9 +156,9 @@ in `docs/requirements/tsr_safety_core.md`.
 
 | Residual Risk | Mitigation in RTL | Remaining work |
 |---------------|-------------------|----------------|
-| Common cause failure in lockstep | Core B 2 clocks behind core A; ECC on the shared RAM | Shared read data from peripherals, decode, clock, power and reset have no independent check. Each is listed in `docs/safety/dependent_failure_analysis.md` |
+| Common cause failure in lockstep | Core B 2 clocks behind core A; each instruction's result compared (TSR_LOCKSTEP_046); ECC on the shared RAM; parity on the shared read data to both cores (TSR_BUS_002) | Faults inside a register slave, decode, clock, power and reset have no independent check. Each is listed in `docs/safety/dependent_failure_analysis.md` |
 | Watchdog oscillator failure | None in the SoC | Independent board supervisor (HSI WD-04) |
-| Instruction fetch corruption | Lockstep detects it once it changes a bus access | No IMEM ECC; private CPU state stays latent until used (trace comparison sees it in verification builds only) |
+| Instruction fetch corruption, private CPU state | The retirement comparator detects it at the instruction it first changes; the bus comparator contains every access (TSR_LOCKSTEP_046) | No IMEM ECC: a stored fault both cores fetch alike is a common-cause fault; the retirement comparator is not self-tested (FMEDA FM-26) |
 | Latent comparator fault after startup | Two comparators cross-checked every clock, each proved by the startup self-test (TSR_LOCKSTEP_045) | Both comparators share clock, reset and inputs (DF-15) |
 | Power supply transient | Watchdog on its own clock | Target-specific analysis |
 | Faults after the comparator | Actuator: read-back and a second channel (TSR_ACTUATOR_001); CAN: bit monitoring and CRC | A line stuck at "permit" is latent until the next demand or start, when the second channel acts; the UART is diagnostic only; FMEDA FM-19, FM-20, FM-22 |
